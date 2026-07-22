@@ -27,12 +27,18 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-html, body {
+html { height: 100%; }
+/* body is pinned to the viewport and never scrolls — scrolling happens inside .view.
+   This prevents iOS (standalone PWA) from leaving the whole app panned upward
+   after the on-screen keyboard closes. */
+body {
+  position: fixed; inset: 0; width: 100%;
+  display: flex; flex-direction: column;
+  overflow: hidden;
   background: var(--page);
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 16px;
-  height: 100%;
 }
 
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
@@ -50,11 +56,10 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 
 /* ---------- layout ---------- */
 .topbar {
-  position: sticky; top: 0; z-index: 20;
+  flex-shrink: 0; z-index: 20;
   display: flex; align-items: center; gap: 10px;
   padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
   background: rgba(13,13,13,0.92);
-  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--grid);
 }
 .topbar-title { display: flex; align-items: center; gap: 8px; }
@@ -64,15 +69,18 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 .icon-btn { font-size: 20px; padding: 4px 6px; color: var(--ink-2); }
 
 .view {
-  padding: 16px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 24px);
-  max-width: 560px; margin: 0 auto;
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  width: 100%; max-width: 560px; margin: 0 auto;
+  padding: 16px 16px 32px;
 }
 
 .tabbar {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  flex-shrink: 0; z-index: 20;
   display: flex;
   background: rgba(13,13,13,0.95);
-  backdrop-filter: blur(10px);
   border-top: 1px solid var(--grid);
   padding-bottom: env(safe-area-inset-bottom);
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
@@ -166,7 +174,7 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   border: 1px solid var(--border);
   border-radius: 20px 20px 0 0;
   width: 100%; max-width: 560px;
-  max-height: 88vh; overflow-y: auto;
+  max-height: 88vh; max-height: 88dvh; overflow-y: auto;
   padding: 20px 18px calc(env(safe-area-inset-bottom) + 20px);
   animation: slideUp .22s ease;
 }

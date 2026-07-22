@@ -23,9 +23,16 @@ const App = {
       case 'sleep': view.innerHTML = renderSleep(); break;
       case 'grocery': view.innerHTML = renderGrocery(); break;
     }
-    window.scrollTo(0, 0);
+    view.scrollTo(0, 0);
   }
 };
+
+/* iOS standalone PWA: dismissing the keyboard can leave the whole app panned
+   upward (tab bar floating mid-screen). The window itself never scrolls in our
+   layout, so snapping it to 0 after any input loses focus is always safe. */
+document.addEventListener('focusout', () => {
+  setTimeout(() => window.scrollTo(0, 0), 60);
+});
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -370,6 +377,13 @@ document.addEventListener('click', e => {
     case 'readd-food': {
       const r = Store.get('recentFoods', [])[Number(el.dataset.idx)];
       if (r) { addFoodEntry(App.foodDay, { ...r, source: 'recent' }); toast('Logged'); App.render(); }
+      break;
+    }
+    case 'del-recent': {
+      const rec = Store.get('recentFoods', []);
+      rec.splice(Number(el.dataset.idx), 1);
+      Store.set('recentFoods', rec);
+      App.render();
       break;
     }
 

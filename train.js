@@ -155,7 +155,7 @@ function renderTrain() {
         <div class="list-item">
           <div class="li-main">
             <div class="li-title">${esc(s.dayName)}</div>
-            <div class="li-sub">${prettyDate(s.date)} · ${sets} sets · ${Math.round(kgToLb(vol)).toLocaleString()} lb volume</div>
+            <div class="li-sub">${prettyDate(s.date)} · ${sets} set${sets !== 1 ? 's' : ''} · ${Math.round(kgToLb(vol)).toLocaleString()} lb volume</div>
           </div>
           <button class="btn small" data-action="view-workout" data-id="${s.id}">View</button>
         </div>`;

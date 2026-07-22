@@ -67,6 +67,7 @@ function renderRecentFoods() {
         </div>
         <div class="li-val">${Math.round(r.kcal)}<span class="unit"> kcal</span></div>
         <button class="btn small" data-action="readd-food" data-idx="${i}">＋</button>
+        <button class="x-btn" data-action="del-recent" data-idx="${i}" aria-label="Remove from quick re-add">✕</button>
       </div>`).join('')}
   </div>`;
 }
