@@ -1,4 +1,4 @@
-/* Forge — app shell, dashboard, onboarding, settings */
+/* Peak — app shell, dashboard, onboarding, settings */
 
 const App = {
   tab: 'today',
@@ -6,6 +6,7 @@ const App = {
   activeSession: null,
   scanImage: null,
   scanResult: null,
+  grocSection: 'staples',
   ob: {},
 
   render() {
@@ -152,7 +153,7 @@ function openOnboarding(step = 1) {
   if (step === 1) {
     openModal(`
       <div class="ob-step-dots">${dots}</div>
-      <h3>Welcome to Forge 🔨</h3>
+      <h3>Welcome to Peak ⛰️</h3>
       <div class="modal-sub">30 seconds of setup — this calibrates your calorie & protein targets.</div>
       <label>Sex (for the metabolism formula)</label>
       <div class="seg" id="ob-sex">
@@ -209,7 +210,7 @@ function openOnboarding(step = 1) {
       <select id="ob-template">
         ${Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}" ${k === ob.template ? 'selected' : ''}>${v.name}</option>`).join('')}
       </select>
-      <button class="btn accent mt" data-action="ob-finish">Let's go 🔨</button>
+      <button class="btn accent mt" data-action="ob-finish">Start the climb ⛰️</button>
     `);
   }
 }
@@ -249,6 +250,12 @@ function openSettingsModal() {
       <option value="claude-opus-4-8" ${s.model === 'claude-opus-4-8' ? 'selected' : ''}>Claude Opus 4.8 — most accurate (~2¢/scan)</option>
       <option value="claude-haiku-4-5" ${s.model === 'claude-haiku-4-5' ? 'selected' : ''}>Claude Haiku 4.5 — budget (~0.4¢/scan)</option>
     </select>
+
+    <label>Time format</label>
+    <div class="seg" id="set-timefmt">
+      <button data-v="12" class="${s.timeFmt !== '24' ? 'on' : ''}">12-hour</button>
+      <button data-v="24" class="${s.timeFmt === '24' ? 'on' : ''}">24-hour</button>
+    </div>
 
     <details class="adv">
       <summary>Edit profile & goal</summary>
@@ -291,6 +298,7 @@ function saveSettings() {
   const s = getSettings();
   s.apiKey = document.getElementById('set-key').value.trim();
   s.model = document.getElementById('set-model').value;
+  s.timeFmt = document.querySelector('#set-timefmt button.on')?.dataset.v || '12';
   setSettings(s);
   const p = getProfile();
   if (p) {
@@ -344,7 +352,7 @@ document.addEventListener('click', e => {
     case 'ob-finish': {
       App.ob.template = document.getElementById('ob-template').value;
       setProfile(buildProfileFromOb());
-      closeModal(); toast('Locked in. Welcome to Forge 🔨');
+      closeModal(); toast('Locked in. Welcome to Peak ⛰️');
       App.render();
       break;
     }
@@ -397,7 +405,8 @@ document.addEventListener('click', e => {
 
     /* grocery */
     case 'g-add': groceryAdd(document.getElementById('g-new').value); break;
-    case 'g-staple': groceryAdd(STAPLES[Number(el.dataset.idx)].name); break;
+    case 'g-section': App.grocSection = el.dataset.v; App.render(); break;
+    case 'g-staple': groceryAddFromSection(el.dataset.sec || 'staples', Number(el.dataset.idx)); break;
     case 'g-toggle': {
       if (e.target.closest('[data-action=g-del]')) break;
       const list = getGrocery();
@@ -425,12 +434,12 @@ document.addEventListener('click', e => {
       const blob = new Blob([Store.exportAll()], { type: 'application/json' });
       const a2 = document.createElement('a');
       a2.href = URL.createObjectURL(blob);
-      a2.download = 'forge-backup-' + todayKey() + '.json';
+      a2.download = 'peak-backup-' + todayKey() + '.json';
       a2.click();
       break;
     }
     case 'reset-app':
-      if (confirm('Delete ALL Forge data on this device? Export a backup first if you want to keep it.')) {
+      if (confirm('Delete ALL Peak data on this device? Export a backup first if you want to keep it.')) {
         Object.keys(localStorage).filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k));
         location.reload();
       }

@@ -1,4 +1,4 @@
-/* Forge — data layer (localStorage) */
+/* Peak — data layer (localStorage; keys keep the legacy "forge:" prefix so existing data survives the rename) */
 const Store = {
   get(key, fallback) {
     try {
@@ -17,11 +17,11 @@ const Store = {
       const k = localStorage.key(i);
       if (k.startsWith('forge:')) out[k] = localStorage.getItem(k);
     }
-    return JSON.stringify({ app: 'forge', version: 1, exported: new Date().toISOString(), data: out }, null, 2);
+    return JSON.stringify({ app: 'peak', version: 1, exported: new Date().toISOString(), data: out }, null, 2);
   },
   importAll(json) {
     const parsed = JSON.parse(json);
-    if (!parsed || parsed.app !== 'forge' || !parsed.data) throw new Error('Not a Forge backup file');
+    if (!parsed || (parsed.app !== 'peak' && parsed.app !== 'forge') || !parsed.data) throw new Error('Not a Peak backup file');
     Object.entries(parsed.data).forEach(([k, v]) => localStorage.setItem(k, v));
   }
 };
@@ -42,11 +42,23 @@ function prettyDate(key) {
 function daysBetween(k1, k2) {
   return Math.round((new Date(k2) - new Date(k1)) / 86400000);
 }
+/* display a stored "HH:MM" (24h) per the user's time-format setting */
+function fmtTime(hhmm) {
+  if (!hhmm) return '';
+  if (getSettings().timeFmt === '24') return hhmm;
+  const [h, m] = hhmm.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
 
 /* ---------- profile & targets ---------- */
 function getProfile() { return Store.get('profile', null); }
 function setProfile(p) { Store.set('profile', p); }
-function getSettings() { return Store.get('settings', { apiKey: '', model: 'claude-opus-4-8' }); }
+function getSettings() {
+  const s = Store.get('settings', {});
+  return { apiKey: '', model: 'claude-opus-4-8', timeFmt: '12', ...s };
+}
 function setSettings(s) { Store.set('settings', s); }
 
 const ACTIVITY_MULT = { sedentary: 1.2, light: 1.375, moderate: 1.55, high: 1.725 };

@@ -1,6 +1,6 @@
 {
-  "name": "Forge — Fuel, Train, Recover",
-  "short_name": "Forge",
+  "name": "Peak — Fuel, Train, Recover",
+  "short_name": "Peak",
   "description": "Calorie tracking with AI meal scanning, workout log with plateau detection, sleep scores, and smart grocery lists.",
   "start_url": "./",
   "scope": "./",

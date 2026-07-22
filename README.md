@@ -1,8 +1,8 @@
-# Forge 🔨
+# Peak ⛰️
 
 A personal fitness PWA: **fuel, train, recover** — built to break plateaus.
 
-**Live app:** https://tripod110.github.io/forge/
+**Live app:** https://tripod110.github.io/peak/
 
 ## Features
 
@@ -10,7 +10,7 @@ A personal fitness PWA: **fuel, train, recover** — built to break plateaus.
 - **AI meal scanning** — snap a photo (or just describe a meal) and Claude estimates calories, macros, fiber, and a nutrition-quality score per item. Review and edit before logging.
 - **Workout log** — built-in training splits (Full Body, Upper/Lower, PPL), per-set logging with "beat last time" hints, estimated-1RM PR detection, and **automatic plateau alerts** with concrete fixes.
 - **Sleep scores** — nightly log (duration + quality + bedtime consistency → 0–100 score) with 14-day trends and recovery insights.
-- **Smart grocery list** — checklist for the store, budget high-protein staples one tap away, and nudges when your week ran under your protein target.
+- **Smart grocery list** — checklist for the store, one-tap quick-adds (budget protein staples, snacks, and easy meals that add all their ingredients at once), and nudges when your week ran under your protein target.
 - **Streaks, weight trend, weekly dashboard.**
 
 ## Privacy
@@ -28,7 +28,7 @@ to the Anthropic API using **your own API key** (stored on-device only, never in
 ## AI scanning setup
 
 1. Create an API key at [console.anthropic.com](https://console.anthropic.com) → API keys.
-2. In Forge: ⚙ Settings → paste the key → Save.
+2. In Peak: ⚙ Settings → paste the key → Save.
 3. Costs roughly 1–2¢ per scan with Claude Opus 4.8 (default) or ~0.4¢ with Haiku 4.5.
 
 ## Stack

@@ -18,6 +18,40 @@ const STAPLES = [
   { name: 'Whey protein (if budget allows)', protein: '~24g/scoop', tag: 'cost per 25g protein is hard to beat' }
 ];
 
+const SNACKS = [
+  { name: 'Protein bars (box)', protein: '~20g each', tag: 'gym-bag staple' },
+  { name: 'Beef jerky', protein: '~10g/oz', tag: 'no fridge needed' },
+  { name: 'String cheese', protein: '7g each', tag: 'grab & go' },
+  { name: 'Tuna packets', protein: '~17g each', tag: 'no can opener' },
+  { name: 'Cottage cheese cups', protein: '~19g each', tag: 'pre-bed protein' },
+  { name: 'Greek yogurt cups', protein: '~15g each', tag: 'dessert swap' },
+  { name: 'Eggs for hard-boiling', protein: '6g each', tag: 'prep a batch Sunday' },
+  { name: 'Rice cakes + peanut butter', protein: 'quick carbs + fat', tag: 'pre-workout' },
+  { name: 'Chocolate milk', protein: '8g/cup', tag: 'post-workout classic' },
+  { name: 'Popcorn kernels', protein: 'high volume, low cal', tag: 'cutting-friendly' },
+  { name: 'Trail mix', protein: 'calorie dense', tag: 'for hungrier days' },
+  { name: 'Whey + banana + milk (shake)', protein: '~35g', tag: 'fastest meal there is' }
+];
+
+const EASY_MEALS = [
+  { name: 'Rotisserie chicken bowls', protein: '~40g/bowl', tag: 'zero cooking', items: ['Rotisserie chicken', 'Microwave rice packets', 'Frozen stir-fry vegetables', 'Teriyaki or hot sauce'] },
+  { name: 'Tuna wraps', protein: '~25g/wrap', tag: '5 minutes flat', items: ['Canned tuna (×4)', 'Tortillas', 'Mayo', 'Baby spinach'] },
+  { name: 'Egg & cheese burritos', protein: '~22g each', tag: 'make a batch, freeze', items: ['Eggs (dozen)', 'Tortillas', 'Shredded cheese', 'Salsa'] },
+  { name: 'Ground turkey pasta', protein: '~40g/serving', tag: 'one pot, 20 min', items: ['Ground turkey', 'Pasta', 'Marinara jar', 'Parmesan'] },
+  { name: 'Sheet-pan chicken & potatoes', protein: '~45g/serving', tag: 'oven does the work', items: ['Chicken thighs (family pack)', 'Baby potatoes', 'Frozen broccoli', 'Olive oil'] },
+  { name: 'Overnight oats', protein: '~30g w/ whey', tag: 'breakfast done the night before', items: ['Oats (big canister)', 'Whey protein', 'Milk', 'Peanut butter', 'Bananas'] },
+  { name: '15-minute chili', protein: '~35g/bowl', tag: 'cheap, freezes great', items: ['Ground 80/20 beef', 'Canned beans', 'Canned diced tomatoes', 'Chili seasoning'] },
+  { name: 'Turkey sandwiches', protein: '~25g each', tag: 'lunch autopilot', items: ['Deli turkey', 'Bread', 'Cheese slices', 'Mustard'] },
+  { name: 'Chicken quesadillas', protein: '~35g each', tag: 'leftover rotisserie use', items: ['Tortillas', 'Shredded cheese', 'Rotisserie chicken', 'Salsa'] },
+  { name: 'Yogurt power bowl', protein: '~25g/bowl', tag: 'no-cook breakfast', items: ['Greek yogurt (big tub, plain)', 'Granola', 'Frozen berries', 'Honey'] }
+];
+
+const GROC_SECTIONS = {
+  staples: { label: 'Staples', data: STAPLES, blurb: 'High protein per dollar. Tap to add to your list.' },
+  snacks: { label: 'Snacks', data: SNACKS, blurb: 'Quick grabs that keep protein up between meals. Tap to add.' },
+  meals: { label: 'Easy meals', data: EASY_MEALS, blurb: 'Tap a meal to add all its ingredients to your list.' }
+};
+
 function renderGrocery() {
   const list = getGrocery();
   const open = list.filter(i => !i.done);
@@ -40,14 +74,38 @@ function renderGrocery() {
   </div>
 
   <div class="card">
-    <h2>Budget protein staples</h2>
-    <div class="muted small" style="margin-bottom:10px">High protein per dollar. Tap to add to your list.</div>
-    ${STAPLES.map((s, i) => `
-      <button class="staple-chip" data-action="g-staple" data-idx="${i}">
+    <h2>Quick adds</h2>
+    <div class="seg" style="margin-bottom:10px">
+      ${Object.entries(GROC_SECTIONS).map(([k, s]) =>
+        `<button data-action="g-section" data-v="${k}" class="${App.grocSection === k ? 'on' : ''}">${s.label}</button>`).join('')}
+    </div>
+    <div class="muted small" style="margin-bottom:10px">${GROC_SECTIONS[App.grocSection].blurb}</div>
+    ${GROC_SECTIONS[App.grocSection].data.map((s, i) => `
+      <button class="staple-chip" data-action="g-staple" data-sec="${App.grocSection}" data-idx="${i}">
         <span class="s-name">${esc(s.name)}</span>
-        <span class="s-sub">${esc(s.protein)} · ${esc(s.tag)}</span>
+        <span class="s-sub">${esc(s.protein)} · ${esc(s.tag)}${s.items ? ' · ' + s.items.length + ' items' : ''}</span>
       </button>`).join('')}
   </div>`;
+}
+
+/* add one entry, or a meal's whole ingredient list */
+function groceryAddFromSection(sec, idx) {
+  const item = GROC_SECTIONS[sec].data[idx];
+  if (!item) return;
+  if (item.items) {
+    const list = getGrocery();
+    let n = 0;
+    item.items.forEach(name => {
+      if (list.some(i => i.name.toLowerCase() === name.toLowerCase() && !i.done)) return;
+      list.unshift({ id: 'g' + Math.random().toString(36).slice(2, 9), name, done: false });
+      n++;
+    });
+    setGrocery(list);
+    toast(n ? `Added ${n} ingredients for ${item.name}` : 'Already on the list');
+    App.render();
+  } else {
+    groceryAdd(item.name);
+  }
 }
 
 function gItem(i) {

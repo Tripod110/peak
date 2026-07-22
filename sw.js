@@ -1,5 +1,5 @@
-/* Forge service worker — cache app shell, never cache API calls */
-const CACHE = 'forge-v1';
+/* Peak service worker — cache app shell, never cache API calls */
+const CACHE = 'peak-v2';
 const SHELL = [
   './', 'index.html', 'style.css',
   'store.js', 'charts.js', 'api.js', 'food.js', 'train.js', 'sleep.js', 'grocery.js', 'app.js',

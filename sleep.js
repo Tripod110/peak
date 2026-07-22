@@ -65,7 +65,7 @@ function renderSleep() {
       <div class="spread">
         <div>
           <div class="hero-num">${fmtDur(today.durationMin)}</div>
-          <div class="muted small">${esc(today.bed)} → ${esc(today.wake)} · quality ${today.quality}/5</div>
+          <div class="muted small">${fmtTime(today.bed)} → ${fmtTime(today.wake)} · quality ${today.quality}/5</div>
         </div>
         <div class="center">
           <div class="hero-num" style="color:${scoreColor}">${score}</div>

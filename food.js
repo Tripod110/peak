@@ -44,7 +44,7 @@ function renderFood() {
       <div class="list-item">
         <div class="li-main">
           <div class="li-title">${esc(e.name)}</div>
-          <div class="li-sub">${e.time || ''}${e.portion ? ' · ' + esc(e.portion) : ''} · P${Math.round(e.protein)} C${Math.round(e.carbs)} F${Math.round(e.fat)}</div>
+          <div class="li-sub">${e.time ? fmtTime(e.time) : ''}${e.portion ? ' · ' + esc(e.portion) : ''} · P${Math.round(e.protein)} C${Math.round(e.carbs)} F${Math.round(e.fat)}</div>
         </div>
         <div class="li-val">${Math.round(e.kcal)}<span class="unit"> kcal</span></div>
         <button class="x-btn" data-action="del-food" data-id="${e.id}" aria-label="Delete">✕</button>
