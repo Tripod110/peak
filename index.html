@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Forge</title>
+<meta name="description" content="Calorie tracking, AI meal scanning, workout log, sleep scores, and smart grocery lists.">
+<meta name="theme-color" content="#0d0d0d">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Forge">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-title">
+    <span class="logo-dot"></span>
+    <h1 id="header-title">Forge</h1>
+  </div>
+  <div class="topbar-date" id="header-date"></div>
+  <button class="icon-btn" data-action="open-settings" aria-label="Settings">⚙</button>
+</header>
+
+<main id="view" class="view"></main>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tab" data-tab="today"><span class="tab-ico">◉</span>Today</button>
+  <button class="tab" data-tab="food"><span class="tab-ico">🍳</span>Food</button>
+  <button class="tab" data-tab="train"><span class="tab-ico">🏋</span>Train</button>
+  <button class="tab" data-tab="sleep"><span class="tab-ico">☾</span>Sleep</button>
+  <button class="tab" data-tab="grocery"><span class="tab-ico">🛒</span>Grocery</button>
+</nav>
+
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script src="store.js"></script>
+<script src="charts.js"></script>
+<script src="api.js"></script>
+<script src="food.js"></script>
+<script src="train.js"></script>
+<script src="sleep.js"></script>
+<script src="grocery.js"></script>
+<script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
