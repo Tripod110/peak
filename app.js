@@ -11,6 +11,9 @@ const App = {
 
   render() {
     const view = document.getElementById('view');
+    // keep the reading position when re-rendering the same tab (e.g. adding a set);
+    // only jump to the top when actually switching tabs
+    const keepScroll = App._renderedTab === App.tab ? view.scrollTop : 0;
     document.getElementById('header-date').textContent =
       new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === App.tab));
@@ -23,16 +26,24 @@ const App = {
       case 'sleep': view.innerHTML = renderSleep(); break;
       case 'grocery': view.innerHTML = renderGrocery(); break;
     }
-    view.scrollTo(0, 0);
+    view.scrollTop = keepScroll;
+    App._renderedTab = App.tab;
   }
 };
 
-/* iOS standalone PWA: dismissing the keyboard can leave the whole app panned
-   upward (tab bar floating mid-screen). The window itself never scrolls in our
-   layout, so snapping it to 0 after any input loses focus is always safe. */
-document.addEventListener('focusout', () => {
-  setTimeout(() => window.scrollTo(0, 0), 60);
-});
+/* Mobile keyboards can pan/resize the viewport and leave the app shifted with
+   dead space under the tab bar. The window itself never scrolls in our layout,
+   so snapping it back whenever the keyboard closes is always safe. */
+function snapViewport() {
+  const ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return; // keyboard still open
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+}
+document.addEventListener('focusout', () => setTimeout(snapViewport, 60));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => setTimeout(snapViewport, 60));
+}
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -48,7 +59,9 @@ function renderToday() {
   const plateaus = detectPlateaus();
   const tpl = TEMPLATES[p.template];
   const nextIdx = nextDayIndex();
-  const trainedToday = getWorkouts().some(s => s.date === tk);
+  const todayScores = getWorkouts().filter(s => s.date === tk).map(s => s.score || 0);
+  const trainedToday = todayScores.length > 0;
+  const todayBest = trainedToday ? Math.max(...todayScores) : 0;
 
   // 7-day calories
   const weekVals = [];
@@ -86,7 +99,7 @@ function renderToday() {
     <div class="card mb0" data-action="go-tab" data-tab="train" style="cursor:pointer">
       <h2>Training</h2>
       ${trainedToday
-        ? `<div class="pill good">✓ Trained today</div>`
+        ? `<div class="pill good">✓ Trained${todayBest ? ' · ' + todayBest : ''}</div>`
         : `<div style="font-weight:700">${esc(tpl.days[nextIdx].name)}</div><div class="muted small">up next — tap to start</div>`}
     </div>
     <div class="card mb0" data-action="go-tab" data-tab="sleep" style="cursor:pointer">
@@ -409,6 +422,8 @@ document.addEventListener('click', e => {
       if (confirm('Discard this workout?')) { App.activeSession = null; App.render(); }
       break;
     case 'view-workout': viewWorkoutModal(el.dataset.id); break;
+    case 'open-cardio': openCardioModal(); break;
+    case 'save-cardio': saveCardio(); break;
     case 'delete-workout':
       if (confirm('Delete this session permanently?')) { deleteWorkout(el.dataset.id); closeModal(); App.render(); }
       break;

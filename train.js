@@ -40,8 +40,42 @@ const TEMPLATE_FOR_DAYS = { 2: 'fb3', 3: 'fb3', 4: 'ul4', 5: 'ppl5', 6: 'ppl6', 
 
 /* est. 1RM (Epley), capped at 12 reps for sanity */
 function e1rm(weight, reps) {
-  if (!weight || !reps) return 0;
+  if (!weight || weight < 0 || !reps) return 0;
   return weight * (1 + Math.min(reps, 12) / 30);
+}
+
+/* Session score 0-100: intensity vs your bests (50) + sets vs plan (35) + PR/completion bonus (15).
+   Call BEFORE saveWorkout so history excludes the session being scored. */
+function scoreWorkout(s) {
+  let intensitySum = 0, n = 0, prs = 0;
+  s.exercises.forEach(ex => {
+    const nowBest = Math.max(0, ...ex.sets.map(st => e1rm(st.weight, st.reps)));
+    if (nowBest <= 0) return; // bodyweight-only work carries no intensity signal
+    const prevBest = Math.max(0, ...exerciseHistory(ex.name).map(h => h.bestE1rm));
+    if (prevBest > 0) {
+      intensitySum += Math.min(nowBest / prevBest, 1.1);
+      if (nowBest > prevBest + 0.01) prs++;
+    } else intensitySum += 1; // first time on a lift: full credit
+    n++;
+  });
+  const intensity = n ? intensitySum / n : 0.9;
+  const intensityPts = Math.max(0, Math.min(1, (intensity - 0.5) / 0.5)) * 50;
+  const setsDone = s.exercises.reduce((x, e) => x + e.sets.length, 0);
+  const setsPlanned = s.exercises.reduce((x, e) => {
+    const m = /^(\d+)/.exec(e.target || '');
+    return x + (m ? Number(m[1]) : 3);
+  }, 0);
+  const volumePts = Math.min(setsDone / Math.max(setsPlanned, 1), 1) * 35;
+  const bonus = Math.min(prs * 10, 10) + (setsDone >= setsPlanned ? 5 : 0);
+  return Math.round(Math.min(100, intensityPts + volumePts + bonus));
+}
+
+/* cardio */
+const CARDIO_TYPES = ['Run', 'Incline walk', 'Bike', 'Row', 'Stairmaster', 'Swim', 'Jump rope', 'Sports / other'];
+const CARDIO_MET = { easy: 5, moderate: 8, hard: 11 };
+function scoreCardio(min, intensity) {
+  const durPts = Math.min(min / 45, 1) * 55;
+  return Math.round(Math.min(100, durPts + ({ easy: 25, moderate: 35, hard: 45 }[intensity] || 30)));
 }
 
 /* Per-exercise history: [{date, bestE1rm, topSet}] oldest→newest */
@@ -55,7 +89,10 @@ function exerciseHistory(name) {
         const v = e1rm(st.weight, st.reps);
         if (v > best) { best = v; top = st; }
       });
-      if (best > 0) out.push({ date: s.date, bestE1rm: best, topSet: top });
+      if (!top) { // bodyweight-only (abs etc.): track the best rep set instead
+        (ex.sets || []).forEach(st => { if (st.reps > 0 && (!top || st.reps > top.reps)) top = st; });
+      }
+      if (top) out.push({ date: s.date, bestE1rm: best, topSet: top });
     });
   });
   out.sort((a, b) => a.date < b.date ? -1 : 1);
@@ -88,6 +125,7 @@ function detectPlateaus() {
     const hist = exerciseHistory(name);
     if (hist.length < 4) return;
     const max = Math.max(...hist.map(h => h.bestE1rm));
+    if (max <= 0) return; // bodyweight-only exercises aren't plateau-tracked
     const firstBestIdx = hist.findIndex(h => h.bestE1rm >= max - 0.01);
     const sessionsSince = hist.length - 1 - firstBestIdx;
     const daysSince = daysBetween(hist[firstBestIdx].date, hist[hist.length - 1].date);
@@ -139,7 +177,10 @@ function renderTrain() {
         ${tpl.days.map((d, i) => `<option value="${i}" ${i === nextIdx ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
       </select>
       <button class="btn small" data-action="start-picked">Start</button>
-      <button class="btn small" data-action="start-freestyle">Freestyle</button>
+    </div>
+    <div class="grid-2 mt">
+      <button class="btn" data-action="start-freestyle">Freestyle lift</button>
+      <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
     </div>
   </div>
 
@@ -149,14 +190,21 @@ function renderTrain() {
     <h2>Recent sessions</h2>
     ${recent.length === 0 ? '<div class="muted center" style="padding:10px 0">No sessions yet. Time to put in work.</div>' :
       recent.map(s => {
-        const sets = (s.exercises || []).reduce((n, e) => n + (e.sets || []).length, 0);
-        const vol = (s.exercises || []).reduce((v, e) => v + (e.sets || []).reduce((x, st) => x + (st.weight || 0) * (st.reps || 0), 0), 0);
+        const scoreChip = s.score != null ? `<span class="pill ${s.score >= 75 ? 'good' : s.score >= 50 ? 'warn' : ''}">${s.score}</span>` : '';
+        const sub = s.cardio
+          ? `${prettyDate(s.date)} · ${s.durationMin} min ${esc(s.intensity)} · ~${s.kcalEst} kcal`
+          : (() => {
+            const sets = (s.exercises || []).reduce((n, e) => n + (e.sets || []).length, 0);
+            const vol = (s.exercises || []).reduce((v, e) => v + (e.sets || []).reduce((x, st) => x + Math.max(st.weight || 0, 0) * (st.reps || 0), 0), 0);
+            return `${prettyDate(s.date)} · ${sets} set${sets !== 1 ? 's' : ''} · ${Math.round(kgToLb(vol)).toLocaleString()} lb volume`;
+          })();
         return `
         <div class="list-item">
           <div class="li-main">
             <div class="li-title">${esc(s.dayName)}</div>
-            <div class="li-sub">${prettyDate(s.date)} · ${sets} set${sets !== 1 ? 's' : ''} · ${Math.round(kgToLb(vol)).toLocaleString()} lb volume</div>
+            <div class="li-sub">${sub}</div>
           </div>
+          ${scoreChip}
           <button class="btn small" data-action="view-workout" data-id="${s.id}">View</button>
         </div>`;
       }).join('')}
@@ -218,7 +266,9 @@ function renderExerciseBlock(ex, xi) {
   const hist = exerciseHistory(ex.name);
   const last = hist.length ? hist[hist.length - 1] : null;
   const lastTxt = last
-    ? `Last time: ${Math.round(kgToLb(last.topSet.weight))} lb × ${last.topSet.reps} (${prettyDate(last.date)}) — beat it.`
+    ? (last.topSet.weight > 0
+      ? `Last time: ${Math.round(kgToLb(last.topSet.weight))} lb × ${last.topSet.reps} (${prettyDate(last.date)}) — beat it.`
+      : `Last time: ${last.topSet.reps} reps (${prettyDate(last.date)}) — beat it.`)
     : 'First time logging this — set the baseline.';
   return `
   <div class="card">
@@ -230,9 +280,9 @@ function renderExerciseBlock(ex, xi) {
     ${ex.sets.map((st, si) => `
       <div class="set-row">
         <span class="set-no">${si + 1}</span>
-        <input type="number" inputmode="decimal" placeholder="lb" value="${st.weight != null ? Math.round(kgToLb(st.weight) * 10) / 10 : ''}"
+        <input type="number" step="any" placeholder="lb" value="${st.weight != null && st.weight !== 0 ? Math.round(kgToLb(st.weight) * 10) / 10 : ''}"
           data-set-w data-xi="${xi}" data-si="${si}">
-        <input type="number" inputmode="numeric" placeholder="reps" value="${st.reps ?? ''}"
+        <input type="number" placeholder="reps" value="${st.reps ?? ''}"
           data-set-r data-xi="${xi}" data-si="${si}">
         <button class="x-btn" data-action="del-set" data-xi="${xi}" data-si="${si}">✕</button>
       </div>`).join('')}
@@ -266,32 +316,41 @@ function readSetInputs() {
 function finishWorkout() {
   readSetInputs();
   const s = App.activeSession;
+  // reps are required; weight is optional (0 = bodyweight, e.g. ab work)
   s.exercises = s.exercises
-    .map(ex => ({ ...ex, sets: ex.sets.filter(st => st.weight > 0 && st.reps > 0) }))
+    .map(ex => ({ ...ex, sets: ex.sets.filter(st => st.reps > 0).map(st => ({ weight: st.weight || 0, reps: st.reps })) }))
     .filter(ex => ex.sets.length > 0);
-  if (!s.exercises.length) { toast('No completed sets — add weight & reps or discard'); return; }
-  // PR check
+  if (!s.exercises.length) { toast('No completed sets — add reps or discard'); return; }
+  // PR check (weighted lifts only)
   const prs = [];
   s.exercises.forEach(ex => {
     const prevBest = Math.max(0, ...exerciseHistory(ex.name).map(h => h.bestE1rm));
-    const nowBest = Math.max(...ex.sets.map(st => e1rm(st.weight, st.reps)));
+    const nowBest = Math.max(0, ...ex.sets.map(st => e1rm(st.weight, st.reps)));
     if (nowBest > prevBest + 0.01 && prevBest > 0) prs.push(ex.name);
   });
+  s.score = scoreWorkout(s);
   saveWorkout(s);
   App.activeSession = null;
-  toast(prs.length ? `🎉 PR on ${prs.join(', ')}!` : 'Workout saved 💪');
+  toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${s.score}` : `Workout saved — score ${s.score} 💪`);
   App.render();
 }
+
+const EXTRA_EXERCISES = [
+  'Crunch', 'Cable Crunch', 'Ab Wheel Rollout', 'Russian Twist', 'Sit-up', 'Decline Sit-up',
+  'Leg Raise', 'Plank (seconds)', 'Side Plank (seconds)', 'Dead Bug', 'Back Extension', 'Farmer Carry'
+];
 
 function openAddExercise() {
   const names = new Set();
   Object.values(TEMPLATES).forEach(t => t.days.forEach(d => d.ex.forEach(e => names.add(e[0]))));
+  EXTRA_EXERCISES.forEach(n => names.add(n));
   getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
   openModal(`
     <h3>Add exercise</h3>
     <label>Exercise name</label>
-    <input id="ax-name" list="ax-list" placeholder="e.g. Cable Fly">
+    <input id="ax-name" list="ax-list" placeholder="e.g. Cable Crunch">
     <datalist id="ax-list">${[...names].sort().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+    <div class="chart-note">Bodyweight ab work: leave the weight blank and just log reps (or seconds).</div>
     <button class="btn primary mt" data-action="confirm-add-exercise">Add</button>
   `);
   setTimeout(() => document.getElementById('ax-name')?.focus(), 50);
@@ -302,12 +361,50 @@ function viewWorkoutModal(id) {
   if (!s) return;
   openModal(`
     <h3>${esc(s.dayName)}</h3>
-    <div class="modal-sub">${prettyDate(s.date)}</div>
-    ${(s.exercises || []).map(ex => `
+    <div class="modal-sub">${prettyDate(s.date)}${s.score != null ? ` · score ${s.score}/100` : ''}</div>
+    ${s.cardio
+      ? `<div class="muted small">${s.durationMin} min · ${esc(s.intensity)} intensity · ~${s.kcalEst} kcal burned</div>`
+      : (s.exercises || []).map(ex => `
       <div class="exercise-block">
         <div class="ex-head"><span class="ex-name">${esc(ex.name)}</span></div>
-        ${(ex.sets || []).map((st, i) => `<div class="muted small">Set ${i + 1}: ${Math.round(kgToLb(st.weight))} lb × ${st.reps}</div>`).join('')}
+        ${(ex.sets || []).map((st, i) => `<div class="muted small">Set ${i + 1}: ${st.weight ? Math.round(kgToLb(st.weight)) + ' lb × ' + st.reps : st.reps + ' reps'}</div>`).join('')}
       </div>`).join('')}
+    ${s.score != null && !s.cardio ? `<div class="chart-note mt">Score = intensity vs your bests (50) + sets vs plan (35) + PR bonus (15).</div>` : ''}
     <button class="btn ghost danger mt" data-action="delete-workout" data-id="${s.id}">Delete session</button>
   `);
+}
+
+/* ---------- cardio ---------- */
+function openCardioModal() {
+  openModal(`
+    <h3>Log cardio</h3>
+    <label>Type</label>
+    <select id="cd-type">${CARDIO_TYPES.map(t => `<option>${esc(t)}</option>`).join('')}</select>
+    <label>Duration (minutes)</label>
+    <input id="cd-min" type="number" placeholder="e.g. 25">
+    <label>Intensity</label>
+    <div class="seg" id="cd-int">
+      <button data-v="easy">Easy</button>
+      <button data-v="moderate" class="on">Moderate</button>
+      <button data-v="hard">Hard</button>
+    </div>
+    <button class="btn primary mt" data-action="save-cardio">Save</button>
+  `);
+}
+
+function saveCardio() {
+  const min = Number(document.getElementById('cd-min').value);
+  if (!min || min < 1) { toast('Enter the duration'); return; }
+  const type = document.getElementById('cd-type').value;
+  const intensity = document.querySelector('#cd-int button.on')?.dataset.v || 'moderate';
+  const kg = getProfile().weightKg;
+  const kcalEst = Math.round(CARDIO_MET[intensity] * 3.5 * kg / 200 * min);
+  const score = scoreCardio(min, intensity);
+  saveWorkout({
+    id: 'c' + Date.now(), date: todayKey(), cardio: true, freestyle: true,
+    dayName: 'Cardio · ' + type, type, durationMin: min, intensity, kcalEst, score, exercises: []
+  });
+  closeModal();
+  toast(`Cardio logged — score ${score} 🏃 (~${kcalEst} kcal)`);
+  App.render();
 }
