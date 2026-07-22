@@ -239,16 +239,16 @@ function openSettingsModal() {
     <h3>Settings</h3>
     <div class="modal-sub">${p ? `${GOAL_LABEL[p.goal]} · ${t.kcal.toLocaleString()} kcal · ${t.protein}g protein · ${TEMPLATES[p.template].name}` : ''}</div>
 
-    <label>Anthropic API key (for AI meal scanning)</label>
+    <label>Google Gemini API key (for AI meal scanning — free)</label>
     <div class="key-row">
-      <input id="set-key" type="password" value="${esc(s.apiKey)}" placeholder="sk-ant-…" autocomplete="off">
+      <input id="set-key" type="password" value="${esc(s.apiKey)}" placeholder="AIza…" autocomplete="off">
     </div>
-    <div class="chart-note">Stored only on this device. Get a key at console.anthropic.com → API keys.</div>
+    <div class="chart-note">Free: aistudio.google.com/apikey → sign in with Google → Create API key. Stored only on this device.</div>
 
     <label>Scan model</label>
     <select id="set-model">
-      <option value="claude-opus-4-8" ${s.model === 'claude-opus-4-8' ? 'selected' : ''}>Claude Opus 4.8 — most accurate (~2¢/scan)</option>
-      <option value="claude-haiku-4-5" ${s.model === 'claude-haiku-4-5' ? 'selected' : ''}>Claude Haiku 4.5 — budget (~0.4¢/scan)</option>
+      <option value="gemini-flash-latest" ${s.model === 'gemini-flash-latest' ? 'selected' : ''}>Gemini Flash — best quality (free)</option>
+      <option value="gemini-flash-lite-latest" ${s.model === 'gemini-flash-lite-latest' ? 'selected' : ''}>Gemini Flash-Lite — more scans/day (free)</option>
     </select>
 
     <label>Time format</label>

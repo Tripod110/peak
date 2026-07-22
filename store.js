@@ -57,7 +57,11 @@ function getProfile() { return Store.get('profile', null); }
 function setProfile(p) { Store.set('profile', p); }
 function getSettings() {
   const s = Store.get('settings', {});
-  return { apiKey: '', model: 'claude-opus-4-8', timeFmt: '12', ...s };
+  const merged = { apiKey: '', model: 'gemini-flash-latest', timeFmt: '12', ...s };
+  // migrate from the old Claude-based scanner: ignore leftover Anthropic keys/models
+  if ((merged.apiKey || '').startsWith('sk-ant-')) merged.apiKey = '';
+  if ((merged.model || '').startsWith('claude')) merged.model = 'gemini-flash-latest';
+  return merged;
 }
 function setSettings(s) { Store.set('settings', s); }
 

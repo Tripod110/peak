@@ -75,8 +75,8 @@ function renderRecentFoods() {
 function openScanModal() {
   const s = getSettings();
   const keyWarning = s.apiKey ? '' :
-    `<div class="alert crit"><span class="a-ico">⚠</span><div class="a-body"><b>API key needed</b>
-     AI scanning uses your Anthropic API key. Add it in Settings — it never leaves this device.</div></div>`;
+    `<div class="alert crit"><span class="a-ico">⚠</span><div class="a-body"><b>Free API key needed (one-time)</b>
+     Scanning runs on Google Gemini's free tier. Grab a key at aistudio.google.com/apikey and paste it in Settings — it never leaves this device.</div></div>`;
   openModal(`
     <h3>Scan a meal</h3>
     <div class="modal-sub">Snap a photo, or just describe the meal — Claude estimates calories and macros.</div>
@@ -87,7 +87,7 @@ function openScanModal() {
       <label>Optional: describe it (helps accuracy)</label>
       <textarea id="scan-desc" rows="2" placeholder="e.g. chipotle bowl, double chicken, no rice"></textarea>
       <button class="btn primary mt" data-action="scan-run">Analyze ${s.apiKey ? '' : '(needs key)'}</button>
-      <div class="chart-note center">A scan costs roughly 1–2¢ with the default model.</div>
+      <div class="chart-note center">Scans are free (Gemini free tier — generous daily allowance).</div>
     </div>
     <div id="scan-busy" style="display:none" class="center">
       <div class="spinner"></div>
