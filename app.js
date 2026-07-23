@@ -1,5 +1,21 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
+const APP_VERSION = 'v6';
+
+/* Size the app to the REAL visible height. CSS viewport units (vh/dvh) misreport
+   on some phones — especially after the keyboard closes — leaving dead space
+   under the tab bar. window.innerHeight is the ground truth; re-measure on
+   every viewport change. */
+function setAppHeight() {
+  document.body.style.height = window.innerHeight + 'px';
+}
+window.addEventListener('resize', setAppHeight);
+window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 120));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => setTimeout(setAppHeight, 60));
+}
+setAppHeight();
+
 const App = {
   tab: 'today',
   foodDay: todayKey(),
@@ -301,6 +317,7 @@ function openSettingsModal() {
     </details>
 
     <button class="btn primary mt" data-action="save-settings">Save</button>
+    <div class="chart-note center mt">Peak ${APP_VERSION}</div>
   `);
   document.getElementById('import-file')?.addEventListener('change', ev => {
     const f = ev.target.files[0];
