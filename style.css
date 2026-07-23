@@ -28,14 +28,13 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 html { height: 100%; overflow: hidden; }
-/* body never scrolls — scrolling happens inside .view. Height uses dynamic
-   viewport units (dvh) so it always matches the phone's real visible height,
-   with no dead space under the tab bar; a JS handler snaps back any leftover
-   pan after the on-screen keyboard closes. */
+/* body is pinned to ALL FOUR edges of the real viewport (inset:0), so it always
+   spans exactly top→bottom of the screen — no phantom gap, on any device. It
+   never scrolls; scrolling happens inside .view. The safe-area padding on the
+   topbar/tabbar keeps content clear of the Dynamic Island and home indicator. */
 body {
-  height: 100vh;
-  height: 100dvh;
-  width: 100%;
+  position: fixed;
+  inset: 0;
   display: flex; flex-direction: column;
   overflow: hidden;
   background: var(--page);
