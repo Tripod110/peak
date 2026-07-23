@@ -1,43 +1,9 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v11-diag';
+const APP_VERSION = 'v12';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-}
-
-/* TEMP diagnostic: measure which viewport unit equals the real screen height. */
-function measureViewport() {
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed;top:0;left:-9999px;width:1px;visibility:hidden;';
-  document.body.appendChild(probe);
-  const read = h => { probe.style.height = h; return Math.round(probe.getBoundingClientRect().height); };
-  const vh = read('100vh'), dvh = read('100dvh'), svh = read('100svh'), lvh = read('100lvh');
-  probe.style.height = '0px'; probe.style.paddingBottom = 'env(safe-area-inset-bottom)';
-  const sab = Math.round(probe.getBoundingClientRect().height);
-  probe.style.paddingBottom = '0px'; probe.style.paddingTop = 'env(safe-area-inset-top)';
-  const sat = Math.round(probe.getBoundingClientRect().height);
-  probe.remove();
-  const tb = document.getElementById('tabbar')?.getBoundingClientRect();
-  const bodyH = Math.round(document.body.getBoundingClientRect().height);
-  return { inner: window.innerHeight, screenH: screen.height, vh, dvh, svh, lvh, safeTop: sat, safeBottom: sab,
-    tabbarBottom: tb ? Math.round(tb.bottom) : '?', bodyH, appH: getComputedStyle(document.documentElement).getPropertyValue('--app-h').trim() || '(unset)', standalone: isStandalone() };
-}
-function diagCard() {
-  const m = measureViewport();
-  return `<div class="card" style="border:1px solid var(--orange)">
-    <h2>📐 Screen diagnostic (v11)</h2>
-    <div class="small" style="font-family:monospace;line-height:1.8">
-      innerHeight: <b>${m.inner}</b> · screen.height: <b>${m.screenH}</b><br>
-      --app-h set to: <b>${m.appH}</b><br>
-      body rendered height: <b>${m.bodyH}</b><br>
-      tab bar bottom edge: <b>${m.tabbarBottom}</b><br>
-      safe-area top/bottom: <b>${m.safeTop}</b> / <b>${m.safeBottom}</b><br>
-      standalone: <b>${m.standalone}</b>
-    </div>
-    <div class="chart-note mt">👇 There's a bright ORANGE line at the bottom. One question: is it touching the very bottom edge of your screen, or is there black BELOW it? That answer tells me exactly what to do.</div>
-  </div>
-  <div style="position:fixed;left:0;right:0;bottom:0;height:8px;background:var(--orange);z-index:99" aria-hidden="true"></div>`;
 }
 
 /* Shown only when running in a browser tab: the browser's own bottom bar eats
@@ -54,20 +20,16 @@ function installBanner() {
     <div><button class="btn small ghost" data-action="dismiss-install" style="margin-top:6px">Dismiss</button></div></div></div>`;
 }
 
-/* SAFE: size the app to the reported viewport (innerHeight). Never larger —
-   overshooting would push the tab bar off-screen if iOS has genuinely walled
-   off the extra pixels. The orange probe line below reveals whether the
-   reported bottom equals the physical screen bottom. */
-function setAppHeight() {
-  document.documentElement.style.setProperty('--app-h', window.innerHeight + 'px');
+/* The app is laid out entirely in CSS (body: position:fixed; inset:0). The only
+   JS the layout needs is snapping the window back to 0,0 after the keyboard
+   closes, since a mobile keyboard can leave the page panned. */
+function snapViewport() {
+  const ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return; // keyboard still open
+  window.scrollTo(0, 0);
 }
-window.addEventListener('resize', setAppHeight);
-window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 120));
-window.addEventListener('pageshow', setAppHeight);
-window.addEventListener('load', () => { setAppHeight(); setTimeout(setAppHeight, 300); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(setAppHeight, 80); });
-if (window.visualViewport) window.visualViewport.addEventListener('resize', () => setTimeout(setAppHeight, 60));
-setAppHeight();
+document.addEventListener('focusout', () => setTimeout(snapViewport, 60));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', () => setTimeout(snapViewport, 60));
 
 const App = {
   tab: 'today',
@@ -145,7 +107,6 @@ function renderToday() {
   const slColor = slScore == null ? CHART.muted : slScore >= 75 ? CHART.good : slScore >= 50 ? CHART.warning : CHART.critical;
 
   return `
-  ${diagCard()}
   ${plateaus.slice(0, 2).map(pl => `
     <div class="alert">
       <span class="a-ico">⚠</span>

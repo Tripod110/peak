@@ -28,16 +28,13 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 html { height: 100%; overflow: hidden; }
-/* body is anchored to the top and its height is driven by JS (--app-h), because
-   iOS standalone can under-report the viewport (innerHeight 873 on a 932px
-   screen) while the webview is actually full-size. JS sets --app-h to the true
-   screen height so the app reaches the physical bottom; CSS 100dvh is the
-   fallback. It never scrolls — scrolling happens inside .view. */
+/* body fills the viewport iOS provides (position:fixed; inset:0) and never
+   scrolls — scrolling happens inside .view. With the opaque `black` status-bar
+   style, iOS sizes this viewport to sit below the status bar and above the home
+   indicator, so it reaches the real screen edges with no letterbox gap. */
 body {
   position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 100dvh;
-  height: var(--app-h, 100dvh);
+  inset: 0;
   display: flex; flex-direction: column;
   overflow: hidden;
   background: var(--page);
