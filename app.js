@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v7';
+const APP_VERSION = 'v8';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -20,6 +20,20 @@ function installBanner() {
     <div><button class="btn small ghost" data-action="dismiss-install" style="margin-top:6px">Dismiss</button></div></div></div>`;
 }
 
+/* Shown in the installed app when the system is visibly withholding screen
+   space (e.g. an Android navigation-button bar) — surfaces the numbers. */
+function screenCheckCard() {
+  if (!isStandalone() || !screen.height || Store.get('screenCheckDismissed', false)) return '';
+  const short = screen.height - window.innerHeight;
+  if (short < screen.height * 0.07) return '';
+  return `<div class="alert"><span class="a-ico">📐</span><div class="a-body">
+    <b>Screen check: your phone is giving Peak ${window.innerHeight}px of its ${screen.height}px screen.</b>
+    The ${short}px band at the bottom is reserved by the system — usually the navigation-button bar.
+    Phones set to gesture navigation (with an up-to-date browser/OS) hand that space back automatically;
+    with 3-button navigation it always stays. Report this line if it looks wrong: ${APP_VERSION} · ${window.innerHeight}/${screen.height}.
+    <div><button class="btn small ghost" data-action="dismiss-screencheck" style="margin-top:6px">Got it</button></div></div></div>`;
+}
+
 /* Size the app to the REAL visible height. CSS viewport units (vh/dvh) misreport
    on some phones — especially after the keyboard closes — leaving dead space
    under the tab bar. window.innerHeight is the ground truth; re-measure on
@@ -32,6 +46,11 @@ window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 120)
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', () => setTimeout(setAppHeight, 60));
 }
+/* Some phones report a wrong height at boot and never fire a correcting resize
+   event — re-measure at several moments after launch and on every resume. */
+window.addEventListener('load', () => { setAppHeight(); setTimeout(setAppHeight, 300); setTimeout(setAppHeight, 1200); });
+window.addEventListener('pageshow', setAppHeight);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(setAppHeight, 80); });
 setAppHeight();
 
 const App = {
@@ -61,7 +80,7 @@ const App = {
       case 'sleep': html = renderSleep(); break;
       case 'grocery': html = renderGrocery(); break;
     }
-    view.innerHTML = installBanner() + html;
+    view.innerHTML = installBanner() + screenCheckCard() + html;
     view.scrollTop = keepScroll;
     App._renderedTab = App.tab;
   }
@@ -387,6 +406,7 @@ document.addEventListener('click', e => {
     case 'go-tab': App.tab = el.dataset.tab; App.render(); break;
     case 'open-settings': openSettingsModal(); break;
     case 'dismiss-install': Store.set('installDismissed', true); App.render(); break;
+    case 'dismiss-screencheck': Store.set('screenCheckDismissed', true); App.render(); break;
     case 'save-settings': saveSettings(); break;
     case 'modal-backdrop': if (e.target === el) closeModal(); break;
 
