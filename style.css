@@ -28,13 +28,16 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 html { height: 100%; overflow: hidden; }
-/* body is pinned to ALL FOUR edges of the real viewport (inset:0), so it always
-   spans exactly top→bottom of the screen — no phantom gap, on any device. It
-   never scrolls; scrolling happens inside .view. The safe-area padding on the
-   topbar/tabbar keeps content clear of the Dynamic Island and home indicator. */
+/* body is anchored to the top and its height is driven by JS (--app-h), because
+   iOS standalone can under-report the viewport (innerHeight 873 on a 932px
+   screen) while the webview is actually full-size. JS sets --app-h to the true
+   screen height so the app reaches the physical bottom; CSS 100dvh is the
+   fallback. It never scrolls — scrolling happens inside .view. */
 body {
   position: fixed;
-  inset: 0;
+  top: 0; left: 0; right: 0;
+  height: 100dvh;
+  height: var(--app-h, 100dvh);
   display: flex; flex-direction: column;
   overflow: hidden;
   background: var(--page);

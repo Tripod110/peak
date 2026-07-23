@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v10-diag';
+const APP_VERSION = 'v11-diag';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -19,25 +19,25 @@ function measureViewport() {
   const sat = Math.round(probe.getBoundingClientRect().height);
   probe.remove();
   const tb = document.getElementById('tabbar')?.getBoundingClientRect();
-  return { inner: window.innerHeight, client: document.documentElement.clientHeight, screenH: screen.height,
-    vh, dvh, svh, lvh, safeTop: sat, safeBottom: sab, tabbarBottom: tb ? Math.round(tb.bottom) : '?', standalone: isStandalone() };
+  const bodyH = Math.round(document.body.getBoundingClientRect().height);
+  return { inner: window.innerHeight, screenH: screen.height, vh, dvh, svh, lvh, safeTop: sat, safeBottom: sab,
+    tabbarBottom: tb ? Math.round(tb.bottom) : '?', bodyH, appH: getComputedStyle(document.documentElement).getPropertyValue('--app-h').trim() || '(unset)', standalone: isStandalone() };
 }
 function diagCard() {
   const m = measureViewport();
   return `<div class="card" style="border:1px solid var(--orange)">
-    <h2>📐 Screen diagnostic (temporary)</h2>
+    <h2>📐 Screen diagnostic (v11)</h2>
     <div class="small" style="font-family:monospace;line-height:1.8">
-      innerHeight: <b>${m.inner}</b><br>
-      screen.height: <b>${m.screenH}</b><br>
-      100vh = <b>${m.vh}</b> · 100dvh = <b>${m.dvh}</b><br>
-      100svh = <b>${m.svh}</b> · 100lvh = <b>${m.lvh}</b><br>
-      safe-area top/bottom: <b>${m.safeTop}</b> / <b>${m.safeBottom}</b><br>
+      innerHeight: <b>${m.inner}</b> · screen.height: <b>${m.screenH}</b><br>
+      --app-h set to: <b>${m.appH}</b><br>
+      body rendered height: <b>${m.bodyH}</b><br>
       tab bar bottom edge: <b>${m.tabbarBottom}</b><br>
+      safe-area top/bottom: <b>${m.safeTop}</b> / <b>${m.safeBottom}</b><br>
       standalone: <b>${m.standalone}</b>
     </div>
-    <div class="chart-note mt">Screenshot this whole card and send it — it tells me exactly how to close the gap.</div>
+    <div class="chart-note mt">👇 There's a bright ORANGE line at the bottom. One question: is it touching the very bottom edge of your screen, or is there black BELOW it? That answer tells me exactly what to do.</div>
   </div>
-  <div style="position:fixed;left:0;right:0;bottom:0;height:5px;background:var(--orange);z-index:99" aria-hidden="true"></div>`;
+  <div style="position:fixed;left:0;right:0;bottom:0;height:8px;background:var(--orange);z-index:99" aria-hidden="true"></div>`;
 }
 
 /* Shown only when running in a browser tab: the browser's own bottom bar eats
@@ -54,16 +54,20 @@ function installBanner() {
     <div><button class="btn small ghost" data-action="dismiss-install" style="margin-top:6px">Dismiss</button></div></div></div>`;
 }
 
-/* The body is pinned to the viewport with CSS (position:fixed; inset:0), so its
-   height is governed by the real screen edges — no JS sizing needed. We only
-   clear any stale inline height a previous cached version may have left behind,
-   which is what was pinning the app short and leaving dead space at the bottom. */
-function clearStaleHeight() {
-  document.body.style.height = '';
+/* SAFE: size the app to the reported viewport (innerHeight). Never larger —
+   overshooting would push the tab bar off-screen if iOS has genuinely walled
+   off the extra pixels. The orange probe line below reveals whether the
+   reported bottom equals the physical screen bottom. */
+function setAppHeight() {
+  document.documentElement.style.setProperty('--app-h', window.innerHeight + 'px');
 }
-window.addEventListener('load', clearStaleHeight);
-window.addEventListener('pageshow', clearStaleHeight);
-clearStaleHeight();
+window.addEventListener('resize', setAppHeight);
+window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 120));
+window.addEventListener('pageshow', setAppHeight);
+window.addEventListener('load', () => { setAppHeight(); setTimeout(setAppHeight, 300); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(setAppHeight, 80); });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', () => setTimeout(setAppHeight, 60));
+setAppHeight();
 
 const App = {
   tab: 'today',
