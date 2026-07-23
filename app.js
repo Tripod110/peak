@@ -1,9 +1,43 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v9';
+const APP_VERSION = 'v10-diag';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+/* TEMP diagnostic: measure which viewport unit equals the real screen height. */
+function measureViewport() {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:0;left:-9999px;width:1px;visibility:hidden;';
+  document.body.appendChild(probe);
+  const read = h => { probe.style.height = h; return Math.round(probe.getBoundingClientRect().height); };
+  const vh = read('100vh'), dvh = read('100dvh'), svh = read('100svh'), lvh = read('100lvh');
+  probe.style.height = '0px'; probe.style.paddingBottom = 'env(safe-area-inset-bottom)';
+  const sab = Math.round(probe.getBoundingClientRect().height);
+  probe.style.paddingBottom = '0px'; probe.style.paddingTop = 'env(safe-area-inset-top)';
+  const sat = Math.round(probe.getBoundingClientRect().height);
+  probe.remove();
+  const tb = document.getElementById('tabbar')?.getBoundingClientRect();
+  return { inner: window.innerHeight, client: document.documentElement.clientHeight, screenH: screen.height,
+    vh, dvh, svh, lvh, safeTop: sat, safeBottom: sab, tabbarBottom: tb ? Math.round(tb.bottom) : '?', standalone: isStandalone() };
+}
+function diagCard() {
+  const m = measureViewport();
+  return `<div class="card" style="border:1px solid var(--orange)">
+    <h2>📐 Screen diagnostic (temporary)</h2>
+    <div class="small" style="font-family:monospace;line-height:1.8">
+      innerHeight: <b>${m.inner}</b><br>
+      screen.height: <b>${m.screenH}</b><br>
+      100vh = <b>${m.vh}</b> · 100dvh = <b>${m.dvh}</b><br>
+      100svh = <b>${m.svh}</b> · 100lvh = <b>${m.lvh}</b><br>
+      safe-area top/bottom: <b>${m.safeTop}</b> / <b>${m.safeBottom}</b><br>
+      tab bar bottom edge: <b>${m.tabbarBottom}</b><br>
+      standalone: <b>${m.standalone}</b>
+    </div>
+    <div class="chart-note mt">Screenshot this whole card and send it — it tells me exactly how to close the gap.</div>
+  </div>
+  <div style="position:fixed;left:0;right:0;bottom:0;height:5px;background:var(--orange);z-index:99" aria-hidden="true"></div>`;
 }
 
 /* Shown only when running in a browser tab: the browser's own bottom bar eats
@@ -107,6 +141,7 @@ function renderToday() {
   const slColor = slScore == null ? CHART.muted : slScore >= 75 ? CHART.good : slScore >= 50 ? CHART.warning : CHART.critical;
 
   return `
+  ${diagCard()}
   ${plateaus.slice(0, 2).map(pl => `
     <div class="alert">
       <span class="a-ico">⚠</span>
