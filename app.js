@@ -1,6 +1,24 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v6';
+const APP_VERSION = 'v7';
+
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+/* Shown only when running in a browser tab: the browser's own bottom bar eats
+   screen space that the installed app gets back. */
+function installBanner() {
+  if (isStandalone() || Store.get('installDismissed', false)) return '';
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const how = ios
+    ? 'tap <b>Share</b> (the square with the arrow) → <b>Add to Home Screen</b>'
+    : 'tap the <b>⋮ menu</b> → <b>Add to Home screen</b> / <b>Install app</b>';
+  return `<div class="alert" style="border-left-color:var(--blue)"><span class="a-ico">📲</span><div class="a-body">
+    <b>You're in the browser — the bottom of your screen belongs to its toolbar.</b>
+    Install Peak to get true fullscreen: ${how}, then open it from your home screen.
+    <div><button class="btn small ghost" data-action="dismiss-install" style="margin-top:6px">Dismiss</button></div></div></div>`;
+}
 
 /* Size the app to the REAL visible height. CSS viewport units (vh/dvh) misreport
    on some phones — especially after the keyboard closes — leaving dead space
@@ -35,13 +53,15 @@ const App = {
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === App.tab));
     const p = getProfile();
     if (!p) { view.innerHTML = ''; openOnboarding(); return; }
+    let html = '';
     switch (App.tab) {
-      case 'today': view.innerHTML = renderToday(); break;
-      case 'food': view.innerHTML = renderFood(); break;
-      case 'train': view.innerHTML = renderTrain(); break;
-      case 'sleep': view.innerHTML = renderSleep(); break;
-      case 'grocery': view.innerHTML = renderGrocery(); break;
+      case 'today': html = renderToday(); break;
+      case 'food': html = renderFood(); break;
+      case 'train': html = renderTrain(); break;
+      case 'sleep': html = renderSleep(); break;
+      case 'grocery': html = renderGrocery(); break;
     }
+    view.innerHTML = installBanner() + html;
     view.scrollTop = keepScroll;
     App._renderedTab = App.tab;
   }
@@ -317,7 +337,7 @@ function openSettingsModal() {
     </details>
 
     <button class="btn primary mt" data-action="save-settings">Save</button>
-    <div class="chart-note center mt">Peak ${APP_VERSION}</div>
+    <div class="chart-note center mt">Peak ${APP_VERSION} · ${isStandalone() ? 'installed app' : 'browser tab'} · viewport ${window.innerHeight}px${screen.height ? ' of ' + screen.height + 'px screen' : ''}</div>
   `);
   document.getElementById('import-file')?.addEventListener('change', ev => {
     const f = ev.target.files[0];
@@ -366,6 +386,7 @@ document.addEventListener('click', e => {
     /* nav */
     case 'go-tab': App.tab = el.dataset.tab; App.render(); break;
     case 'open-settings': openSettingsModal(); break;
+    case 'dismiss-install': Store.set('installDismissed', true); App.render(); break;
     case 'save-settings': saveSettings(); break;
     case 'modal-backdrop': if (e.target === el) closeModal(); break;
 
