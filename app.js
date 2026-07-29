@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v27';
+const APP_VERSION = 'v28';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -18,6 +18,56 @@ function installBanner() {
     <b>You're in the browser — the bottom of your screen belongs to its toolbar.</b>
     Install Peak to get true fullscreen: ${how}, then open it from your home screen.
     <div><button class="btn small ghost" data-action="dismiss-install" style="margin-top:6px">Dismiss</button></div></div></div>`;
+}
+
+/* ---------- backup nudge ----------
+   Everything lives in localStorage, so a cleared browser or an iOS storage
+   eviction takes the whole training history with it. storage.persist() reduces
+   that risk but does not remove it, and the only real insurance is a file the
+   user actually holds. So: once there is history worth losing, ask — then get
+   out of the way for a month. Never on day one, never twice in a week. */
+
+const BACKUP_MIN_FOOD_DAYS = 10;
+const BACKUP_MIN_WORKOUTS = 6;
+const BACKUP_STALE_DAYS = 30;
+const BACKUP_SNOOZE_DAYS = 7;
+
+/* how much history exists, and therefore how much a wipe would cost */
+function historyWeight() {
+  let foodDays = 0;
+  for (let i = 0; i < 90; i++) if (foodForDay(todayKey(-i)).length) foodDays++;
+  return { foodDays, workouts: getWorkouts().length };
+}
+
+function backupState() {
+  const last = Store.get('lastBackupAt', null);
+  const snoozed = Store.get('backupSnoozeUntil', null);
+  const h = historyWeight();
+  const worthLosing = h.foodDays >= BACKUP_MIN_FOOD_DAYS || h.workouts >= BACKUP_MIN_WORKOUTS;
+  const staleDays = last ? daysBetween(last, todayKey()) : null;
+  const due = worthLosing && (last === null || staleDays >= BACKUP_STALE_DAYS);
+  const quiet = snoozed && snoozed > todayKey();
+  return { ...h, last, staleDays, due, show: due && !quiet };
+}
+
+function backupBanner() {
+  const b = backupState();
+  if (!b.show) return '';
+  const what = [
+    b.workouts ? `${b.workouts} session${b.workouts !== 1 ? 's' : ''}` : null,
+    b.foodDays ? `${b.foodDays} logged day${b.foodDays !== 1 ? 's' : ''}` : null
+  ].filter(Boolean).join(' and ');
+  const why = b.last
+    ? `Your last backup was ${b.staleDays} days ago.`
+    : `You've never exported a backup.`;
+  return `<div class="alert" style="border-left-color:var(--warning)"><span class="a-ico">💾</span><div class="a-body">
+    <b>Back up your ${what}.</b>
+    ${why} Peak keeps everything on this device — clearing your browser data, or iOS reclaiming
+    storage, would erase it. The export is one tap and one small file.
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn small primary" data-action="export-data">⬇ Export now</button>
+      <button class="btn small ghost" data-action="snooze-backup">Not now</button>
+    </div></div></div>`;
 }
 
 /* The document scrolls naturally (edge-to-edge flow layout). After the keyboard
@@ -73,7 +123,8 @@ const App = {
       case 'sleep': html = renderSleep(); break;
       case 'grocery': html = renderGrocery(); break;
     }
-    view.innerHTML = installBanner() + html;
+    // the backup nudge only ever appears on Today, so it can't interrupt logging
+    view.innerHTML = installBanner() + (App.tab === 'today' && App.todayView === 'home' ? backupBanner() : '') + html;
     window.scrollTo(0, keepScroll);
     App._renderedTab = App.tab;
   }
@@ -795,6 +846,7 @@ function openSettingsModal() {
   const metric = s.units === 'metric';
   const u = metric ? 'kg' : 'lb';
   const ht = p ? cmToFtIn(p.heightCm) : { ft: 5, inch: 10 };
+  const bk = backupState();
   openModal(`
     <h3>Settings</h3>
     <div class="modal-sub">${p ? `${GOAL_LABEL[p.goal]} · ${t.kcal.toLocaleString()} kcal · ${t.protein}g protein · ${TEMPLATES[p.template].name}` : ''}</div>
@@ -864,8 +916,13 @@ function openSettingsModal() {
       </select>
     </details>
 
-    <details class="adv">
-      <summary>Backup & data</summary>
+    <details class="adv" ${bk.due ? 'open' : ''}>
+      <summary>Backup & data${bk.due ? ' <span class="pill warn">due</span>' : ''}</summary>
+      <div class="spread" style="margin-top:8px">
+        <span class="muted small">Last backup</span>
+        <b class="small" style="color:${bk.last ? (bk.staleDays >= BACKUP_STALE_DAYS ? 'var(--warning)' : CHART.good) : 'var(--warning)'}">
+          ${bk.last ? `${prettyDate(bk.last)}${bk.staleDays > 0 ? ` · ${bk.staleDays}d ago` : ' · today'}` : 'never'}</b>
+      </div>
       <button class="btn mt" data-action="export-data">⬇ Export data (JSON)</button>
       <label class="btn mt" style="display:flex">⬆ Import backup<input id="import-file" type="file" accept=".json" style="display:none"></label>
       <div class="chart-note">Importing replaces everything on this device with the contents of the backup.</div>
@@ -1122,12 +1179,23 @@ document.addEventListener('click', e => {
     /* settings data */
     case 'export-data': {
       const blob = new Blob([Store.exportAll()], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
       const a2 = document.createElement('a');
-      a2.href = URL.createObjectURL(blob);
+      a2.href = url;
       a2.download = 'peak-backup-' + todayKey() + '.json';
       a2.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      // remember it, so the nudge can stand down for a month
+      Store.set('lastBackupAt', todayKey());
+      Store.remove('backupSnoozeUntil');
+      toast('Backup saved to your downloads');
+      App.render();
       break;
     }
+    case 'snooze-backup':
+      Store.set('backupSnoozeUntil', todayKey(BACKUP_SNOOZE_DAYS));
+      App.render();
+      break;
     case 'reset-app':
       if (confirm('Delete ALL Peak data on this device? Export a backup first if you want to keep it.')) {
         Store.wipeAll();

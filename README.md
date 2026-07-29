@@ -91,3 +91,18 @@ Peak's training features work with no setup. Meal scanning needs a free Google k
 
 Vanilla HTML/CSS/JS, zero dependencies, zero build step. Installable PWA with offline
 support via a service worker. Charts are hand-rolled inline SVG.
+
+## Project docs
+
+| | |
+|---|---|
+| [ROADMAP.md](ROADMAP.md) | Where this is going, with the gates that decide whether it keeps going |
+| [SHIPPING.md](SHIPPING.md) | Release runbook — pre-flight checks, the push, rollback |
+| [PAYMENTS.md](PAYMENTS.md) | Getting Peak Pro sellable: Stripe setup and what blocks it |
+| [worker/README.md](worker/README.md) | The hosted meal-scan proxy (scaffolded, ships in v29) |
+
+Releasing? Never hand-edit version strings — one version lives in 22 places:
+
+```bash
+node tools/release.mjs --check
+```

@@ -2,6 +2,17 @@
 
 *Written 2026-07-29. Revisit at every gate below; delete anything that stops being true.*
 
+> **Status — 2026-07-29.** **v27 is live** on GitHub Pages. Four of its five hardening items
+> shipped in it; the fifth (backup nudge) is in **v28**, not yet pushed — it needed its own
+> version because the service worker is cache-first and only drops the old bundle when
+> `CACHE` changes, so an in-place edit to v27 would never have reached anyone.
+> What remains before this counts as *shipped* is not code: instrumentation, and putting it in
+> front of real people. A UX audit also pre-empted two of Week 2's four predicted issues (see
+> notes there), leaving onboarding drop-off and iOS PWA behaviour as the live risks — neither
+> observed on a real device yet.
+>
+> Release process: [SHIPPING.md](SHIPPING.md) · Payments: [PAYMENTS.md](PAYMENTS.md)
+
 ## North star
 
 **Peak tells you when a lift has stalled and what to do about it.**
@@ -28,13 +39,15 @@ expense of the training engine.
 The goal is not features. It's: don't lose anyone's data, know what's happening, and be
 reachable.
 
-- [ ] **v27 hardening** (see `#v27` below) — pin the Gemini model, kill thinking tokens,
-      request persistent storage, add a feedback channel.
+- [x] **v27 hardening** (see `#v27` below) — pinned the Gemini model, killed thinking tokens,
+      requested persistent storage, added a feedback channel *(live in v27)* and a backup
+      nudge *(v28, pending push)*. All five done.
 - [ ] **Instrumentation.** Right now there is zero visibility. Minimum viable: a
       privacy-respecting counter (self-hosted Umami, or a Worker endpoint) for installs,
       tab views, first workout logged, and day-7 return. No personal data, no third-party
       trackers — it would contradict the privacy promise in the README.
-- [ ] **Ship it.** Push to GitHub Pages Fri Jul 31 – Sun Aug 2.
+- [x] **Ship it.** v27 is live on GitHub Pages. *(v28 still to push — follow
+      [SHIPPING.md](SHIPPING.md), including the real-device pass, which has never been run.)*
 - [ ] **Get 10–20 humans on it.** Friends, gym floor, one lifting Discord. Watch at least
       three of them do onboarding *without helping them*. That hour is worth more than a
       month of guessing.
@@ -49,12 +62,18 @@ everything that confused them.
 
 Triage feedback. Build nothing new. Predicted top issues, in likelihood order:
 
-1. **Unrecognised exercises.** The regex exercise→muscle map will miss a lot of what real
-   people log. Every miss silently breaks weekly volume, which breaks the plateau alert's
-   "why." Highest-value fix available.
-2. **Onboarding drop-off** — people bouncing before targets are set.
-3. **iOS PWA quirks** — safe areas, storage eviction, the install flow.
-4. **Unit conversion bugs** at metric/imperial boundaries.
+1. ~~**Unrecognised exercises.**~~ **Pre-empted in v27.** Unmatched lifts now land in an
+   "N lifts not counted yet" bucket with one-tap tagging, and volume-based plateau advice
+   stays switched off until nothing is untagged — so a regex miss can no longer silently
+   report zero volume or invent a deficit. *Watch anyway:* whether people actually tag, or
+   ignore the prompt. If they ignore it, the volume "why" is still effectively broken.
+2. **Onboarding drop-off** — people bouncing before targets are set. **Now the top live
+   risk.** Nobody has watched a stranger complete onboarding.
+3. **iOS PWA quirks** — safe areas, storage eviction, the install flow. **Unverified on real
+   hardware.** All layout work to date has been measured, not seen.
+4. ~~**Unit conversion bugs** at metric/imperial boundaries.~~ **Pre-empted in v27.** Full
+   metric support shipped with the boundary cases tested (bar defaults, plate math,
+   increments, per-hand dumbbell loads, stored-string unit staleness).
 
 **Done looks like:** every issue from week 1 either fixed or explicitly deferred with a
 reason.
@@ -199,12 +218,27 @@ Things that will look tempting and should be refused:
 
 ## <a name="v27"></a>v27 — ship release
 
-1. **Pin the Gemini model.** `gemini-flash-latest` is an alias; when it rolls to 3.5 Flash,
-   input goes $0.30 → $1.50 and output $2.50 → $9.00 per 1M with no code change.
-2. **`thinkingBudget: 0`.** Thinking is on by default on 2.5 Flash and bills as output.
-   Meal estimation doesn't need reasoning; this roughly halves per-scan cost.
-3. **`navigator.storage.persist()`.** Asks the browser not to evict localStorage. Not a
-   guarantee, but it's the difference between "usually safe" and "iOS may bin your training
-   history after a week of not opening the app."
-4. **Backup nudge.** Prompt for a JSON export when there's real history and no recent backup.
-5. **Feedback channel** in Settings. You cannot act on feedback you never receive.
+**All five complete (2026-07-29).** Items 1–3 and 5 are live in v27; the backup nudge is in
+v28, awaiting a push.
+
+- [x] **Pin the Gemini model.** `gemini-flash-latest` is an alias; when it rolls to 3.5 Flash,
+      input goes $0.30 → $1.50 and output $2.50 → $9.00 per 1M with no code change.
+      → `DEFAULT_MODEL = 'gemini-2.5-flash'` with the old aliases mapped, `store.js`.
+- [x] **`thinkingBudget: 0`.** Thinking is on by default on 2.5 Flash and bills as output.
+      Meal estimation doesn't need reasoning; this roughly halves per-scan cost.
+      → `thinkingConfig: { thinkingBudget: 0 }`, `api.js`.
+- [x] **`navigator.storage.persist()`.** Asks the browser not to evict localStorage. Not a
+      guarantee, but it's the difference between "usually safe" and "iOS may bin your training
+      history after a week of not opening the app." → `app.js`, on boot.
+- [x] **Backup nudge.** Prompts for a JSON export once there's history worth losing
+      (≥10 logged days or ≥6 sessions) and no backup in 30 days. Names what's actually at
+      risk ("back up your 7 sessions and 4 logged days"), Today-only so it never interrupts
+      logging, "Not now" snoozes 7 days, exporting stands it down for 30. Settings shows the
+      last backup date and flags it when due.
+- [x] **Feedback channel** in Settings. You cannot act on feedback you never receive.
+
+### Deferred out of v27
+
+- [ ] **Real-device pass on iOS and Android.** The only unverified area of the audit — layout
+      and tap targets were measured in code, never seen on a phone. Do this before the push,
+      not after.
