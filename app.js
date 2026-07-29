@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v23';
+const APP_VERSION = 'v24';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -49,6 +49,7 @@ const App = {
   grocSection: 'staples',
   trainView: 'home',
   todayView: 'home',
+  foodView: 'home',
   rest: null,
   ob: {},
 
@@ -545,6 +546,40 @@ function renderStreaks() {
 }
 
 
+
+/* Copy a whole previous day's food onto the day on screen — the fastest way to
+   log a repeat day of eating, which for most people is most days. */
+function openRepeatDayModal() {
+  const opts = [];
+  for (let i = 1; i <= 14; i++) {
+    const k = todayKey(-i);
+    const items = foodForDay(k);
+    if (!items.length || k === App.foodDay) continue;
+    const d = dayTotals(k);
+    opts.push(`<option value="${k}">${prettyDate(k)} \u2014 ${Math.round(d.kcal)} kcal, ${Math.round(d.protein)}g protein (${items.length} items)</option>`);
+  }
+  if (!opts.length) { toast('No other logged days to copy yet'); return; }
+  openModal(`
+    <h3>Repeat a day</h3>
+    <div class="modal-sub">Copies every item from that day onto ${App.foodDay === todayKey() ? 'today' : prettyDate(App.foodDay)}.</div>
+    <label>Which day?</label>
+    <select id="rp-day">${opts.join('')}</select>
+    <button class="btn primary mt" data-action="confirm-repeat-day">Copy those meals</button>
+  `);
+}
+function confirmRepeatDay() {
+  const from = document.getElementById('rp-day').value;
+  const items = foodForDay(from);
+  if (!items.length) { toast('Nothing to copy'); return; }
+  items.forEach(e => addFoodEntry(App.foodDay, {
+    name: e.name, portion: e.portion, kcal: e.kcal, protein: e.protein,
+    carbs: e.carbs, fat: e.fat, fiber: e.fiber || 0, quality: e.quality ?? 5, source: 'repeat'
+  }));
+  closeModal();
+  toast(`Copied ${items.length} item${items.length !== 1 ? 's' : ''}`);
+  App.render();
+}
+
 function openWeightModal() {
   const ws = getWeights();
   const last = ws.length ? Math.round(kgToLb(ws[ws.length - 1].kg) * 10) / 10 : '';
@@ -826,6 +861,12 @@ document.addEventListener('click', e => {
     }
 
     /* train */
+    case 'food-nav': App.foodView = el.dataset.view; App._renderedTab = null; App.render(); break;
+    case 'food-back': App.foodView = 'home'; App._renderedTab = null; App.render(); break;
+    case 'open-day': App.foodDay = el.dataset.key; App.foodView = 'home'; App._renderedTab = null; App.render(); break;
+    case 'goto-nutrition': App.tab = 'today'; App.todayView = 'nutrition'; App._renderedTab = null; App.render(); break;
+    case 'repeat-last': openRepeatDayModal(); break;
+    case 'confirm-repeat-day': confirmRepeatDay(); break;
     case 'today-nav': App.todayView = el.dataset.view; App._renderedTab = null; App.render(); break;
     case 'today-back': App.todayView = 'home'; App._renderedTab = null; App.render(); break;
     case 'quick-scan': App.tab = 'food'; App.foodDay = todayKey(); App.render(); openScanModal(); break;
@@ -932,7 +973,7 @@ document.getElementById('tabbar').addEventListener('click', e => {
   const b = e.target.closest('.tab');
   if (!b) return;
   App.tab = b.dataset.tab;
-  if (App.tab === 'food') App.foodDay = todayKey();
+  if (App.tab === 'food') { App.foodDay = todayKey(); App.foodView = 'home'; }
   if (App.tab === 'train') App.trainView = 'home';
   if (App.tab === 'today') App.todayView = 'home';
   App.render();
