@@ -38,6 +38,11 @@ const TEMPLATES = {
 };
 const TEMPLATE_FOR_DAYS = { 2: 'fb3', 3: 'fb3', 4: 'ul4', 5: 'ppl5', 6: 'ppl6', 7: 'ppl6' };
 
+/* Warmup sets are logged but must never count toward volume, PRs, est. 1RM,
+   session score, or progression — only working sets do. */
+function isWarmup(st) { return st && st.type === 'warmup'; }
+function workingSets(sets) { return (sets || []).filter(st => !isWarmup(st)); }
+
 /* est. 1RM (Epley), capped at 12 reps for sanity */
 function e1rm(weight, reps) {
   if (!weight || weight < 0 || !reps) return 0;
@@ -49,7 +54,7 @@ function e1rm(weight, reps) {
 function scoreWorkout(s) {
   let intensitySum = 0, n = 0, prs = 0;
   s.exercises.forEach(ex => {
-    const nowBest = Math.max(0, ...ex.sets.map(st => e1rm(st.weight, st.reps)));
+    const nowBest = Math.max(0, ...workingSets(ex.sets).map(st => e1rm(st.weight, st.reps)));
     if (nowBest <= 0) return; // bodyweight-only work carries no intensity signal
     const prevBest = Math.max(0, ...exerciseHistory(ex.name).map(h => h.bestE1rm));
     if (prevBest > 0) {
@@ -60,7 +65,7 @@ function scoreWorkout(s) {
   });
   const intensity = n ? intensitySum / n : 0.9;
   const intensityPts = Math.max(0, Math.min(1, (intensity - 0.5) / 0.5)) * 50;
-  const setsDone = s.exercises.reduce((x, e) => x + e.sets.length, 0);
+  const setsDone = s.exercises.reduce((x, e) => x + workingSets(e.sets).length, 0);
   const setsPlanned = s.exercises.reduce((x, e) => {
     const m = /^(\d+)/.exec(e.target || '');
     return x + (m ? Number(m[1]) : 3);
@@ -85,12 +90,13 @@ function exerciseHistory(name) {
     (s.exercises || []).forEach(ex => {
       if (ex.name.toLowerCase() !== name.toLowerCase()) return;
       let best = 0, top = null;
-      (ex.sets || []).forEach(st => {
+      const work = workingSets(ex.sets);
+      work.forEach(st => {
         const v = e1rm(st.weight, st.reps);
         if (v > best) { best = v; top = st; }
       });
       if (!top) { // bodyweight-only (abs etc.): track the best rep set instead
-        (ex.sets || []).forEach(st => { if (st.reps > 0 && (!top || st.reps > top.reps)) top = st; });
+        work.forEach(st => { if (st.reps > 0 && (!top || st.reps > top.reps)) top = st; });
       }
       if (top) out.push({ date: s.date, bestE1rm: best, topSet: top });
     });
@@ -164,7 +170,7 @@ function lastSessionSets(name) {
   if (!sessions.length) return null;
   const s = sessions[0];
   const ex = s.exercises.find(e => e.name.toLowerCase() === key);
-  return { date: s.date, sets: (ex.sets || []).filter(st => st.reps > 0) };
+  return { date: s.date, sets: workingSets(ex.sets).filter(st => st.reps > 0), allSets: (ex.sets || []).filter(st => st.reps > 0) };
 }
 
 function incrementLb(name) {
@@ -236,7 +242,7 @@ function nextTarget(name, targetStr, stalledNames) {
 function sessionVolumeKg(s) {
   if (s.cardio) return 0;
   return (s.exercises || []).reduce((v, e) =>
-    v + (e.sets || []).reduce((x, st) => x + Math.max(st.weight || 0, 0) * (st.reps || 0), 0), 0);
+    v + workingSets(e.sets).reduce((x, st) => x + Math.max(st.weight || 0, 0) * (st.reps || 0), 0), 0);
 }
 function volumeInDays(days) {
   return getWorkouts().reduce((v, s) => {
@@ -421,7 +427,7 @@ function renderVolumeCard(all) {
   const series = weeklyVolumeSeries(8);
   const showTrend = series.filter(v => v > 0).length >= 2;
   const next = VOLUME_MILESTONES.find(m => m > lifeLb);
-  const sets = all.reduce((n, s) => n + (s.exercises || []).reduce((x, e) => x + (e.sets || []).length, 0), 0);
+  const sets = all.reduce((n, s) => n + (s.exercises || []).reduce((x, e) => x + workingSets(e.sets).length, 0), 0);
   return `
   <div class="card">
     <h2>Weight moved <span class="h2-right">lb lifted</span></h2>
@@ -505,7 +511,7 @@ function renderRecentCard(all) {
       const scoreChip = s.score != null ? `<span class="pill ${s.score >= 75 ? 'good' : s.score >= 50 ? 'warn' : ''}">${s.score}</span>` : '';
       const sub = s.cardio
         ? `${prettyDate(s.date)} · ${s.durationMin} min ${esc(s.intensity)} · ~${s.kcalEst} kcal`
-        : `${prettyDate(s.date)} · ${(s.exercises || []).reduce((n, e) => n + (e.sets || []).length, 0)} sets · ${fmtVol(kgToLb(sessionVolumeKg(s)))} lb`;
+        : `${prettyDate(s.date)} · ${(s.exercises || []).reduce((n, e) => n + workingSets(e.sets).length, 0)} sets · ${fmtVol(kgToLb(sessionVolumeKg(s)))} lb`;
       return `
       <div class="list-item">
         <div class="li-main">
@@ -527,6 +533,7 @@ function startWorkout(dayIdx, freestyle = false) {
   App.activeSession = {
     id: 'w' + Date.now(),
     date: todayKey(),
+    startedAt: Date.now(),
     template: p.template,
     dayName: freestyle ? 'Freestyle' : day.name,
     freestyle,
@@ -535,13 +542,144 @@ function startWorkout(dayIdx, freestyle = false) {
   App.render();
 }
 
+/* ---------- in-gym helpers ---------- */
+
+const SET_TYPES = ['normal', 'warmup', 'failure', 'drop'];
+const SET_BADGE = { normal: null, warmup: 'W', failure: 'F', drop: 'D' };
+const SET_BADGE_COLOR = { warmup: 'var(--warning)', failure: 'var(--critical)', drop: 'var(--violet)' };
+
+function isBarbellLift(name) {
+  return /squat|bench|deadlift|overhead press|barbell|row|hip thrust|lunge/i.test(name)
+    && !/dumbbell|db |cable|machine|lat pulldown|pushdown|pull-?up|fly|raise/i.test(name);
+}
+
+/* plates per side for a target weight — returns null if the bar alone is heavier */
+function plateMath(totalLb, barLb) {
+  const PLATES = [45, 35, 25, 10, 5, 2.5];
+  let perSide = (totalLb - barLb) / 2;
+  if (perSide < 0) return null;
+  if (perSide === 0) return { list: [], exact: true, off: 0 };
+  const list = [];
+  PLATES.forEach(p => { while (perSide >= p - 0.001) { list.push(p); perSide -= p; } });
+  return { list, exact: perSide < 0.001, off: Math.round(perSide * 2 * 10) / 10 };
+}
+function plateLine(totalLb, barLb) {
+  const m = plateMath(totalLb, barLb);
+  if (!m) return '';
+  if (!m.list.length) return `just the ${barLb} lb bar`;
+  const counts = [];
+  let i = 0;
+  while (i < m.list.length) {
+    let j = i; while (j < m.list.length && m.list[j] === m.list[i]) j++;
+    counts.push((j - i > 1 ? (j - i) + '×' : '') + m.list[i]);
+    i = j;
+  }
+  return counts.join(' + ') + ' per side' + (m.exact ? '' : ` (${m.off} lb short)`);
+}
+
+/* rest timer — driven off a timestamp so throttled/background tabs stay accurate */
+function suggestedRestSec(name) {
+  const base = getSettings().restSec || 120;
+  if (/squat|deadlift|bench|overhead press|row|hip thrust/i.test(name)) return Math.round(base * 1.5);
+  if (/curl|raise|fly|pushdown|extension|calf|crunch|plank/i.test(name)) return Math.round(base * 0.6);
+  return base;
+}
+function startRest(sec, label) {
+  App.rest = { endsAt: Date.now() + sec * 1000, total: sec, label };
+  paintRest();
+}
+function paintRest() {
+  const root = document.getElementById('rest-root');
+  if (!root) return;
+  if (!App.rest) { root.innerHTML = ''; return; }
+  const left = Math.ceil((App.rest.endsAt - Date.now()) / 1000);
+  if (left <= -2) { App.rest = null; root.innerHTML = ''; return; }
+  const done = left <= 0;
+  if (done && !App.rest.beeped) { App.rest.beeped = true; restBeep(); }
+  const pct = done ? 100 : Math.min(100, (1 - left / App.rest.total) * 100);
+  const mm = Math.max(0, Math.floor(left / 60)), ss = Math.max(0, left % 60);
+  root.innerHTML = `
+    <div class="rest-bar">
+      <div class="rest-fill" style="width:${pct}%;background:${done ? 'var(--good)' : 'var(--blue)'}"></div>
+      <div class="rest-inner">
+        <span class="rest-time">${done ? "Rest done — go" : `${mm}:${String(ss).padStart(2, '0')}`}</span>
+        <span class="rest-label">${esc(App.rest.label || 'rest')}</span>
+        <button class="btn small ghost" data-action="rest-add">+30s</button>
+        <button class="btn small ghost" data-action="rest-skip">${done ? 'Dismiss' : 'Skip'}</button>
+      </div>
+    </div>`;
+}
+function restBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) {
+      const ctx = new Ctx();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+      o.start(); o.stop(ctx.currentTime + 0.52);
+      setTimeout(() => ctx.close().catch(() => {}), 800);
+    }
+  } catch { /* audio unavailable — silent */ }
+  if (navigator.vibrate) { try { navigator.vibrate([140, 70, 140]); } catch {} }
+}
+
+/* live PR check the moment a working set is completed */
+function checkSetPR(exName, st) {
+  if (isWarmup(st) || !st.reps) return null;
+  const s = App.activeSession;
+  s.bestSeen = s.bestSeen || {};
+  const hist = exerciseHistory(exName);
+  const histBestE1rm = Math.max(0, ...hist.map(h => h.bestE1rm));
+  const seen = s.bestSeen[exName] || { e1rm: 0, reps: 0, weight: 0 };
+  const val = e1rm(st.weight, st.reps);
+
+  let msg = null;
+  if (val > 0 && val > histBestE1rm + 0.01 && val > seen.e1rm + 0.01 && histBestE1rm > 0) {
+    msg = `🎉 ${exName} PR — ${Math.round(kgToLb(val))} lb est. 1RM`;
+  } else if (!st.weight) {
+    const histBestReps = Math.max(0, ...hist.map(h => h.topSet?.reps || 0));
+    if (st.reps > histBestReps && st.reps > seen.reps && histBestReps > 0) {
+      msg = `🎉 ${exName} PR — ${st.reps} reps`;
+    }
+  }
+  s.bestSeen[exName] = {
+    e1rm: Math.max(seen.e1rm, val),
+    reps: Math.max(seen.reps, st.reps || 0),
+    weight: Math.max(seen.weight, st.weight || 0)
+  };
+  return msg;
+}
+
+function sessionLiveStats() {
+  const s = App.activeSession;
+  let sets = 0, volKg = 0, warm = 0;
+  s.exercises.forEach(ex => (ex.sets || []).forEach(st => {
+    if (!st.done || !st.reps) return;
+    if (isWarmup(st)) { warm++; return; }
+    sets++; volKg += Math.max(st.weight || 0, 0) * st.reps;
+  }));
+  return { sets, volLb: kgToLb(volKg), warm };
+}
+
 function renderActiveSession() {
   const s = App.activeSession;
+  const live = sessionLiveStats();
+  const elapsed = s.startedAt ? Math.floor((Date.now() - s.startedAt) / 1000) : 0;
   return `
   <div class="card">
     <div class="spread">
       <h2 class="mb0">${esc(s.dayName)} — in progress</h2>
-      <span class="muted small">${prettyDate(s.date)}</span>
+      <span class="muted small" id="sess-timer">${fmtClock(elapsed)}</span>
+    </div>
+    <div class="grid-4 mt">
+      <div class="stat"><div class="sv" id="live-sets">${live.sets}</div><div class="sl">sets</div></div>
+      <div class="stat"><div class="sv" id="live-vol">${live.volLb > 0 ? fmtVol(live.volLb) : '—'}</div><div class="sl">lb moved</div></div>
+      <div class="stat"><div class="sv">${s.exercises.length}</div><div class="sl">lifts</div></div>
+      <div class="stat"><div class="sv">${live.warm}</div><div class="sl">warmups</div></div>
     </div>
   </div>
   ${s.exercises.map((ex, xi) => renderExerciseBlock(ex, xi)).join('')}
@@ -549,9 +687,22 @@ function renderActiveSession() {
   <button class="btn primary mt" data-action="finish-workout">✓ Finish workout</button>
   <button class="btn ghost danger mt" data-action="discard-workout">Discard</button>`;
 }
+function fmtClock(sec) {
+  const m = Math.floor(sec / 60), ss = sec % 60;
+  return (m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + ':' + String(ss).padStart(2, '0'));
+}
 
 function renderExerciseBlock(ex, xi) {
   const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
+  const last = lastSessionSets(ex.name);
+  const prevWork = last ? last.sets : [];
+  const prevLine = prevWork.length
+    ? prevWork.map(s => s.weight > 0 ? `${Math.round(kgToLb(s.weight))}×${s.reps}` : `${s.reps}`).join('  ')
+    : '';
+  // plate math for the working weight (entered top set, else the prescription)
+  const entered = Math.max(0, ...(ex.sets || []).filter(s => !isWarmup(s)).map(s => kgToLb(s.weight || 0)));
+  const target = entered > 0 ? entered : (pr.lb || 0);
+  const plates = (target > 0 && isBarbellLift(ex.name)) ? plateLine(target, getSettings().barLb || 45) : '';
   return `
   <div class="card">
     <div class="ex-head">
@@ -559,28 +710,79 @@ function renderExerciseBlock(ex, xi) {
       <span class="ex-target">${ex.target ? 'target ' + esc(ex.target) : ''}</span>
     </div>
     <div class="last-time" style="color:${cueColor(pr.type)};font-weight:600">${CUE[pr.type] || '→'} ${esc(pr.text)}</div>
-    ${pr.lastText ? `<div class="last-time">Last: ${esc(pr.lastText)}</div>` : ''}
-    ${ex.sets.map((st, si) => `
-      <div class="set-row">
-        <span class="set-no">${si + 1}</span>
-        <input type="number" step="any" placeholder="lb" value="${st.weight != null && st.weight !== 0 ? Math.round(kgToLb(st.weight) * 10) / 10 : ''}"
+    ${prevLine ? `<div class="last-time">Previous: ${esc(prevLine)}</div>` : ''}
+    ${plates ? `<div class="last-time" style="color:var(--ink-2)">🏋 ${esc(plates)}</div>` : ''}
+    ${(() => { let workIdx = 0; return ex.sets.map((st, si) => {
+      const type = st.type || 'normal';
+      const warm = type === 'warmup';
+      if (!warm) workIdx++;
+      const badge = SET_BADGE[type];
+      // previous-session hints belong on working sets only, matched by working index
+      const prevSet = warm ? null : prevWork[workIdx - 1];
+      const wPlace = prevSet && prevSet.weight > 0 ? String(Math.round(kgToLb(prevSet.weight) * 10) / 10) : 'lb';
+      const rPlace = prevSet ? String(prevSet.reps) : 'reps';
+      return `
+      <div class="set-row ${st.done ? 'done' : ''}">
+        <button class="set-no ${badge ? 'typed' : ''}" data-action="set-type" data-xi="${xi}" data-si="${si}"
+          style="${badge ? `color:${SET_BADGE_COLOR[type]};font-weight:800` : ''}"
+          title="Tap to change set type">${badge || workIdx}</button>
+        <input type="number" step="any" placeholder="${wPlace}" value="${st.weight != null && st.weight !== 0 ? Math.round(kgToLb(st.weight) * 10) / 10 : ''}"
           data-set-w data-xi="${xi}" data-si="${si}">
-        <input type="number" placeholder="reps" value="${st.reps ?? ''}"
+        <input type="number" placeholder="${rPlace}" value="${st.reps ?? ''}"
           data-set-r data-xi="${xi}" data-si="${si}">
+        <button class="done-btn ${st.done ? 'on' : ''}" data-action="set-done" data-xi="${xi}" data-si="${si}"
+          aria-label="Mark set complete">✓</button>
         <button class="x-btn" data-action="del-set" data-xi="${xi}" data-si="${si}">✕</button>
-      </div>`).join('')}
-    <button class="btn small mt" data-action="add-set" data-xi="${xi}">＋ Add set</button>
+      </div>`;
+    }).join(''); })()}
+    <div class="row mt">
+      <button class="btn small grow" data-action="add-set" data-xi="${xi}">＋ Add set</button>
+      <button class="btn small" data-action="add-warmup" data-xi="${xi}">＋ Warmup</button>
+    </div>
   </div>`;
 }
 
 function addSet(xi) {
   const ex = App.activeSession.exercises[xi];
-  const prev = ex.sets[ex.sets.length - 1];
-  if (prev) { ex.sets.push({ weight: prev.weight, reps: prev.reps }); }
+  const prevWorking = workingSets(ex.sets).slice(-1)[0];
+  if (prevWorking) { ex.sets.push({ weight: prevWorking.weight, reps: prevWorking.reps, type: 'normal', done: false }); }
   else {
-    // pre-fill the first set with today's prescribed target
+    // pre-fill the first working set with today's prescribed target
     const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
-    ex.sets.push({ weight: pr.lb ? lbToKg(pr.lb) : null, reps: pr.reps ?? null });
+    ex.sets.push({ weight: pr.lb ? lbToKg(pr.lb) : null, reps: pr.reps ?? null, type: 'normal', done: false });
+  }
+  App.render();
+}
+
+/* a warmup ramp set — ~55% of the working weight, higher reps, never counted */
+function addWarmup(xi) {
+  const ex = App.activeSession.exercises[xi];
+  const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
+  const workLb = pr.lb || Math.round(kgToLb(Math.max(0, ...workingSets(ex.sets).map(s => s.weight || 0))));
+  const warmLb = workLb > 0 ? roundLb5(workLb * 0.55) : 0;
+  ex.sets.unshift({ weight: warmLb ? lbToKg(warmLb) : null, reps: Math.max(5, (pr.reps || 8) + 2), type: 'warmup', done: false });
+  App.render();
+}
+
+function cycleSetType(xi, si) {
+  readSetInputs();
+  const st = App.activeSession.exercises[xi].sets[si];
+  const i = SET_TYPES.indexOf(st.type || 'normal');
+  st.type = SET_TYPES[(i + 1) % SET_TYPES.length];
+  App.render();
+}
+
+/* marking a working set done starts rest and fires any live PR */
+function toggleSetDone(xi, si) {
+  readSetInputs();
+  const ex = App.activeSession.exercises[xi];
+  const st = ex.sets[si];
+  st.done = !st.done;
+  if (st.done) {
+    if (!st.reps) { st.done = false; toast('Enter reps first'); App.render(); return; }
+    const pr = checkSetPR(ex.name, st);
+    if (pr) toast(pr);
+    if (!isWarmup(st)) startRest(suggestedRestSec(ex.name), ex.name);
   }
   App.render();
 }
@@ -601,19 +803,22 @@ function finishWorkout() {
   const s = App.activeSession;
   // reps are required; weight is optional (0 = bodyweight, e.g. ab work)
   s.exercises = s.exercises
-    .map(ex => ({ ...ex, sets: ex.sets.filter(st => st.reps > 0).map(st => ({ weight: st.weight || 0, reps: st.reps })) }))
+    .map(ex => ({ ...ex, sets: ex.sets.filter(st => st.reps > 0)
+      .map(st => ({ weight: st.weight || 0, reps: st.reps, type: st.type || 'normal' })) }))
     .filter(ex => ex.sets.length > 0);
   if (!s.exercises.length) { toast('No completed sets — add reps or discard'); return; }
   // PR check (weighted lifts only)
   const prs = [];
   s.exercises.forEach(ex => {
     const prevBest = Math.max(0, ...exerciseHistory(ex.name).map(h => h.bestE1rm));
-    const nowBest = Math.max(0, ...ex.sets.map(st => e1rm(st.weight, st.reps)));
+    const nowBest = Math.max(0, ...workingSets(ex.sets).map(st => e1rm(st.weight, st.reps)));
     if (nowBest > prevBest + 0.01 && prevBest > 0) prs.push(ex.name);
   });
   s.score = scoreWorkout(s);
+  if (s.startedAt) s.durationMin = Math.max(1, Math.round((Date.now() - s.startedAt) / 60000));
   saveWorkout(s);
   App.activeSession = null;
+  App.rest = null;
   toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${s.score}` : `Workout saved — score ${s.score} 💪`);
   App.render();
 }
@@ -650,7 +855,10 @@ function viewWorkoutModal(id) {
       : (s.exercises || []).map(ex => `
       <div class="exercise-block">
         <div class="ex-head"><span class="ex-name">${esc(ex.name)}</span></div>
-        ${(ex.sets || []).map((st, i) => `<div class="muted small">Set ${i + 1}: ${st.weight ? Math.round(kgToLb(st.weight)) + ' lb × ' + st.reps : st.reps + ' reps'}</div>`).join('')}
+        ${(ex.sets || []).map((st, i) => {
+          const tag = st.type && st.type !== 'normal' ? ` <span style="color:${SET_BADGE_COLOR[st.type] || 'var(--muted)'}">${st.type}</span>` : '';
+          return `<div class="muted small">Set ${i + 1}: ${st.weight ? Math.round(kgToLb(st.weight)) + ' lb × ' + st.reps : st.reps + ' reps'}${tag}</div>`;
+        }).join('')}
       </div>`).join('')}
     ${s.score != null && !s.cardio ? `<div class="chart-note mt">Score = intensity vs your bests (50) + sets vs plan (35) + PR bonus (15).</div>` : ''}
     <button class="btn ghost danger mt" data-action="delete-workout" data-id="${s.id}">Delete session</button>

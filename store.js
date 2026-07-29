@@ -57,7 +57,7 @@ function getProfile() { return Store.get('profile', null); }
 function setProfile(p) { Store.set('profile', p); }
 function getSettings() {
   const s = Store.get('settings', {});
-  const merged = { apiKey: '', model: 'gemini-flash-latest', timeFmt: '12', ...s };
+  const merged = { apiKey: '', model: 'gemini-flash-latest', timeFmt: '12', restSec: 120, barLb: 45, ...s };
   // migrate from the old Claude-based scanner: ignore leftover Anthropic keys/models
   if ((merged.apiKey || '').startsWith('sk-ant-')) merged.apiKey = '';
   if ((merged.model || '').startsWith('claude')) merged.model = 'gemini-flash-latest';

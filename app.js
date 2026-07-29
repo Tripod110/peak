@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -29,6 +29,17 @@ function snapViewport() {
 }
 document.addEventListener('focusout', () => setTimeout(snapViewport, 60));
 
+/* 1s tick: repaint the rest bar and session clock in place — never a full
+   re-render, or the user would lose focus mid-typing. */
+setInterval(() => {
+  if (App.rest) paintRest();
+  const s = App.activeSession;
+  if (s && s.startedAt) {
+    const el = document.getElementById('sess-timer');
+    if (el) el.textContent = fmtClock(Math.floor((Date.now() - s.startedAt) / 1000));
+  }
+}, 1000);
+
 const App = {
   tab: 'today',
   foodDay: todayKey(),
@@ -36,6 +47,7 @@ const App = {
   scanImage: null,
   scanResult: null,
   grocSection: 'staples',
+  rest: null,
   ob: {},
 
   render() {
@@ -353,6 +365,12 @@ function openSettingsModal() {
       <option value="gemini-flash-lite-latest" ${s.model === 'gemini-flash-lite-latest' ? 'selected' : ''}>Gemini Flash-Lite — more scans/day (free)</option>
     </select>
 
+    <div class="grid-2">
+      <div><label>Default rest (seconds)</label><input id="set-rest" type="number" value="${s.restSec}"></div>
+      <div><label>Barbell weight (lb)</label><input id="set-bar" type="number" value="${s.barLb}"></div>
+    </div>
+    <div class="chart-note">Rest scales per lift: compounds get 1.5×, isolations 0.6×.</div>
+
     <label>Time format</label>
     <div class="seg" id="set-timefmt">
       <button data-v="12" class="${s.timeFmt !== '24' ? 'on' : ''}">12-hour</button>
@@ -402,6 +420,10 @@ function saveSettings() {
   s.apiKey = document.getElementById('set-key').value.trim();
   s.model = document.getElementById('set-model').value;
   s.timeFmt = document.querySelector('#set-timefmt button.on')?.dataset.v || '12';
+  const rest = Number(document.getElementById('set-rest')?.value);
+  if (rest >= 15 && rest <= 600) s.restSec = rest;
+  const bar = Number(document.getElementById('set-bar')?.value);
+  if (bar >= 0 && bar <= 100) s.barLb = bar;
   setSettings(s);
   const p = getProfile();
   if (p) {
@@ -489,6 +511,11 @@ document.addEventListener('click', e => {
     case 'start-picked': startWorkout(Number(document.getElementById('day-picker').value)); break;
     case 'start-freestyle': startWorkout(0, true); break;
     case 'add-set': readSetInputs(); addSet(Number(el.dataset.xi)); break;
+    case 'add-warmup': readSetInputs(); addWarmup(Number(el.dataset.xi)); break;
+    case 'set-done': toggleSetDone(Number(el.dataset.xi), Number(el.dataset.si)); break;
+    case 'set-type': cycleSetType(Number(el.dataset.xi), Number(el.dataset.si)); break;
+    case 'rest-add': if (App.rest) { App.rest.endsAt += 30000; App.rest.total += 30; App.rest.beeped = false; paintRest(); } break;
+    case 'rest-skip': App.rest = null; paintRest(); break;
     case 'del-set': {
       readSetInputs();
       App.activeSession.exercises[el.dataset.xi].sets.splice(Number(el.dataset.si), 1);
@@ -503,7 +530,7 @@ document.addEventListener('click', e => {
     }
     case 'finish-workout': finishWorkout(); break;
     case 'discard-workout':
-      if (confirm('Discard this workout?')) { App.activeSession = null; App.render(); }
+      if (confirm('Discard this workout?')) { App.activeSession = null; App.rest = null; paintRest(); App.render(); }
       break;
     case 'view-workout': viewWorkoutModal(el.dataset.id); break;
     case 'open-cardio': openCardioModal(); break;

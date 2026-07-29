@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Peak">
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 
@@ -40,17 +40,18 @@
   <button class="tab" data-tab="grocery"><span class="tab-ico">🛒</span>Grocery</button>
 </nav>
 
+<div id="rest-root"></div>
 <div id="modal-root"></div>
 <div id="toast-root"></div>
 
-<script src="store.js?v=19"></script>
-<script src="charts.js?v=19"></script>
-<script src="api.js?v=19"></script>
-<script src="food.js?v=19"></script>
-<script src="train.js?v=19"></script>
-<script src="sleep.js?v=19"></script>
-<script src="grocery.js?v=19"></script>
-<script src="app.js?v=19"></script>
+<script src="store.js?v=20"></script>
+<script src="charts.js?v=20"></script>
+<script src="api.js?v=20"></script>
+<script src="food.js?v=20"></script>
+<script src="train.js?v=20"></script>
+<script src="sleep.js?v=20"></script>
+<script src="grocery.js?v=20"></script>
+<script src="app.js?v=20"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
