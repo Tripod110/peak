@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v21';
+const APP_VERSION = 'v22';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -47,6 +47,7 @@ const App = {
   scanImage: null,
   scanResult: null,
   grocSection: 'staples',
+  trainView: 'home',
   rest: null,
   ob: {},
 
@@ -452,7 +453,7 @@ document.addEventListener('click', e => {
 
   switch (a) {
     /* nav */
-    case 'go-tab': App.tab = el.dataset.tab; App.render(); break;
+    case 'go-tab': App.tab = el.dataset.tab; if (App.tab === 'train') App.trainView = 'home'; App.render(); break;
     case 'open-settings': openSettingsModal(); break;
     case 'dismiss-install': Store.set('installDismissed', true); App.render(); break;
     case 'save-settings': saveSettings(); break;
@@ -507,6 +508,8 @@ document.addEventListener('click', e => {
     }
 
     /* train */
+    case 'train-nav': App.trainView = el.dataset.view; App._renderedTab = null; App.render(); break;
+    case 'train-back': App.trainView = 'home'; App._renderedTab = null; App.render(); break;
     case 'start-workout': startWorkout(Number(el.dataset.idx)); break;
     case 'start-picked': startWorkout(Number(document.getElementById('day-picker').value)); break;
     case 'start-freestyle': startWorkout(0, true); break;
@@ -604,6 +607,7 @@ document.getElementById('tabbar').addEventListener('click', e => {
   if (!b) return;
   App.tab = b.dataset.tab;
   if (App.tab === 'food') App.foodDay = todayKey();
+  if (App.tab === 'train') App.trainView = 'home';
   App.render();
 });
 

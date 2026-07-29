@@ -257,6 +257,53 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 }
 .done-btn.on { background: var(--good); border-color: transparent; color: #fff; }
 
+/* ---------- dashboard: subview header ---------- */
+.sub-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.back-btn {
+  width: 38px; height: 38px; flex-shrink: 0;
+  border-radius: 11px; background: var(--surface); border: 1px solid var(--border);
+  color: var(--ink); font-size: 24px; line-height: 1; padding-bottom: 3px;
+}
+.back-btn:active { background: var(--surface-2); }
+.sub-title { font-size: 19px; font-weight: 700; }
+
+/* ---------- dashboard: glance strip ---------- */
+.glance { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.gl {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 2px; border-radius: 10px; background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.gl:active { border-color: var(--blue); }
+.gl .gv { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.gl .gl-l { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; text-align: center; line-height: 1.25; }
+
+/* ---------- dashboard: drill-in rows ---------- */
+.nav-row {
+  display: grid; grid-template-columns: 26px 1fr auto 14px;
+  align-items: center; gap: 10px; width: 100%;
+  padding: 13px 2px; border-bottom: 1px solid var(--grid); text-align: left;
+}
+.nav-row:last-child { border-bottom: none; }
+.nav-row:active { background: var(--surface-2); }
+.nr-ico { font-size: 17px; }
+.nr-label { font-size: 15px; font-weight: 500; }
+.nr-value { font-size: 12px; text-align: right; }
+.nr-chev { color: var(--baseline); font-size: 19px; }
+
+/* ---------- dashboard: compact session plan ---------- */
+.plan { border-top: 1px solid var(--grid); padding-top: 4px; }
+.plan-row {
+  display: grid; grid-template-columns: 16px 1fr auto;
+  align-items: baseline; gap: 9px; padding: 7px 0;
+}
+.plan-row + .plan-row { border-top: 1px solid rgba(255,255,255,0.04); }
+.pl-cue { font-weight: 800; font-size: 12px; }
+.pl-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-note { font-size: 11px; color: var(--muted); }
+.pl-val { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.pl-val .unit { font-size: 11px; color: var(--muted); font-weight: 500; }
+
 /* muscle volume rows */
 .mv-row { margin-bottom: 11px; }
 .mv-row:last-of-type { margin-bottom: 4px; }

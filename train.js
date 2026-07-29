@@ -420,8 +420,51 @@ function cueColor(type) {
 }
 
 /* ---------- render ---------- */
+/* The Train tab is a dashboard with drill-ins, not one long scroll:
+   home answers "what am I doing today, and am I progressing?" in a glance;
+   everything analytical lives one tap deeper. */
 function renderTrain() {
   if (App.activeSession) return renderActiveSession();
+  const view = App.trainView || 'home';
+  return view === 'home' ? renderTrainHome() : renderTrainSub(view);
+}
+
+const TRAIN_SUBVIEWS = {
+  moved: { title: 'Weight moved', sub: 'every pound you have lifted' },
+  muscles: { title: 'Weekly sets by muscle', sub: 'volume distribution vs effective ranges' },
+  records: { title: 'Personal records', sub: 'your best on every lift' },
+  consistency: { title: 'Consistency', sub: 'showing up, week after week' },
+  history: { title: 'Session history', sub: 'everything you have logged' }
+};
+
+function subHeader(view) {
+  const meta = TRAIN_SUBVIEWS[view] || { title: '', sub: '' };
+  return `
+  <div class="sub-head">
+    <button class="back-btn" data-action="train-back" aria-label="Back to training">‹</button>
+    <div class="grow">
+      <div class="sub-title">${esc(meta.title)}</div>
+      <div class="muted small">${esc(meta.sub)}</div>
+    </div>
+  </div>`;
+}
+
+function renderTrainSub(view) {
+  const p = getProfile();
+  const all = getWorkouts();
+  let body = '';
+  switch (view) {
+    case 'moved': body = renderVolumeCard(all); break;
+    case 'muscles': body = renderMuscleVolumeCard(all) || emptyNote('Log a lifting session and your muscle volume shows up here.'); break;
+    case 'records': body = renderRecordsCard(24) || emptyNote('Records appear once you have logged a weighted lift.'); break;
+    case 'consistency': body = renderConsistencyCard(p, all) || emptyNote('Your training calendar starts with your first session.'); break;
+    case 'history': body = renderRecentCard(all, 40); break;
+  }
+  return subHeader(view) + body;
+}
+function emptyNote(t) { return `<div class="card"><div class="muted small">${esc(t)}</div></div>`; }
+
+function renderTrainHome() {
   const p = getProfile();
   const tpl = TEMPLATES[p.template];
   const nextIdx = nextDayIndex();
@@ -429,6 +472,22 @@ function renderTrain() {
   const stalledNames = new Set(plateaus.map(pl => pl.name.toLowerCase()));
   const day = tpl.days[nextIdx];
   const all = getWorkouts();
+
+  // glance numbers
+  const weekLb = kgToLb(volumeInDays(7));
+  const lifeLb = kgToLb(lifetimeVolumeKg());
+  const wkSessions = sessionsInDays(7);
+  const streak = weekStreak(p.gymDays);
+  const prs = prBoard(1);
+  const topPr = prs.length ? prs[0] : null;
+
+  // muscle-volume summary for the nav row
+  const mv = muscleSetsInDays(7);
+  const low = MUSCLES.filter(m => mv[m] < MUSCLE_LANDMARKS[m][0]).length;
+  const hasLifts = all.some(s => !s.cardio);
+
+  const quip = volumeQuip(lifeLb, weekLb);
+  if (quip && quip.fresh) { setTimeout(() => { toast(quip.text); settleQuip(); }, 400); }
 
   return `
   ${plateaus.map(pl => {
@@ -442,11 +501,56 @@ function renderTrain() {
   }).join('')}
 
   ${renderTodaysSession(tpl, day, nextIdx, stalledNames)}
-  ${renderVolumeCard(all)}
-  ${renderMuscleVolumeCard(all)}
-  ${renderConsistencyCard(p, all)}
-  ${renderRecordsCard()}
-  ${renderRecentCard(all)}`;
+
+  <div class="card">
+    <div class="glance">
+      <button class="gl" data-action="train-nav" data-view="moved">
+        <span class="gv">${weekLb > 0 ? fmtVol(weekLb) : '—'}</span><span class="gl-l">lb this week</span></button>
+      <button class="gl" data-action="train-nav" data-view="consistency">
+        <span class="gv">${wkSessions}/${p.gymDays}</span><span class="gl-l">sessions</span></button>
+      <button class="gl" data-action="train-nav" data-view="consistency">
+        <span class="gv">${streak}</span><span class="gl-l">week streak</span></button>
+      <button class="gl" data-action="train-nav" data-view="records">
+        <span class="gv">${topPr ? topPr.bestLb : '—'}</span><span class="gl-l">${topPr ? 'top lift lb' : 'no PRs yet'}</span></button>
+    </div>
+    ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
+  </div>
+
+  <div class="card">
+    <h2>Explore</h2>
+    ${navRow('muscles', '💪', 'Weekly sets by muscle',
+      !hasLifts ? 'no data yet' : low ? `${low} below range` : 'all in range',
+      !hasLifts ? '' : low ? 'warn' : 'good')}
+    ${navRow('moved', '🏋', 'Weight moved', lifeLb > 0 ? `${fmtVol(lifeLb)} lb lifetime` : 'starts with set one')}
+    ${navRow('records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestLb} lb` : 'none yet')}
+    ${navRow('consistency', '📅', 'Consistency', streak ? `${streak}-week streak` : `${wkSessions} this week`)}
+    ${navRow('history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
+  </div>
+
+  <div class="grid-2">
+    <button class="btn" data-action="start-freestyle">Freestyle lift</button>
+    <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
+  </div>
+  <details class="adv">
+    <summary>Train a different day</summary>
+    <div class="row mt">
+      <select id="day-picker" class="grow">
+        ${tpl.days.map((d, i) => `<option value="${i}" ${i === nextIdx ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
+      </select>
+      <button class="btn small" data-action="start-picked">Start</button>
+    </div>
+  </details>`;
+}
+
+function navRow(view, ico, label, value, tone) {
+  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
+  return `
+  <button class="nav-row" data-action="train-nav" data-view="${view}">
+    <span class="nr-ico">${ico}</span>
+    <span class="nr-label">${esc(label)}</span>
+    <span class="nr-value" style="color:${color}">${esc(value)}</span>
+    <span class="nr-chev">›</span>
+  </button>`;
 }
 
 /* ---------- 1. the hero: what to do today ---------- */
@@ -455,40 +559,30 @@ function renderTodaysSession(tpl, day, nextIdx, stalledNames) {
   const estMin = Math.max(20, Math.round(plannedSets * 2.6 / 5) * 5);
   return `
   <div class="card">
-    <h2>Today's session <span class="h2-right">${esc(tpl.name)}</span></h2>
-    <div class="hero-num" style="font-size:28px">${esc(day.name)}</div>
-    <div class="muted small">${day.ex.length} lifts · ${plannedSets} sets · about ${estMin} min</div>
+    <div class="spread">
+      <div>
+        <div class="muted small">Today · ${esc(tpl.name)}</div>
+        <div class="hero-num" style="font-size:30px">${esc(day.name)}</div>
+      </div>
+      <div class="muted small center" style="line-height:1.5">${day.ex.length} lifts<br>${plannedSets} sets<br>~${estMin} min</div>
+    </div>
     <button class="btn accent mt" data-action="start-workout" data-idx="${nextIdx}">Start workout</button>
-    <div class="mt">
+    <div class="plan mt">
       ${day.ex.map(([n, tstr]) => {
         const pr = nextTarget(n, tstr, stalledNames);
-        const val = pr.lb > 0 ? `${pr.lb}<span class="unit"> lb × ${pr.reps}</span>`
-          : pr.lb === 0 ? `${pr.reps}<span class="unit"> reps</span>`
-          : '<span class="unit">choose</span>';
+        const val = pr.lb > 0 ? `${pr.lb}<span class="unit"> × ${pr.reps}</span>`
+          : pr.lb === 0 ? `<span class="unit">${pr.reps} reps</span>`
+          : '<span class="unit">pick a weight</span>';
+        // only a deload needs explaining here; "pick a weight" already says it for a new lift
+        const note = pr.type === 'deload' ? 'deload' : '';
         return `
-        <div class="list-item">
-          <span style="color:${cueColor(pr.type)};font-weight:700;width:14px">${CUE[pr.type] || '→'}</span>
-          <div class="li-main">
-            <div class="li-title">${esc(n)}</div>
-            <div class="li-sub">${esc(pr.short || '')}</div>
-          </div>
-          <div class="li-val">${val}</div>
+        <div class="plan-row">
+          <span class="pl-cue" style="color:${cueColor(pr.type)}">${CUE[pr.type] || '→'}</span>
+          <span class="pl-name">${esc(n)}${note ? ` <span class="pl-note">${esc(note)}</span>` : ''}</span>
+          <span class="pl-val">${val}</span>
         </div>`;
       }).join('')}
     </div>
-    <details class="adv">
-      <summary>Train something else</summary>
-      <div class="row mt">
-        <select id="day-picker" class="grow">
-          ${tpl.days.map((d, i) => `<option value="${i}" ${i === nextIdx ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
-        </select>
-        <button class="btn small" data-action="start-picked">Start</button>
-      </div>
-      <div class="grid-2 mt">
-        <button class="btn" data-action="start-freestyle">Freestyle lift</button>
-        <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
-      </div>
-    </details>
   </div>`;
 }
 
@@ -608,8 +702,8 @@ function renderConsistencyCard(p, all) {
 }
 
 /* ---------- 4. records: the trophy case ---------- */
-function renderRecordsCard() {
-  const prs = prBoard(6);
+function renderRecordsCard(limit) {
+  const prs = prBoard(limit || 6);
   if (!prs.length) return '';
   return `
   <div class="card">
@@ -628,8 +722,8 @@ function renderRecordsCard() {
 }
 
 /* ---------- 5. history ---------- */
-function renderRecentCard(all) {
-  const recent = all.slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 5);
+function renderRecentCard(all, limit) {
+  const recent = all.slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, limit || 5);
   if (!recent.length) {
     return `<div class="card"><h2>Recent sessions</h2>
       <div class="muted center" style="padding:10px 0">No sessions yet. Your first one sets the baseline.</div></div>`;
@@ -949,6 +1043,7 @@ function finishWorkout() {
   saveWorkout(s);
   App.activeSession = null;
   App.rest = null;
+  App.trainView = 'home';
   toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${s.score}` : `Workout saved — score ${s.score} 💪`);
   App.render();
 }
