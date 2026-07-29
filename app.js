@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v15';
+const APP_VERSION = 'v16';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -20,16 +20,14 @@ function installBanner() {
     <div><button class="btn small ghost" data-action="dismiss-install" style="margin-top:6px">Dismiss</button></div></div></div>`;
 }
 
-/* The app is laid out entirely in CSS (body: position:fixed; inset:0). The only
-   JS the layout needs is snapping the window back to 0,0 after the keyboard
-   closes, since a mobile keyboard can leave the page panned. */
+/* The document scrolls naturally (edge-to-edge flow layout). After the keyboard
+   closes, snap back to the top so a mobile keyboard can't leave the page panned. */
 function snapViewport() {
   const ae = document.activeElement;
   if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return; // keyboard still open
   window.scrollTo(0, 0);
 }
 document.addEventListener('focusout', () => setTimeout(snapViewport, 60));
-if (window.visualViewport) window.visualViewport.addEventListener('resize', () => setTimeout(snapViewport, 60));
 
 const App = {
   tab: 'today',
@@ -42,9 +40,9 @@ const App = {
 
   render() {
     const view = document.getElementById('view');
-    // keep the reading position when re-rendering the same tab (e.g. adding a set);
-    // only jump to the top when actually switching tabs
-    const keepScroll = App._renderedTab === App.tab ? view.scrollTop : 0;
+    // the document is the scroll container now; keep the reading position when
+    // re-rendering the same tab, jump to top only when switching tabs
+    const keepScroll = App._renderedTab === App.tab ? (window.scrollY || 0) : 0;
     document.getElementById('header-date').textContent =
       new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === App.tab));
@@ -59,7 +57,7 @@ const App = {
       case 'grocery': html = renderGrocery(); break;
     }
     view.innerHTML = installBanner() + html;
-    view.scrollTop = keepScroll;
+    window.scrollTo(0, keepScroll);
     App._renderedTab = App.tab;
   }
 };
