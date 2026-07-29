@@ -267,6 +267,26 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 .back-btn:active { background: var(--surface-2); }
 .sub-title { font-size: 19px; font-weight: 700; }
 
+/* ---------- today: focus line ---------- */
+.focus {
+  display: flex; align-items: center; gap: 10px;
+  border-top: 1px solid var(--grid); padding-top: 12px;
+}
+.fc-ico { font-size: 16px; flex-shrink: 0; }
+.fc-text { flex: 1; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.focus .btn.small { flex-shrink: 0; }
+
+/* ---------- today: quick log ---------- */
+.qa-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.qa {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 11px 2px 9px; border-radius: 11px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 10.5px; color: var(--ink-2);
+}
+.qa:active { border-color: var(--blue); transform: scale(0.97); }
+.qa-i { font-size: 19px; line-height: 1; }
+
 /* ---------- dashboard: glance strip ---------- */
 .glance { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .gl {

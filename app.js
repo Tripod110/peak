@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -48,6 +48,7 @@ const App = {
   scanResult: null,
   grocSection: 'staples',
   trainView: 'home',
+  todayView: 'home',
   rest: null,
   ob: {},
 
@@ -79,83 +80,389 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/* ---------- Today dashboard ---------- */
+/* ---------- Today: status dashboard + drill-ins ----------
+   Home answers "where do I stand right now, and what should I do next?".
+   Trends and history live one tap deeper. */
+
+function navHeader(title, sub, backAction) {
+  return `
+  <div class="sub-head">
+    <button class="back-btn" data-action="${backAction}" aria-label="Back">‹</button>
+    <div class="grow">
+      <div class="sub-title">${esc(title)}</div>
+      ${sub ? `<div class="muted small">${esc(sub)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+const TODAY_SUBVIEWS = {
+  week: { title: 'This week', sub: 'your last 7 days, and the one thing to fix' },
+  nutrition: { title: 'Nutrition trends', sub: 'calories and protein over 14 days' },
+  weight: { title: 'Body weight', sub: 'the trend that tells you if it is working' },
+  streaks: { title: 'Consistency', sub: 'the habit underneath the results' }
+};
+
 function renderToday() {
+  const view = App.todayView || 'home';
+  return view === 'home' ? renderTodayHome() : renderTodaySub(view);
+}
+
+function renderTodaySub(view) {
+  const meta = TODAY_SUBVIEWS[view] || { title: '', sub: '' };
+  let body = '';
+  switch (view) {
+    case 'week': body = renderWeeklyReview() || emptyNote('Log a few days and your weekly review appears here.'); break;
+    case 'nutrition': body = renderNutritionTrends(); break;
+    case 'weight': body = renderWeightDetail(); break;
+    case 'streaks': body = renderStreakDetail(); break;
+  }
+  return navHeader(meta.title, meta.sub, 'today-back') + body;
+}
+
+/* the single most useful thing to do right now — time-aware, one line */
+function todayFocus(p, t, totals, slScore, trainedToday) {
+  const hour = new Date().getHours();
+  const logged = foodForDay(todayKey()).length;
+  const proteinLeft = Math.max(0, t.protein - totals.protein);
+  const kcalLeft = t.kcal - totals.kcal;
+  const wk = sessionsInDays(7);
+
+  if (!logged && hour >= 10)
+    return { ico: '📷', text: 'Nothing logged yet today — scan a meal and the rest of the day builds itself.', action: 'quick-scan' };
+  if (slScore == null && hour < 15)
+    return { ico: '☾', text: "Last night's sleep isn't logged. Ten seconds, and it explains everything else.", action: 'quick-sleep' };
+  if (proteinLeft > 50 && hour >= 15)
+    return { ico: '🥩', text: `${Math.round(proteinLeft)}g protein to go — this is the number that decides whether the training sticks.`, action: 'quick-food' };
+  if (!trainedToday && wk < p.gymDays)
+    return { ico: '🏋', text: `${wk} of ${p.gymDays} sessions this week — ${TEMPLATES[p.template].days[nextDayIndex()].name} is up next.`, action: 'quick-train' };
+  if (kcalLeft < -250)
+    return { ico: '⚠', text: `${Math.abs(Math.round(kcalLeft))} kcal over target. Not a problem on its own — just keep tomorrow tight.` };
+  if (proteinLeft > 25)
+    return { ico: '🥩', text: `${Math.round(proteinLeft)}g protein left to hit today's target.`, action: 'quick-food' };
+  const stalled = detectPlateaus();
+  if (stalled.length)
+    return { ico: '⚠', text: `${stalled[0].name} has stalled — Train has the fix ready.`, action: 'quick-train' };
+  if (!logged)
+    return { ico: '☀', text: 'Fresh day. Log breakfast when you get to it.', action: 'quick-scan' };
+  return { ico: '✓', text: 'On track today — calories and protein both landing where they should.' };
+}
+
+function renderTodayHome() {
   const p = getProfile();
   const t = computeTargets(p);
   const tk = todayKey();
   const totals = dayTotals(tk);
   const slScore = sleepScore(tk);
-  const plateaus = detectPlateaus();
-  const tpl = TEMPLATES[p.template];
-  const nextIdx = nextDayIndex();
+  const trainedToday = getWorkouts().some(s => s.date === tk);
   const todayScores = getWorkouts().filter(s => s.date === tk).map(s => s.score || 0);
-  const trainedToday = todayScores.length > 0;
-  const todayBest = trainedToday ? Math.max(...todayScores) : 0;
+  const focus = todayFocus(p, t, totals, slScore, trainedToday);
 
-  // 7-day calories
   const weekVals = [];
   for (let i = 6; i >= 0; i--) weekVals.push(dayTotals(todayKey(-i)).kcal);
 
-  // weight trend
-  const ws = getWeights().slice(-14);
-  const wPoints = ws.map(w => ({ label: prettyDate(w.date).replace(/^\w+, /, ''), value: Math.round(kgToLb(w.kg) * 10) / 10 }));
+  const ws = getWeights();
+  const latestLb = ws.length ? Math.round(kgToLb(ws[ws.length - 1].kg) * 10) / 10 : null;
+  const older = ws.filter(w => daysBetween(w.date, tk) >= 7);
+  const wChange = (latestLb != null && older.length)
+    ? Math.round((latestLb - kgToLb(older[older.length - 1].kg)) * 10) / 10 : null;
 
+  const proteinPct = Math.round(totals.protein / t.protein * 100);
   const slColor = slScore == null ? CHART.muted : slScore >= 75 ? CHART.good : slScore >= 50 ? CHART.warning : CHART.critical;
+  const weak = weeklyWeakLink(p, t);
 
   return `
-  ${plateaus.slice(0, 2).map(pl => `
-    <div class="alert">
-      <span class="a-ico">⚠</span>
-      <div class="a-body"><b>Plateau: ${esc(pl.name)}</b>${esc(pl.tip)}</div>
-    </div>`).join('')}
-
   <div class="card">
     <div class="row">
-      <div>${ringChart(totals.kcal, t.kcal, { size: 118, color: CHART.blue, unit: 'kcal' })}</div>
+      <div>${ringChart(totals.kcal, t.kcal, { size: 116, color: CHART.blue, unit: 'kcal' })}</div>
       <div class="grow">
         ${macroBar('Protein', totals.protein, t.protein, CHART.blue)}
         ${macroBar('Carbs', totals.carbs, t.carbs, CHART.orange)}
         ${macroBar('Fat', totals.fat, t.fat, CHART.aqua)}
       </div>
     </div>
+    <div class="focus mt">
+      <span class="fc-ico">${focus.ico}</span>
+      <span class="fc-text">${esc(focus.text)}</span>
+      ${focus.action ? `<button class="btn small primary" data-action="${focus.action}">Go</button>` : ''}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Quick log</h2>
+    <div class="qa-grid">
+      <button class="qa" data-action="quick-scan"><span class="qa-i">📷</span>Scan</button>
+      <button class="qa" data-action="quick-food"><span class="qa-i">＋</span>Food</button>
+      <button class="qa" data-action="quick-train"><span class="qa-i">🏋</span>Train</button>
+      <button class="qa" data-action="quick-sleep"><span class="qa-i">☾</span>Sleep</button>
+      <button class="qa" data-action="quick-weight"><span class="qa-i">⚖</span>Weight</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="glance">
+      <button class="gl" data-action="quick-train">
+        <span class="gv" style="color:${trainedToday ? CHART.good : 'var(--ink)'}">${trainedToday ? (todayScores.length ? Math.max(...todayScores) : '✓') : '—'}</span>
+        <span class="gl-l">${trainedToday ? 'session score' : 'not trained'}</span></button>
+      <button class="gl" data-action="quick-sleep">
+        <span class="gv" style="color:${slColor}">${slScore != null ? slScore : '—'}</span>
+        <span class="gl-l">sleep score</span></button>
+      <button class="gl" data-action="today-nav" data-view="nutrition">
+        <span class="gv">${totals.kcal > 0 ? proteinPct + '%' : '—'}</span>
+        <span class="gl-l">protein today</span></button>
+      <button class="gl" data-action="today-nav" data-view="weight">
+        <span class="gv">${latestLb != null ? latestLb : '—'}</span>
+        <span class="gl-l">body weight</span></button>
+    </div>
     <div class="spread mt">
       <span class="muted small">Target ${t.kcal.toLocaleString()} kcal · ${GOAL_LABEL[p.goal]}</span>
-      <span>${weekBars(weekVals, t.kcal, { w: 110, h: 26 })}</span>
+      <span>${weekBars(weekVals, t.kcal, { w: 104, h: 24 })}</span>
     </div>
   </div>
 
-  <div class="grid-2">
-    <div class="card mb0" data-action="go-tab" data-tab="train" style="cursor:pointer">
-      <h2>Training</h2>
-      ${trainedToday
-        ? `<div class="pill good">✓ Trained${todayBest ? ' · ' + todayBest : ''}</div>`
-        : `<div style="font-weight:700">${esc(tpl.days[nextIdx].name)}</div><div class="muted small">up next — tap to start</div>`}
-    </div>
-    <div class="card mb0" data-action="go-tab" data-tab="sleep" style="cursor:pointer">
-      <h2>Sleep</h2>
-      ${slScore != null
-        ? `<div class="hero-num" style="font-size:26px;color:${slColor}">${slScore}<span class="unit"> /100</span></div>`
-        : `<div class="muted small">Not logged — tap to log last night</div>`}
-    </div>
-  </div>
+  <div class="card">
+    <h2>Explore</h2>
+    ${todayNavRow('week', '📈', 'This week', weak.short, weak.tone)}
+    ${todayNavRow('nutrition', '🍽', 'Nutrition trends', '14-day averages')}
+    ${todayNavRow('weight', '⚖', 'Body weight',
+      latestLb != null ? `${latestLb} lb${wChange != null ? ` · ${wChange > 0 ? '+' : ''}${wChange} this week` : ''}` : 'not logged yet')}
+    ${todayNavRow('streaks', '🔥', 'Consistency', streakSummary())}
+  </div>`;
+}
 
-  <div class="card mt">
-    <h2>Body weight <span class="h2-right">lb</span></h2>
-    ${wPoints.length >= 2 ? lineChart(wPoints, { color: CHART.blue, h: 110, yFmt: v => Math.round(v) }) :
-      `<div class="muted small">Log your weight a few times to see the trend.</div>`}
-    <div class="row mt">
+function todayNavRow(view, ico, label, value, tone) {
+  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
+  return `
+  <button class="nav-row" data-action="today-nav" data-view="${view}">
+    <span class="nr-ico">${ico}</span>
+    <span class="nr-label">${esc(label)}</span>
+    <span class="nr-value" style="color:${color}">${esc(value)}</span>
+    <span class="nr-chev">›</span>
+  </button>`;
+}
+
+/* ---------- shared weakest-link analysis ----------
+   One source of truth for "what should he fix this week" — the Today nav row
+   shows the short form, the weekly review shows the full sentence. */
+function weeklyWeakLink(p, t) {
+  let kcalSum = 0, protSum = 0, foodDays = 0;
+  for (let i = 0; i < 7; i++) {
+    const k = todayKey(-i);
+    if (foodForDay(k).length) { foodDays++; const d = dayTotals(k); kcalSum += d.kcal; protSum += d.protein; }
+  }
+  const sleepAll = getSleep();
+  let sleepSum = 0, nights = 0;
+  for (let i = 0; i < 7; i++) {
+    const k = todayKey(-i);
+    if (sleepAll[k]) { nights++; sleepSum += sleepAll[k].durationMin; }
+  }
+  const weekSessions = getWorkouts().filter(s => { const d = daysBetween(s.date, todayKey()); return d >= 0 && d < 7; });
+  const lifts = weekSessions.filter(s => !s.cardio);
+  const scores = weekSessions.map(s => s.score).filter(v => typeof v === 'number');
+  const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  const avgKcal = foodDays ? Math.round(kcalSum / foodDays) : null;
+  const avgProt = foodDays ? Math.round(protSum / foodDays) : null;
+  const avgSleep = nights ? Math.round(sleepSum / nights) : null;
+
+  const stats = { avgKcal, avgProt, avgSleep, nights, foodDays, lifts: lifts.length, sessions: weekSessions.length, avgScore };
+
+  if (!foodDays && !nights && !weekSessions.length)
+    return { ...stats, ico: '·', short: 'no data yet', tone: '', full: 'Nothing logged in the last 7 days — start anywhere.' };
+  if (avgSleep != null && avgSleep < 420)
+    return { ...stats, ico: '☾', short: 'sleep is low', tone: 'warn',
+      full: `Sleep is your bottleneck at ${fmtDur(avgSleep)} a night. Pull bedtime 30 min earlier — it feeds every lift more than any program tweak.` };
+  if (avgProt != null && avgProt < t.protein * 0.85)
+    return { ...stats, ico: '🥩', short: 'protein is low', tone: 'warn',
+      full: `Protein averaged ${avgProt}g against a ${t.protein}g target. Add one protein anchor a day — Grocery → Snacks has the cheap ones.` };
+  if (lifts.length < p.gymDays - 1)
+    return { ...stats, ico: '🏋', short: `${lifts.length} of ${p.gymDays} sessions`, tone: 'warn',
+      full: `${lifts.length} of ${p.gymDays} planned sessions. Consistency outranks intensity — just get in the gym.` };
+  if (avgScore != null && avgScore < 60)
+    return { ...stats, ico: '▲', short: `scores averaging ${avgScore}`, tone: 'warn',
+      full: `Session scores averaging ${avgScore}. Finish the prescribed sets — Train shows the exact target for each lift.` };
+  return { ...stats, ico: '✓', short: 'on track', tone: 'good',
+    full: `Everything's tracking. Repeat this week exactly and let progression do the work.` };
+}
+
+function streakSummary() {
+  const t = computeTargets(getProfile());
+  let logStreak = 0;
+  for (let i = 0; i < 90; i++) {
+    const logged = foodForDay(todayKey(-i)).length > 0;
+    if (i === 0 && !logged) continue;
+    if (logged) logStreak++; else break;
+  }
+  if (!logStreak) return 'start a streak today';
+  return `${logStreak} day${logStreak !== 1 ? 's' : ''} logged in a row`;
+}
+
+/* ---------- Today subview: nutrition trends ---------- */
+function renderNutritionTrends() {
+  const p = getProfile(), t = computeTargets(p);
+  const kcalPts = [], protPts = [];
+  for (let i = 13; i >= 0; i--) {
+    const k = todayKey(-i);
+    if (!foodForDay(k).length) continue;
+    const d = dayTotals(k);
+    const label = prettyDate(k).replace(/^\w+, /, '');
+    kcalPts.push({ label, value: Math.round(d.kcal) });
+    protPts.push({ label, value: Math.round(d.protein) });
+  }
+  if (kcalPts.length < 2) return emptyNote('Log two or more days and your trends appear here.');
+
+  const avgK = Math.round(kcalPts.reduce((a, b) => a + b.value, 0) / kcalPts.length);
+  const avgP = Math.round(protPts.reduce((a, b) => a + b.value, 0) / protPts.length);
+  const hitDays = protPts.filter(x => x.value >= t.protein * 0.9).length;
+
+  return `
+  <div class="card">
+    <h2>Calories <span class="h2-right">avg ${avgK.toLocaleString()} · target ${t.kcal.toLocaleString()}</span></h2>
+    ${lineChart(kcalPts, { color: CHART.blue, goal: t.kcal, h: 130, yFmt: v => Math.round(v / 100) * 100 })}
+    <div class="chart-note">Dashed line is your target. Tap a dot for the day.</div>
+  </div>
+  <div class="card">
+    <h2>Protein <span class="h2-right">avg ${avgP}g · target ${t.protein}g</span></h2>
+    ${lineChart(protPts, { color: CHART.orange, goal: t.protein, h: 130, unit: 'g', yFmt: v => Math.round(v) })}
+    <div class="chart-note">${hitDays} of ${protPts.length} logged days hit at least 90% of target.</div>
+  </div>
+  <div class="card">
+    <h2>Day quality</h2>
+    ${(() => {
+      const rows = [];
+      for (let i = 0; i < 14; i++) {
+        const k = todayKey(-i);
+        const sc = nutritionScore(k);
+        if (sc == null) continue;
+        rows.push(`
+        <div class="list-item">
+          <div class="li-main">
+            <div class="li-title">${prettyDate(k)}</div>
+            <div class="li-sub">${Math.round(dayTotals(k).kcal)} kcal · ${Math.round(dayTotals(k).protein)}g protein</div>
+          </div>
+          <span class="pill ${sc >= 70 ? 'good' : sc >= 45 ? 'warn' : 'crit'}">${sc}</span>
+        </div>`);
+      }
+      return rows.length ? rows.join('') : '<div class="muted small">No scored days yet.</div>';
+    })()}
+    <div class="chart-note">Quality blends how whole your food was with how close you landed on protein.</div>
+  </div>`;
+}
+
+/* ---------- Today subview: body weight ---------- */
+function renderWeightDetail() {
+  const p = getProfile();
+  const ws = getWeights();
+  const pts = ws.slice(-30).map(w => ({ label: prettyDate(w.date).replace(/^\w+, /, ''), value: Math.round(kgToLb(w.kg) * 10) / 10 }));
+  const first = pts.length ? pts[0].value : null;
+  const last = pts.length ? pts[pts.length - 1].value : null;
+  const change = (first != null && pts.length >= 2) ? Math.round((last - first) * 10) / 10 : null;
+  // trailing 7-day average vs the 7 before it — smooths daily water noise
+  const avgOf = (from, to) => {
+    const sel = ws.filter(w => { const d = daysBetween(w.date, todayKey()); return d >= from && d < to; });
+    return sel.length ? kgToLb(sel.reduce((a, b) => a + b.kg, 0) / sel.length) : null;
+  };
+  const recent = avgOf(0, 7), prior = avgOf(7, 14);
+  const weekly = (recent != null && prior != null) ? Math.round((recent - prior) * 10) / 10 : null;
+
+  return `
+  <div class="card">
+    <div class="row">
       <input id="tw-weight" type="number" inputmode="decimal" placeholder="Today's weight (lb)" class="grow">
       <button class="btn small primary" data-action="log-weight">Log</button>
     </div>
   </div>
-
-  ${renderWeeklyReview()}
-  ${renderStreaks()}`;
+  <div class="card">
+    <h2>Trend <span class="h2-right">${pts.length} entr${pts.length === 1 ? 'y' : 'ies'}</span></h2>
+    ${pts.length >= 2 ? lineChart(pts, { color: CHART.blue, h: 140, unit: ' lb', yFmt: v => Math.round(v) })
+      : '<div class="muted small">Log at least two weigh-ins to see a trend.</div>'}
+    ${weekly != null ? `
+      <div class="spread mt" style="border-top:1px solid var(--grid);padding-top:10px">
+        <span class="muted small">7-day average vs the week before</span>
+        <b style="color:${goalDirectionColor(p, weekly)}">${weekly > 0 ? '+' : ''}${weekly} lb</b>
+      </div>` : ''}
+    ${change != null ? `<div class="chart-note">${change > 0 ? 'Up' : change < 0 ? 'Down' : 'Flat'} ${Math.abs(change)} lb across these ${pts.length} entries.</div>` : ''}
+    ${weekly != null ? `<div class="chart-note">${weeklyWeightVerdict(p, weekly)}</div>` : ''}
+  </div>
+  ${ws.length ? `
+  <div class="card">
+    <h2>Recent weigh-ins</h2>
+    ${ws.slice(-10).reverse().map(w => `
+      <div class="list-item">
+        <div class="li-main"><div class="li-title">${prettyDate(w.date)}</div></div>
+        <div class="li-val">${Math.round(kgToLb(w.kg) * 10) / 10}<span class="unit"> lb</span></div>
+      </div>`).join('')}
+  </div>` : ''}`;
+}
+function goalDirectionColor(p, weekly) {
+  const cutting = p.goal === 'cut' || p.goal === 'slowcut';
+  if (cutting) return weekly < 0 ? CHART.good : 'var(--warning)';
+  if (p.goal === 'bulk') return weekly > 0 ? CHART.good : 'var(--warning)';
+  return Math.abs(weekly) < 0.7 ? CHART.good : 'var(--warning)';
+}
+function weeklyWeightVerdict(p, weekly) {
+  const cutting = p.goal === 'cut' || p.goal === 'slowcut';
+  if (cutting) {
+    if (weekly < -2) return 'That is faster than ideal — dropping much more than 1% of body weight a week costs muscle. Consider eating a little more.';
+    if (weekly < -0.4) return 'Good rate for a cut. Hold this and keep protein high.';
+    if (weekly <= 0.3) return 'Roughly flat. If this holds for another week, trim calories slightly.';
+    return 'Trending up while cutting — check portions and logging honesty before changing the target.';
+  }
+  if (p.goal === 'bulk') {
+    if (weekly > 1.2) return 'Gaining quickly — some of that will be fat. Ease the surplus a bit.';
+    if (weekly > 0.2) return 'Solid lean-gain rate.';
+    return 'Not gaining yet. Add roughly 150–200 kcal a day and reassess next week.';
+  }
+  return Math.abs(weekly) < 0.7
+    ? 'Holding steady, which is exactly right for a recomp — let the lifts tell the story.'
+    : 'Drifting for a recomp. Nudge calories back toward maintenance.';
 }
 
-/* Rolling 7-day review: the four numbers that matter + one recommendation
-   aimed at the weakest link. */
+/* ---------- Today subview: consistency ---------- */
+function renderStreakDetail() {
+  const p = getProfile(), t = computeTargets(p);
+  let logStreak = 0, protStreak = 0;
+  for (let i = 0; i < 90; i++) {
+    const logged = foodForDay(todayKey(-i)).length > 0;
+    if (i === 0 && !logged) continue;
+    if (logged) logStreak++; else break;
+  }
+  for (let i = 0; i < 90; i++) {
+    const hit = dayTotals(todayKey(-i)).protein >= t.protein * 0.9;
+    if (i === 0 && !hit) continue;
+    if (hit) protStreak++; else break;
+  }
+  let loggedDays = 0, sleepDays = 0;
+  const sleepAll = getSleep();
+  for (let i = 0; i < 30; i++) {
+    if (foodForDay(todayKey(-i)).length) loggedDays++;
+    if (sleepAll[todayKey(-i)]) sleepDays++;
+  }
+  const sessions30 = sessionsInDays(30);
+
+  return `
+  <div class="card">
+    <div class="grid-4">
+      <div class="stat"><div class="sv">${logStreak}</div><div class="sl">day streak</div></div>
+      <div class="stat"><div class="sv">${protStreak}</div><div class="sl">protein streak</div></div>
+      <div class="stat"><div class="sv">${loggedDays}</div><div class="sl">logged / 30</div></div>
+      <div class="stat"><div class="sv">${sleepDays}</div><div class="sl">sleep / 30</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Training calendar <span class="h2-right">last 5 weeks</span></h2>
+    ${trainingCalendar(35)}
+    <div class="cal-legend">
+      <span><i style="background:var(--orange)"></i>lift</span>
+      <span><i style="background:var(--blue)"></i>cardio</span>
+      <span><i style="background:var(--surface-2)"></i>rest</span>
+    </div>
+    <div class="chart-note">${sessions30} sessions in the last 30 days against a plan of ${p.gymDays} a week.</div>
+  </div>
+  <div class="card">
+    <h2>Why this matters</h2>
+    <div class="muted small" style="line-height:1.6">Adherence beats optimisation. A merely decent plan followed 90% of the time outperforms a perfect one followed half the time — which is why these counts sit here at all. The streak is not the point; noticing when it breaks is.</div>
+  </div>`;
+}
+
 function renderWeeklyReview() {
   const p = getProfile();
   const t = computeTargets(p);
@@ -187,18 +494,8 @@ function renderWeeklyReview() {
   const ws = getWeights().filter(w => daysBetween(w.date, todayKey()) <= 7);
   const wChange = ws.length >= 2 ? Math.round((kgToLb(ws[ws.length - 1].kg) - kgToLb(ws[0].kg)) * 10) / 10 : null;
 
-  let ico, rec;
-  if (avgSleep != null && avgSleep < 420) {
-    ico = '☾'; rec = `Sleep is your bottleneck at ${fmtDur(avgSleep)} a night. Pull bedtime 30 min earlier — it feeds every lift more than any program tweak.`;
-  } else if (avgProt != null && avgProt < t.protein * 0.85) {
-    ico = '🥩'; rec = `Protein averaged ${avgProt}g against a ${t.protein}g target. Add one protein anchor a day — Grocery → Snacks has the cheap ones.`;
-  } else if (lifts.length < p.gymDays - 1) {
-    ico = '🏋'; rec = `${lifts.length} of ${p.gymDays} planned sessions. Consistency outranks intensity — just get in the gym.`;
-  } else if (avgScore != null && avgScore < 60) {
-    ico = '▲'; rec = `Session scores averaging ${avgScore}. Finish the prescribed sets — Train now shows the exact target for each lift.`;
-  } else {
-    ico = '✓'; rec = `Everything's tracking. Repeat this week exactly and let progression do the work.`;
-  }
+  const weak = weeklyWeakLink(p, t);
+  const ico = weak.ico, rec = weak.full;
 
   const tile = (val, sub) => `<div><div class="hero-num" style="font-size:20px">${val}</div><div class="muted small">${sub}</div></div>`;
   return `
@@ -245,6 +542,27 @@ function renderStreaks() {
       <div><div class="hero-num" style="font-size:24px">${streak}💪</div><div class="muted small">protein target hit</div></div>
     </div>
   </div>`;
+}
+
+
+function openWeightModal() {
+  const ws = getWeights();
+  const last = ws.length ? Math.round(kgToLb(ws[ws.length - 1].kg) * 10) / 10 : '';
+  openModal(`
+    <h3>Log body weight</h3>
+    <div class="modal-sub">${ws.length ? `Last entry ${last} lb on ${prettyDate(ws[ws.length - 1].date)}.` : 'First weigh-in \u2014 this starts your trend.'}</div>
+    <label>Weight (lb)</label>
+    <input id="wm-weight" type="number" inputmode="decimal" value="" placeholder="${last || 'e.g. 174'}">
+    <button class="btn primary mt" data-action="save-weight">Save</button>
+    <div class="chart-note center">Weigh in at the same time of day \u2014 first thing, after the bathroom, is the most consistent.</div>
+  `);
+  setTimeout(() => document.getElementById('wm-weight')?.focus(), 60);
+}
+function saveWeightModal() {
+  const lb = Number(document.getElementById('wm-weight').value);
+  if (!lb || lb < 60 || lb > 700) { toast('Enter a weight in lb'); return; }
+  logWeight(lbToKg(lb));
+  closeModal(); toast('Weight logged'); App.render();
 }
 
 /* ---------- modal & toast ---------- */
@@ -508,6 +826,14 @@ document.addEventListener('click', e => {
     }
 
     /* train */
+    case 'today-nav': App.todayView = el.dataset.view; App._renderedTab = null; App.render(); break;
+    case 'today-back': App.todayView = 'home'; App._renderedTab = null; App.render(); break;
+    case 'quick-scan': App.tab = 'food'; App.foodDay = todayKey(); App.render(); openScanModal(); break;
+    case 'quick-food': App.tab = 'food'; App.foodDay = todayKey(); App.render(); openManualFood(); break;
+    case 'quick-train': App.tab = 'train'; App.trainView = 'home'; App.render(); break;
+    case 'quick-sleep': App.tab = 'sleep'; App.render(); openSleepLog(); break;
+    case 'quick-weight': openWeightModal(); break;
+    case 'save-weight': saveWeightModal(); break;
     case 'train-nav': App.trainView = el.dataset.view; App._renderedTab = null; App.render(); break;
     case 'train-back': App.trainView = 'home'; App._renderedTab = null; App.render(); break;
     case 'start-workout': startWorkout(Number(el.dataset.idx)); break;
@@ -608,6 +934,7 @@ document.getElementById('tabbar').addEventListener('click', e => {
   App.tab = b.dataset.tab;
   if (App.tab === 'food') App.foodDay = todayKey();
   if (App.tab === 'train') App.trainView = 'home';
+  if (App.tab === 'today') App.todayView = 'home';
   App.render();
 });
 

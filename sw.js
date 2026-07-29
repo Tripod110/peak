@@ -1,5 +1,5 @@
 /* Peak service worker — cache app shell, never cache API calls */
-const CACHE = 'peak-v22';
+const CACHE = 'peak-v23';
 const SHELL = [
   './', 'index.html', 'style.css',
   'store.js', 'charts.js', 'quips.js', 'api.js', 'food.js', 'train.js', 'sleep.js', 'grocery.js', 'app.js',
