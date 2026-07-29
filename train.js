@@ -191,7 +191,7 @@ function nextTarget(name, targetStr, stalledNames) {
   const tgt = parseTarget(targetStr) || { sets: 3, reps: 8 };
   const last = lastSessionSets(name);
   if (!last || !last.sets.length) {
-    return { type: 'baseline', sets: tgt.sets, reps: tgt.reps,
+    return { type: 'baseline', sets: tgt.sets, reps: tgt.reps, short: 'first time — set a baseline',
       text: `First time — find a working weight for ${tgt.sets}×${tgt.reps}. That's your baseline.` };
   }
   const maxKg = Math.max(...last.sets.map(s => s.weight || 0));
@@ -199,7 +199,7 @@ function nextTarget(name, targetStr, stalledNames) {
   const when = prettyDate(last.date).replace(/^\w+, /, '');
 
   if (maxKg <= 0) { // bodyweight / timed
-    return { type: 'add_reps', lb: 0, sets: tgt.sets, reps: bestReps + 1,
+    return { type: 'add_reps', lb: 0, sets: tgt.sets, reps: bestReps + 1, short: `last ${bestReps} reps`,
       text: `Beat ${bestReps} — aim ${bestReps + 1}+ this time.`,
       lastText: `${bestReps} reps · ${when}` };
   }
@@ -210,6 +210,7 @@ function nextTarget(name, targetStr, stalledNames) {
   if (stalled) {
     const lb = roundLb5(lastLb * 0.9);
     return { type: 'deload', lb, sets: tgt.sets, reps: tgt.reps, lastText,
+      short: `stalled at ${Math.round(lastLb)} lb — deload`,
       text: `Stalled — deload to ${lb} lb × ${tgt.reps}, then add ${incrementLb(name)} lb a session.` };
   }
 
@@ -218,12 +219,110 @@ function nextTarget(name, targetStr, stalledNames) {
   if (allHit) {
     const lb = roundLb5(lastLb + incrementLb(name));
     return { type: 'add_weight', lb, sets: tgt.sets, reps: tgt.reps, lastText,
+      short: `up from ${Math.round(lastLb)} lb`,
       text: `Hit all ${tgt.sets}×${tgt.reps} — go up to ${lb} lb.` };
   }
   const lb = roundLb5(lastLb);
   const spread = topSets.map(s => s.reps).join('/');
   return { type: 'add_reps', lb, sets: tgt.sets, reps: tgt.reps, lastText,
+    short: `last ${spread} — finish the sets`,
     text: `Stay at ${lb} lb — last time ${spread}. Get all ${tgt.sets} sets to ${tgt.reps}.` };
+}
+
+/* ---------- progress / volume engine ----------
+   "Weight moved" = external load only (sets × reps × weight). Bodyweight work
+   contributes 0 so the number stays honest and comparable over time. */
+
+function sessionVolumeKg(s) {
+  if (s.cardio) return 0;
+  return (s.exercises || []).reduce((v, e) =>
+    v + (e.sets || []).reduce((x, st) => x + Math.max(st.weight || 0, 0) * (st.reps || 0), 0), 0);
+}
+function volumeInDays(days) {
+  return getWorkouts().reduce((v, s) => {
+    const d = daysBetween(s.date, todayKey());
+    return (d >= 0 && d < days) ? v + sessionVolumeKg(s) : v;
+  }, 0);
+}
+function lifetimeVolumeKg() {
+  return getWorkouts().reduce((v, s) => v + sessionVolumeKg(s), 0);
+}
+function weeklyVolumeSeries(weeks) {
+  const out = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    let sum = 0;
+    getWorkouts().forEach(s => {
+      const d = daysBetween(s.date, todayKey());
+      if (d >= w * 7 && d < (w + 1) * 7) sum += sessionVolumeKg(s);
+    });
+    out.push(kgToLb(sum));
+  }
+  return out;
+}
+function sessionsInDays(days, liftsOnly) {
+  return getWorkouts().filter(s => {
+    const d = daysBetween(s.date, todayKey());
+    return d >= 0 && d < days && (!liftsOnly || !s.cardio);
+  }).length;
+}
+/* consecutive weeks meeting (planned − 1) sessions; the current partial week
+   counts only if it already qualifies */
+function weekStreak(target) {
+  const bar = Math.max(1, target - 1);
+  let streak = 0;
+  for (let w = 0; w < 104; w++) {
+    let n = 0;
+    getWorkouts().forEach(s => {
+      const d = daysBetween(s.date, todayKey());
+      if (d >= w * 7 && d < (w + 1) * 7) n++;
+    });
+    if (n >= bar) streak++;
+    else if (w === 0) continue;   // this week is still in progress
+    else break;
+  }
+  return streak;
+}
+function fmtVol(lb) {
+  if (lb >= 1e6) return (lb / 1e6).toFixed(2) + 'M';
+  if (lb >= 1e5) return Math.round(lb / 1000) + 'k';
+  if (lb >= 1e4) return (lb / 1000).toFixed(1) + 'k';
+  return Math.round(lb).toLocaleString();
+}
+const VOLUME_MILESTONES = [25e3, 50e3, 100e3, 250e3, 500e3, 1e6, 2e6, 5e6, 10e6];
+
+/* best est. 1RM per lift + 30-day movement, heaviest first */
+function prBoard(limit) {
+  const names = new Set();
+  getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
+  return [...names].map(n => {
+    const hist = exerciseHistory(n).filter(h => h.bestE1rm > 0);
+    if (!hist.length) return null;
+    const best = Math.max(...hist.map(h => h.bestE1rm));
+    const older = hist.filter(h => daysBetween(h.date, todayKey()) > 30).map(h => h.bestE1rm);
+    const oldBest = older.length ? Math.max(...older) : 0;
+    return {
+      name: n, bestLb: Math.round(kgToLb(best)), sessions: hist.length, hist,
+      deltaLb: oldBest ? Math.round(kgToLb(best - oldBest)) : null
+    };
+  }).filter(Boolean).sort((a, b) => b.bestLb - a.bestLb).slice(0, limit || 6);
+}
+
+/* last N days as a weekday-aligned dot grid */
+function trainingCalendar(days) {
+  const marks = {};
+  getWorkouts().forEach(s => {
+    marks[s.date] = marks[s.date] || {};
+    if (s.cardio) marks[s.date].cardio = true; else marks[s.date].lift = true;
+  });
+  let cells = '';
+  for (let i = days - 1; i >= 0; i--) {
+    const k = todayKey(-i);
+    const m = marks[k];
+    const cls = m ? (m.lift ? 'lift' : 'cardio') : '';
+    const label = prettyDate(k) + (m ? (m.lift ? ' · lifted' : '') + (m.cardio ? ' · cardio' : '') : ' · rest');
+    cells += `<div class="cal-day ${cls}" title="${esc(label)}"></div>`;
+  }
+  return `<div class="cal-grid">${cells}</div>`;
 }
 
 const CUE = { add_weight: '▲', add_reps: '→', deload: '▼', baseline: '●' };
@@ -238,11 +337,9 @@ function renderTrain() {
   const tpl = TEMPLATES[p.template];
   const nextIdx = nextDayIndex();
   const plateaus = detectPlateaus();
-  const recent = getWorkouts().slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 6);
-  const week = getWorkouts().filter(s => daysBetween(s.date, todayKey()) < 7).length;
-
   const stalledNames = new Set(plateaus.map(pl => pl.name.toLowerCase()));
   const day = tpl.days[nextIdx];
+  const all = getWorkouts();
 
   return `
   ${plateaus.map(pl => {
@@ -255,81 +352,170 @@ function renderTrain() {
     </div>`;
   }).join('')}
 
+  ${renderTodaysSession(tpl, day, nextIdx, stalledNames)}
+  ${renderVolumeCard(all)}
+  ${renderConsistencyCard(p, all)}
+  ${renderRecordsCard()}
+  ${renderRecentCard(all)}`;
+}
+
+/* ---------- 1. the hero: what to do today ---------- */
+function renderTodaysSession(tpl, day, nextIdx, stalledNames) {
+  const plannedSets = day.ex.reduce((n, [, t]) => n + (parseTarget(t)?.sets || 3), 0);
+  const estMin = Math.max(20, Math.round(plannedSets * 2.6 / 5) * 5);
+  return `
   <div class="card">
-    <h2>Next up <span class="h2-right">${esc(tpl.name)} · ${week}/${p.gymDays} sessions this week</span></h2>
-    <div class="hero-num" style="font-size:24px">${esc(day.name)}</div>
-    <div class="muted small">Today's targets — computed from your last session</div>
+    <h2>Today's session <span class="h2-right">${esc(tpl.name)}</span></h2>
+    <div class="hero-num" style="font-size:28px">${esc(day.name)}</div>
+    <div class="muted small">${day.ex.length} lifts · ${plannedSets} sets · about ${estMin} min</div>
+    <button class="btn accent mt" data-action="start-workout" data-idx="${nextIdx}">Start workout</button>
     <div class="mt">
       ${day.ex.map(([n, tstr]) => {
         const pr = nextTarget(n, tstr, stalledNames);
+        const val = pr.lb > 0 ? `${pr.lb}<span class="unit"> lb × ${pr.reps}</span>`
+          : pr.lb === 0 ? `${pr.reps}<span class="unit"> reps</span>`
+          : '<span class="unit">choose</span>';
         return `
         <div class="list-item">
+          <span style="color:${cueColor(pr.type)};font-weight:700;width:14px">${CUE[pr.type] || '→'}</span>
           <div class="li-main">
             <div class="li-title">${esc(n)}</div>
-            <div class="li-sub" style="color:${cueColor(pr.type)}">${CUE[pr.type] || '→'} ${esc(pr.text)}</div>
+            <div class="li-sub">${esc(pr.short || '')}</div>
           </div>
-          <div class="li-val">${pr.lb > 0 ? pr.lb + '<span class="unit"> lb</span>'
-            : pr.lb === 0 ? '<span class="unit">bodyweight</span>' : '<span class="unit">set it</span>'}</div>
+          <div class="li-val">${val}</div>
         </div>`;
       }).join('')}
     </div>
-    <button class="btn accent mt" data-action="start-workout" data-idx="${nextIdx}">Start workout</button>
-    <div class="row mt">
-      <select id="day-picker" class="grow">
-        ${tpl.days.map((d, i) => `<option value="${i}" ${i === nextIdx ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
-      </select>
-      <button class="btn small" data-action="start-picked">Start</button>
-    </div>
-    <div class="grid-2 mt">
-      <button class="btn" data-action="start-freestyle">Freestyle lift</button>
-      <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
-    </div>
-  </div>
-
-  ${renderLiftTrends()}
-
-  <div class="card">
-    <h2>Recent sessions</h2>
-    ${recent.length === 0 ? '<div class="muted center" style="padding:10px 0">No sessions yet. Time to put in work.</div>' :
-      recent.map(s => {
-        const scoreChip = s.score != null ? `<span class="pill ${s.score >= 75 ? 'good' : s.score >= 50 ? 'warn' : ''}">${s.score}</span>` : '';
-        const sub = s.cardio
-          ? `${prettyDate(s.date)} · ${s.durationMin} min ${esc(s.intensity)} · ~${s.kcalEst} kcal`
-          : (() => {
-            const sets = (s.exercises || []).reduce((n, e) => n + (e.sets || []).length, 0);
-            const vol = (s.exercises || []).reduce((v, e) => v + (e.sets || []).reduce((x, st) => x + Math.max(st.weight || 0, 0) * (st.reps || 0), 0), 0);
-            return `${prettyDate(s.date)} · ${sets} set${sets !== 1 ? 's' : ''} · ${Math.round(kgToLb(vol)).toLocaleString()} lb volume`;
-          })();
-        return `
-        <div class="list-item">
-          <div class="li-main">
-            <div class="li-title">${esc(s.dayName)}</div>
-            <div class="li-sub">${sub}</div>
-          </div>
-          ${scoreChip}
-          <button class="btn small" data-action="view-workout" data-id="${s.id}">View</button>
-        </div>`;
-      }).join('')}
+    <details class="adv">
+      <summary>Train something else</summary>
+      <div class="row mt">
+        <select id="day-picker" class="grow">
+          ${tpl.days.map((d, i) => `<option value="${i}" ${i === nextIdx ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
+        </select>
+        <button class="btn small" data-action="start-picked">Start</button>
+      </div>
+      <div class="grid-2 mt">
+        <button class="btn" data-action="start-freestyle">Freestyle lift</button>
+        <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
+      </div>
+    </details>
   </div>`;
 }
 
-function renderLiftTrends() {
-  const names = new Set();
-  getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
-  const trends = [...names].map(n => ({ name: n, hist: exerciseHistory(n) }))
-    .filter(t => t.hist.length >= 2)
-    .sort((a, b) => b.hist.length - a.hist.length)
-    .slice(0, 5);
-  if (!trends.length) return '';
+/* ---------- 2. weight moved: the number that only goes up ---------- */
+function renderVolumeCard(all) {
+  const lifeLb = kgToLb(lifetimeVolumeKg());
+  if (lifeLb <= 0) {
+    return `
+    <div class="card">
+      <h2>Weight moved</h2>
+      <div class="muted small">Log your first session and this starts counting — every pound, every set, for as long as you use Peak.</div>
+    </div>`;
+  }
+  const tiles = [
+    ['today', kgToLb(volumeInDays(1))],
+    ['7 days', kgToLb(volumeInDays(7))],
+    ['30 days', kgToLb(volumeInDays(30))],
+    ['this year', kgToLb(volumeInDays(365))]
+  ];
+  const series = weeklyVolumeSeries(8);
+  const showTrend = series.filter(v => v > 0).length >= 2;
+  const next = VOLUME_MILESTONES.find(m => m > lifeLb);
+  const sets = all.reduce((n, s) => n + (s.exercises || []).reduce((x, e) => x + (e.sets || []).length, 0), 0);
   return `
   <div class="card">
-    <h2>Lift trends <span class="h2-right">est. 1RM, lb · <span style="color:${CHART.good}">●</span> PR</span></h2>
-    ${trends.map(t => `
+    <h2>Weight moved <span class="h2-right">lb lifted</span></h2>
+    <div class="grid-4">
+      ${tiles.map(([label, lb]) => `
+        <div class="stat"><div class="sv">${lb > 0 ? fmtVol(lb) : '—'}</div><div class="sl">${label}</div></div>`).join('')}
+    </div>
+    ${showTrend ? `
+      <div class="spread mt">
+        <span class="muted small">Weekly volume, last 8 weeks</span>
+        ${sparkline(series, { color: CHART.orange, w: 150, h: 38, fmt: v => fmtVol(v) })}
+      </div>` : ''}
+    <div class="mt" style="border-top:1px solid var(--grid);padding-top:10px">
+      <div class="spread">
+        <span class="muted small">Lifetime</span>
+        <b>${fmtVol(lifeLb)} lb</b>
+      </div>
+      <div class="spread" style="margin-top:4px">
+        <span class="muted small">Sessions · sets</span>
+        <span class="small">${all.length} · ${sets}</span>
+      </div>
+      ${next ? `<div class="chart-note mt">${fmtVol(next - lifeLb)} lb to go until you've moved ${fmtVol(next)} lb.</div>` : ''}
+    </div>
+  </div>`;
+}
+
+/* ---------- 3. consistency: showing up ---------- */
+function renderConsistencyCard(p, all) {
+  if (!all.length) return '';
+  const wk = sessionsInDays(7), mo = sessionsInDays(30);
+  const streak = weekStreak(p.gymDays);
+  return `
+  <div class="card">
+    <h2>Consistency <span class="h2-right">last 5 weeks</span></h2>
+    ${trainingCalendar(35)}
+    <div class="cal-legend">
+      <span><i style="background:var(--orange)"></i>lift</span>
+      <span><i style="background:var(--blue)"></i>cardio</span>
+      <span><i style="background:var(--surface-2)"></i>rest</span>
+    </div>
+    <div class="grid-4 mt" style="border-top:1px solid var(--grid);padding-top:10px">
+      <div class="stat"><div class="sv">${wk}</div><div class="sl">this week</div></div>
+      <div class="stat"><div class="sv">${p.gymDays}</div><div class="sl">planned</div></div>
+      <div class="stat"><div class="sv">${mo}</div><div class="sl">30 days</div></div>
+      <div class="stat"><div class="sv">${streak}</div><div class="sl">week streak</div></div>
+    </div>
+  </div>`;
+}
+
+/* ---------- 4. records: the trophy case ---------- */
+function renderRecordsCard() {
+  const prs = prBoard(6);
+  if (!prs.length) return '';
+  return `
+  <div class="card">
+    <h2>Personal records <span class="h2-right">est. 1RM · vs 30 days ago</span></h2>
+    ${prs.map(r => `
       <div class="list-item">
-        <div class="li-main"><div class="li-title">${esc(t.name)}</div>
-        <div class="li-sub">${t.hist.length} sessions</div></div>
-        ${sparkline(t.hist.map(h => kgToLb(h.bestE1rm)), { markers: prIndexes(t.hist), color: CHART.blue })}
+        <div class="li-main">
+          <div class="li-title">${esc(r.name)}</div>
+          <div class="li-sub">${r.sessions} session${r.sessions !== 1 ? 's' : ''}${
+            r.deltaLb != null ? ` · <span style="color:${r.deltaLb > 0 ? CHART.good : 'var(--muted)'}">${r.deltaLb > 0 ? '+' + r.deltaLb + ' lb' : 'holding'}</span>` : ''}</div>
+        </div>
+        ${r.hist.length >= 2 ? sparkline(r.hist.map(h => kgToLb(h.bestE1rm)), { markers: prIndexes(r.hist), color: CHART.blue, w: 108, h: 34 }) : ''}
+        <div class="li-val">${r.bestLb}<span class="unit"> lb</span></div>
       </div>`).join('')}
+  </div>`;
+}
+
+/* ---------- 5. history ---------- */
+function renderRecentCard(all) {
+  const recent = all.slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 5);
+  if (!recent.length) {
+    return `<div class="card"><h2>Recent sessions</h2>
+      <div class="muted center" style="padding:10px 0">No sessions yet. Your first one sets the baseline.</div></div>`;
+  }
+  return `
+  <div class="card">
+    <h2>Recent sessions</h2>
+    ${recent.map(s => {
+      const scoreChip = s.score != null ? `<span class="pill ${s.score >= 75 ? 'good' : s.score >= 50 ? 'warn' : ''}">${s.score}</span>` : '';
+      const sub = s.cardio
+        ? `${prettyDate(s.date)} · ${s.durationMin} min ${esc(s.intensity)} · ~${s.kcalEst} kcal`
+        : `${prettyDate(s.date)} · ${(s.exercises || []).reduce((n, e) => n + (e.sets || []).length, 0)} sets · ${fmtVol(kgToLb(sessionVolumeKg(s)))} lb`;
+      return `
+      <div class="list-item">
+        <div class="li-main">
+          <div class="li-title">${esc(s.dayName)}</div>
+          <div class="li-sub">${sub}</div>
+        </div>
+        ${scoreChip}
+        <button class="btn small" data-action="view-workout" data-id="${s.id}">View</button>
+      </div>`;
+    }).join('')}
   </div>`;
 }
 

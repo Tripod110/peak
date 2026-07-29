@@ -108,6 +108,26 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 .row { display: flex; gap: 10px; align-items: center; }
 .row > .grow { flex: 1; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+/* stat tiles */
+.stat { text-align: center; }
+.stat .sv { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.stat .sl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px; }
+
+/* training calendar */
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+  max-width: 252px; margin: 0 auto;
+}
+.cal-day { aspect-ratio: 1; border-radius: 5px; background: var(--surface-2); }
+.cal-day.lift { background: var(--orange); }
+.cal-day.cardio { background: var(--blue); }
+.cal-legend {
+  display: flex; gap: 14px; justify-content: center; margin-top: 12px;
+  font-size: 11px; color: var(--muted);
+}
+.cal-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: middle; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
