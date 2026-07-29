@@ -3,7 +3,7 @@
    "how much room is left?" and the next tap logs something. */
 
 const FOOD_SUBVIEWS = {
-  frequents: { title: 'Frequent foods', sub: 'everything you log often — one tap to add' },
+  frequents: { title: 'Frequent foods', sub: 'ranked by how often you log them — one tap to add' },
   days: { title: 'Past days', sub: 'the last two weeks at a glance' }
 };
 
@@ -51,6 +51,7 @@ function renderFoodHome() {
         ${macroBar('Protein', totals.protein, t.protein, CHART.blue)}
         ${macroBar('Carbs', totals.carbs, t.carbs, CHART.orange)}
         ${macroBar('Fat', totals.fat, t.fat, CHART.aqua)}
+        ${macroBar('Fiber', totals.fiber, t.fiber, CHART.violet)}
       </div>
     </div>
     ${proteinLeft > 0 ? `<div class="chart-note center">${proteinLeft}g protein still to go${isToday ? ' today' : ''}.</div>`
@@ -73,13 +74,14 @@ function renderFoodHome() {
       ? `<div class="muted center" style="padding:14px 0">Nothing logged ${isToday ? 'yet today' : 'this day'}. Scan a meal above.</div>`
       : items.map(e => `
       <div class="list-item">
-        <div class="li-main">
+        <button class="li-main li-tap" data-action="edit-food" data-id="${e.id}" aria-label="Edit ${esc(e.name)}">
           <div class="li-title">${esc(e.name)}${e.source === 'ai' ? ' <span class="tag-ai">AI</span>' : ''}</div>
           <div class="li-sub">${e.time ? fmtTime(e.time) : ''}${e.portion ? ' · ' + esc(e.portion) : ''} · P${Math.round(e.protein)} C${Math.round(e.carbs)} F${Math.round(e.fat)}</div>
-        </div>
+        </button>
         <div class="li-val">${Math.round(e.kcal)}<span class="unit"> kcal</span></div>
-        <button class="x-btn" data-action="del-food" data-id="${e.id}" aria-label="Delete">✕</button>
+        <button class="x-btn" data-action="del-food" data-id="${e.id}" aria-label="Delete ${esc(e.name)}">✕</button>
       </div>`).join('')}
+    ${items.length ? '<div class="chart-note">Tap any entry to edit its amounts or time.</div>' : ''}
   </div>
 
   <div class="card">
@@ -120,7 +122,9 @@ function lastLoggedDay() {
   return null;
 }
 
-/* the four foods you log most, one tap each — the real friction killer */
+/* The four foods you log MOST — ranked by count, not by recency. A pure
+   recency list gets taken over by one-off restaurant meals and evicts the
+   breakfast you actually eat every day. */
 function frequentChips() {
   const rec = Store.get('recentFoods', []);
   if (!rec.length) return '';
@@ -130,7 +134,7 @@ function frequentChips() {
     ${top.map((r, i) => `
       <button class="chip" data-action="readd-food" data-idx="${i}">
         <span class="chip-name">${esc(r.name)}</span>
-        <span class="chip-sub">${Math.round(r.kcal)} kcal · ${Math.round(r.protein)}g P</span>
+        <span class="chip-sub">${Math.round(r.kcal)} kcal · ${Math.round(r.protein)}g P${(r.count || 1) > 1 ? ` · ×${r.count}` : ''}</span>
       </button>`).join('')}
     ${rec.length > 4 ? `<button class="chip chip-more" data-action="food-nav" data-view="frequents">+${rec.length - 4} more</button>` : ''}
   </div>`;
@@ -146,13 +150,14 @@ function renderFrequentsFull() {
       <div class="list-item">
         <div class="li-main">
           <div class="li-title">${esc(r.name)}</div>
-          <div class="li-sub">P${Math.round(r.protein)} C${Math.round(r.carbs)} F${Math.round(r.fat)}${r.quality != null ? ` · quality ${r.quality}/10` : ''}</div>
+          <div class="li-sub">P${Math.round(r.protein)} C${Math.round(r.carbs)} F${Math.round(r.fat)} · logged ${r.count || 1}×${
+            typeof r.quality === 'number' ? ` · quality ${r.quality}/10` : ''}</div>
         </div>
         <div class="li-val">${Math.round(r.kcal)}<span class="unit"> kcal</span></div>
         <button class="btn small primary" data-action="readd-food" data-idx="${i}">＋</button>
-        <button class="x-btn" data-action="del-recent" data-idx="${i}" aria-label="Remove">✕</button>
+        <button class="x-btn" data-action="del-recent" data-idx="${i}" aria-label="Remove ${esc(r.name)}">✕</button>
       </div>`).join('')}
-    <div class="chart-note">Adding a food keeps it here; ✕ forgets it. The top four appear as one-tap chips on the Food screen.</div>
+    <div class="chart-note">Ordered by how often you log each one. ✕ forgets it. The top four appear as one-tap chips on the Food screen.</div>
   </div>`;
 }
 
@@ -161,11 +166,13 @@ function renderPastDays() {
   const p = getProfile();
   const t = computeTargets(p);
   const rows = [];
+  const kcals = [];
   for (let i = 0; i < 14; i++) {
     const k = todayKey(-i);
     const items = foodForDay(k);
     if (!items.length) continue;
     const d = dayTotals(k);
+    kcals.push(d.kcal);
     const sc = nutritionScore(k);
     rows.push(`
       <div class="list-item" data-action="open-day" data-key="${k}" style="cursor:pointer">
@@ -178,9 +185,7 @@ function renderPastDays() {
       </div>`);
   }
   if (!rows.length) return emptyNote('No days logged in the last two weeks yet.');
-  const avgK = Math.round([...Array(14).keys()]
-    .map(i => dayTotals(todayKey(-i)).kcal).filter(v => v > 0)
-    .reduce((a, b, _, arr) => a + b / arr.length, 0));
+  const avgK = Math.round(kcals.reduce((a, b) => a + b, 0) / kcals.length);
   return `
   <div class="card">
     <h2>Last 14 days <span class="h2-right">avg ${avgK.toLocaleString()} kcal · target ${t.kcal.toLocaleString()}</span></h2>
@@ -193,11 +198,11 @@ function renderPastDays() {
 function openScanModal() {
   const s = getSettings();
   const keyWarning = s.apiKey ? '' :
-    `<div class="alert crit"><span class="a-ico">⚠</span><div class="a-body"><b>Free API key needed (one-time)</b>
-     Scanning runs on Google Gemini's free tier. Grab a key at aistudio.google.com/apikey and paste it in Settings — it never leaves this device.</div></div>`;
+    `<div class="alert"><span class="a-ico">🔑</span><div class="a-body"><b>One-time setup: add a free key</b>
+     Scanning runs on Google Gemini's free tier, so Peak needs your own key — no card, takes a minute. Grab one at aistudio.google.com/apikey and paste it in Settings; it never leaves this device.</div></div>`;
   openModal(`
     <h3>Scan a meal</h3>
-    <div class="modal-sub">Snap a photo, or just describe the meal — Claude estimates calories and macros.</div>
+    <div class="modal-sub">Snap a photo, or just describe the meal — Gemini estimates calories and macros. Every number is editable before it's logged, so treat it as a fast first draft, not gospel.</div>
     ${keyWarning}
     <input type="file" id="scan-file" accept="image/*" capture="environment" style="display:none">
     <div id="scan-stage">
@@ -250,6 +255,8 @@ async function runScan() {
   }
 }
 
+/* Every estimate is editable here. Portion guesses are routinely off by a third,
+   and "uncheck it or accept it" was the only choice on offer. */
 function renderScanReview(result) {
   const box = document.getElementById('scan-result');
   const conf = { high: ['good', 'High confidence'], medium: ['warn', 'Medium confidence'], low: ['crit', 'Low confidence — double-check'] }[result.confidence] || ['warn', ''];
@@ -261,15 +268,22 @@ function renderScanReview(result) {
     ${result.notes ? `<div class="muted small mt">${esc(result.notes)}</div>` : ''}
     <div id="scan-items">
     ${result.items.map((it, i) => `
-      <div class="list-item">
-        <input type="checkbox" checked data-scan-check="${i}" style="width:auto">
-        <div class="li-main">
-          <div class="li-title">${esc(it.name)}</div>
-          <div class="li-sub">${esc(it.portion)} · P${it.protein_g} C${it.carbs_g} F${it.fat_g} · quality ${it.quality_score}/10</div>
+      <div class="scan-item">
+        <label class="si-head">
+          <input type="checkbox" checked data-scan-check="${i}">
+          <input class="si-name" value="${esc(it.name)}" data-scan-name="${i}" aria-label="Item name">
+        </label>
+        <input class="si-portion" value="${esc(it.portion)}" data-scan-portion="${i}" aria-label="Portion">
+        <div class="si-macros">
+          <label>kcal<input type="number" inputmode="numeric" value="${it.calories}" data-scan-kcal="${i}"></label>
+          <label>P<input type="number" inputmode="numeric" value="${it.protein_g}" data-scan-p="${i}"></label>
+          <label>C<input type="number" inputmode="numeric" value="${it.carbs_g}" data-scan-c="${i}"></label>
+          <label>F<input type="number" inputmode="numeric" value="${it.fat_g}" data-scan-f="${i}"></label>
+          <label>Fib<input type="number" inputmode="numeric" value="${it.fiber_g}" data-scan-fib="${i}"></label>
         </div>
-        <div class="li-val">${it.calories}<span class="unit"> kcal</span></div>
       </div>`).join('')}
     </div>
+    <div class="chart-note">Estimates are editable — halve a portion or fix a macro before logging.</div>
     <button class="btn primary mt" data-action="scan-log">Log selected</button>
     <button class="btn ghost mt" data-action="scan-again">↻ Rescan</button>`;
 }
@@ -277,56 +291,100 @@ function renderScanReview(result) {
 function logScanItems() {
   const result = App.scanResult;
   if (!result) return;
-  const checks = [...document.querySelectorAll('[data-scan-check]')];
+  const num = (attr, i, fallback) => {
+    const el = document.querySelector(`[data-scan-${attr}="${i}"]`);
+    const v = el ? Number(el.value) : NaN;
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const str = (attr, i, fallback) => {
+    const el = document.querySelector(`[data-scan-${attr}="${i}"]`);
+    return el && el.value.trim() ? el.value.trim() : fallback;
+  };
   let n = 0;
-  checks.forEach(c => {
+  [...document.querySelectorAll('[data-scan-check]')].forEach(c => {
     if (!c.checked) return;
-    const it = result.items[Number(c.dataset.scanCheck)];
+    const i = Number(c.dataset.scanCheck);
+    const it = result.items[i];
     addFoodEntry(App.foodDay, {
-      name: it.name, portion: it.portion, kcal: it.calories,
-      protein: it.protein_g, carbs: it.carbs_g, fat: it.fat_g,
-      fiber: it.fiber_g, quality: it.quality_score, source: 'ai'
+      name: str('name', i, it.name), portion: str('portion', i, it.portion),
+      kcal: num('kcal', i, it.calories), protein: num('p', i, it.protein_g),
+      carbs: num('c', i, it.carbs_g), fat: num('f', i, it.fat_g),
+      fiber: num('fib', i, it.fiber_g), quality: it.quality_score, source: 'ai'
     });
     n++;
   });
+  if (!n) { toast('Nothing selected'); return; }
   App.scanImage = null; App.scanResult = null;
   closeModal();
   toast(`Logged ${n} item${n !== 1 ? 's' : ''}`);
   App.render();
 }
 
-/* ---------- manual add ---------- */
+/* ---------- manual add / edit ---------- */
 function openManualFood(prefill) {
   const f = prefill || {};
+  const editing = !!f.id;
+  const rated = typeof f.quality === 'number';
   openModal(`
-    <h3>${f.name ? 'Edit & log' : 'Add food'}</h3>
+    <h3>${editing ? 'Edit entry' : 'Add food'}</h3>
     <label>Name</label>
     <input id="mf-name" value="${esc(f.name || '')}" placeholder="e.g. Chicken & rice">
+    <div class="grid-2">
+      <div><label>Portion (optional)</label><input id="mf-portion" value="${esc(f.portion || '')}" placeholder="e.g. 6 oz"></div>
+      <div><label>Time eaten</label><input id="mf-time" type="time" value="${f.time || nowTime()}"></div>
+    </div>
     <div class="grid-2">
       <div><label>Calories</label><input id="mf-kcal" type="number" inputmode="numeric" value="${f.kcal ?? ''}"></div>
       <div><label>Protein (g)</label><input id="mf-protein" type="number" inputmode="numeric" value="${f.protein ?? ''}"></div>
       <div><label>Carbs (g)</label><input id="mf-carbs" type="number" inputmode="numeric" value="${f.carbs ?? ''}"></div>
       <div><label>Fat (g)</label><input id="mf-fat" type="number" inputmode="numeric" value="${f.fat ?? ''}"></div>
     </div>
-    <label>Quality (how whole / nutrient-dense, 0–10)</label>
-    <input id="mf-quality" type="range" min="0" max="10" value="${f.quality ?? 5}" style="padding:0">
-    <button class="btn primary mt" data-action="manual-food-save">Log it</button>
+    <label>Fiber (g, optional)</label>
+    <input id="mf-fiber" type="number" inputmode="numeric" value="${f.fiber ?? ''}">
+    <label class="check-row">
+      <input type="checkbox" id="mf-qrate" ${rated ? 'checked' : ''}>
+      <span>Rate food quality (optional)</span>
+    </label>
+    <div id="mf-qwrap" style="${rated ? '' : 'display:none'}">
+      <label>How whole / nutrient-dense? (<span id="mf-qval">${rated ? f.quality : 5}</span>/10)</label>
+      <input id="mf-quality" type="range" min="0" max="10" value="${rated ? f.quality : 5}" style="padding:0">
+    </div>
+    <div class="chart-note">Leave quality unrated and your day is scored on protein and calories alone — never penalised for logging by hand.</div>
+    <button class="btn primary mt" data-action="manual-food-save" ${editing ? `data-id="${f.id}"` : ''}>${editing ? 'Save changes' : 'Log it'}</button>
   `);
+  const cb = document.getElementById('mf-qrate');
+  cb.addEventListener('change', () => {
+    document.getElementById('mf-qwrap').style.display = cb.checked ? '' : 'none';
+  });
+  document.getElementById('mf-quality')?.addEventListener('input', ev => {
+    document.getElementById('mf-qval').textContent = ev.target.value;
+  });
+  if (!editing) setTimeout(() => document.getElementById('mf-name')?.focus(), 60);
 }
 
-function saveManualFood() {
+function saveManualFood(id) {
   const name = document.getElementById('mf-name').value.trim();
   const kcal = Number(document.getElementById('mf-kcal').value);
   if (!name || !(kcal >= 0)) { toast('Name and calories are required'); return; }
-  addFoodEntry(App.foodDay, {
+  const numOf = elId => Number(document.getElementById(elId).value) || 0;
+  const rated = document.getElementById('mf-qrate').checked;
+  const entry = {
     name,
+    portion: document.getElementById('mf-portion').value.trim(),
+    time: document.getElementById('mf-time').value || nowTime(),
     kcal,
-    protein: Number(document.getElementById('mf-protein').value) || 0,
-    carbs: Number(document.getElementById('mf-carbs').value) || 0,
-    fat: Number(document.getElementById('mf-fat').value) || 0,
-    fiber: 0,
-    quality: Number(document.getElementById('mf-quality').value),
-    source: 'manual'
-  });
-  closeModal(); toast('Logged'); App.render();
+    protein: numOf('mf-protein'),
+    carbs: numOf('mf-carbs'),
+    fat: numOf('mf-fat'),
+    fiber: numOf('mf-fiber'),
+    quality: rated ? Number(document.getElementById('mf-quality').value) : null
+  };
+  if (id) {
+    updateFoodEntry(App.foodDay, id, entry);
+    closeModal(); toast('Entry updated');
+  } else {
+    addFoodEntry(App.foodDay, { ...entry, source: 'manual' });
+    closeModal(); toast('Logged');
+  }
+  App.render();
 }

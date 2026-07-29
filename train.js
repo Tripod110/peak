@@ -1,4 +1,4 @@
-/* Forge — Train tab: routines, set logging, PRs, plateau detection */
+/* Peak — Train tab: routines, set logging, PRs, plateau detection */
 
 const TEMPLATES = {
   fb3: {
@@ -11,28 +11,28 @@ const TEMPLATES = {
   ul4: {
     name: 'Upper / Lower ×4', days: [
       { name: 'Upper A', ex: [['Bench Press', '4×5'], ['Barbell Row', '4×6'], ['Overhead Press', '3×8'], ['Lat Pulldown', '3×10'], ['Dumbbell Curl', '3×12'], ['Triceps Pushdown', '3×12']] },
-      { name: 'Lower A', ex: [['Squat', '4×5'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '4×12']] },
+      { name: 'Lower A', ex: [['Squat', '4×5'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '4×12'], ['Hanging Leg Raise', '3×12']] },
       { name: 'Upper B', ex: [['Overhead Press', '4×5'], ['Weighted Pull-up', '4×6'], ['Incline DB Press', '3×10'], ['Seated Cable Row', '3×10'], ['Lateral Raise', '3×15'], ['Hammer Curl', '3×12']] },
-      { name: 'Lower B', ex: [['Deadlift', '3×5'], ['Front Squat', '3×8'], ['Walking Lunge', '3×10'], ['Leg Extension', '3×12'], ['Seated Calf Raise', '4×15']] }
+      { name: 'Lower B', ex: [['Deadlift', '3×5'], ['Front Squat', '3×8'], ['Walking Lunge', '3×10'], ['Leg Extension', '3×12'], ['Seated Calf Raise', '4×15'], ['Cable Crunch', '3×15']] }
     ]
   },
   ppl5: {
     name: 'PPL + Upper/Lower ×5', days: [
       { name: 'Push', ex: [['Bench Press', '4×6'], ['Overhead Press', '3×8'], ['Incline DB Press', '3×10'], ['Lateral Raise', '4×15'], ['Triceps Pushdown', '3×12'], ['Overhead Extension', '3×12']] },
       { name: 'Pull', ex: [['Deadlift', '3×5'], ['Weighted Pull-up', '4×6'], ['Barbell Row', '3×8'], ['Face Pull', '3×15'], ['Dumbbell Curl', '3×12'], ['Hammer Curl', '3×12']] },
-      { name: 'Legs', ex: [['Squat', '4×6'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '5×12']] },
+      { name: 'Legs', ex: [['Squat', '4×6'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '5×12'], ['Hanging Leg Raise', '3×12']] },
       { name: 'Upper', ex: [['Overhead Press', '4×6'], ['Lat Pulldown', '3×10'], ['Incline DB Press', '3×10'], ['Seated Cable Row', '3×10'], ['Lateral Raise', '3×15'], ['Dumbbell Curl', '3×12']] },
-      { name: 'Lower', ex: [['Front Squat', '4×6'], ['Hip Thrust', '3×10'], ['Walking Lunge', '3×10'], ['Leg Extension', '3×15'], ['Seated Calf Raise', '4×15']] }
+      { name: 'Lower', ex: [['Front Squat', '4×6'], ['Hip Thrust', '3×10'], ['Walking Lunge', '3×10'], ['Leg Extension', '3×15'], ['Seated Calf Raise', '4×15'], ['Cable Crunch', '3×15']] }
     ]
   },
   ppl6: {
     name: 'Push/Pull/Legs ×6', days: [
       { name: 'Push A', ex: [['Bench Press', '4×5'], ['Overhead Press', '3×8'], ['Incline DB Press', '3×10'], ['Lateral Raise', '4×15'], ['Triceps Pushdown', '3×12']] },
       { name: 'Pull A', ex: [['Deadlift', '3×5'], ['Weighted Pull-up', '4×6'], ['Seated Cable Row', '3×10'], ['Face Pull', '3×15'], ['Dumbbell Curl', '3×12']] },
-      { name: 'Legs A', ex: [['Squat', '4×5'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '5×12']] },
+      { name: 'Legs A', ex: [['Squat', '4×5'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '5×12'], ['Hanging Leg Raise', '3×12']] },
       { name: 'Push B', ex: [['Overhead Press', '4×5'], ['Incline Bench Press', '3×8'], ['Dip', '3×10'], ['Lateral Raise', '4×15'], ['Overhead Extension', '3×12']] },
       { name: 'Pull B', ex: [['Barbell Row', '4×6'], ['Lat Pulldown', '3×10'], ['Chest-supported Row', '3×10'], ['Rear Delt Fly', '3×15'], ['Hammer Curl', '3×12']] },
-      { name: 'Legs B', ex: [['Front Squat', '4×6'], ['Hip Thrust', '3×10'], ['Walking Lunge', '3×10'], ['Leg Extension', '3×15'], ['Seated Calf Raise', '4×15']] }
+      { name: 'Legs B', ex: [['Front Squat', '4×6'], ['Hip Thrust', '3×10'], ['Walking Lunge', '3×10'], ['Leg Extension', '3×15'], ['Seated Calf Raise', '4×15'], ['Cable Crunch', '3×15']] }
     ]
   }
 };
@@ -60,11 +60,14 @@ const MUSCLE_RULES = [
   { re: /calf raise|calf press|calves|soleus/i, p: ['calves'] },
   { re: /pull.?through|reverse hyper/i, p: ['glutes'], s: ['hamstrings'] },
   { re: /hip abduct|hip adduct|abductor|adductor/i, p: ['glutes'] },
+  { re: /glute.?ham raise|\bghr\b/i, p: ['hamstrings'], s: ['glutes', 'back'] },
   { re: /leg curl|nordic|ham(string)? curl/i, p: ['hamstrings'] },
   { re: /leg extension/i, p: ['quads'] },
   { re: /romanian deadlift|\brdl\b|stiff.?leg/i, p: ['hamstrings'], s: ['glutes', 'back'] },
   { re: /hip thrust|glute bridge|glute kick/i, p: ['glutes'], s: ['hamstrings'] },
   { re: /back extension|hyperextension/i, p: ['hamstrings'], s: ['glutes', 'back'] },
+  { re: /kettlebell swing|\bkb swing/i, p: ['glutes', 'hamstrings'], s: ['back'] },
+  { re: /sled (push|drag)|prowler/i, p: ['quads'], s: ['glutes', 'calves'] },
   { re: /front squat/i, p: ['quads'], s: ['glutes', 'abs'] },
   { re: /hack squat|leg press|bulgarian|split squat|step.?up/i, p: ['quads'], s: ['glutes'] },
   { re: /lunge/i, p: ['quads', 'glutes'] },
@@ -72,6 +75,7 @@ const MUSCLE_RULES = [
   { re: /deadlift|good morning/i, p: ['hamstrings', 'back'], s: ['glutes', 'quads'] },
   { re: /lateral raise|side raise|upright row/i, p: ['shoulders'] },
   { re: /rear delt|face pull|reverse fly/i, p: ['shoulders'], s: ['back'] },
+  { re: /landmine press/i, p: ['shoulders'], s: ['chest', 'triceps'] },
   { re: /overhead press|shoulder press|military|arnold/i, p: ['shoulders'], s: ['triceps'] },
   { re: /incline (bench|db|dumbbell|barbell)?\s*press|incline press/i, p: ['chest'], s: ['shoulders', 'triceps'] },
   { re: /bench press|chest press|push.?up|\bdip\b|chest fly|pec/i, p: ['chest'], s: ['triceps', 'shoulders'] },
@@ -86,15 +90,27 @@ const MUSCLE_RULES = [
   { re: /fly|flye/i, p: ['chest'], s: ['shoulders'] }
 ];
 
+/* User-taught mappings win over the regex table, so a lift the patterns miss can
+   be fixed once instead of silently reading as zero volume forever. */
+function getMuscleMap() { return Store.get('muscleMap', {}); }
+function setMuscleOverride(name, p, s) {
+  const m = getMuscleMap();
+  m[String(name).toLowerCase()] = { p, s };
+  Store.set('muscleMap', m);
+}
 function musclesFor(name) {
+  const o = getMuscleMap()[String(name || '').toLowerCase()];
+  if (o) return { p: o.p || [], s: o.s || [] };
   for (const r of MUSCLE_RULES) if (r.re.test(name)) return { p: r.p || [], s: r.s || [] };
   return { p: [], s: [] };
 }
 
-/* weighted sets per muscle over the trailing N days */
+/* weighted sets per muscle over the trailing N days, plus anything the map
+   couldn't place — an unmatched lift must never be reported as zero volume */
 function muscleSetsInDays(days) {
-  const tally = {};
-  MUSCLES.forEach(m => { tally[m] = 0; });
+  const sets = {};
+  MUSCLES.forEach(m => { sets[m] = 0; });
+  const unknown = {};
   getWorkouts().forEach(s => {
     const d = daysBetween(s.date, todayKey());
     if (d < 0 || d >= days || s.cardio) return;
@@ -102,21 +118,24 @@ function muscleSetsInDays(days) {
       const n = workingSets(ex.sets).filter(st => st.reps > 0).length;
       if (!n) return;
       const m = musclesFor(ex.name);
-      m.p.forEach(x => { if (tally[x] != null) tally[x] += n; });
-      m.s.forEach(x => { if (tally[x] != null) tally[x] += n * 0.5; });
+      if (!m.p.length && !m.s.length) { unknown[ex.name] = (unknown[ex.name] || 0) + n; return; }
+      m.p.forEach(x => { if (sets[x] != null) sets[x] += n; });
+      m.s.forEach(x => { if (sets[x] != null) sets[x] += n * 0.5; });
     });
   });
-  return tally;
+  return { sets, unclassified: Object.entries(unknown).map(([name, n]) => ({ name, sets: n })) };
 }
 
 /* if a stalled lift's primary muscle is under-trained, say so — that's a
-   volume problem, not a programming problem */
+   volume problem, not a programming problem. Stays quiet while unclassified
+   lifts exist, because the "deficit" may just be a lift we failed to map. */
 function plateauVolumeNote(exName) {
-  const t = muscleSetsInDays(7);
-  const lacking = musclesFor(exName).p.filter(x => MUSCLE_LANDMARKS[x] && t[x] < MUSCLE_LANDMARKS[x][0]);
+  const { sets, unclassified } = muscleSetsInDays(7);
+  if (unclassified.length) return '';
+  const lacking = musclesFor(exName).p.filter(x => MUSCLE_LANDMARKS[x] && sets[x] < MUSCLE_LANDMARKS[x][0]);
   if (!lacking.length) return '';
   const names = lacking.map(x => MUSCLE_LABEL[x].toLowerCase()).join(' and ');
-  const got = lacking.map(x => Math.round(t[x] * 2) / 2).join('/');
+  const got = lacking.map(x => Math.round(sets[x] * 2) / 2).join('/');
   const need = lacking.map(x => MUSCLE_LANDMARKS[x][0]).join('/');
   return ` Also: your ${names} volume is only ${got} sets this week versus an effective minimum of ${need} — try adding a set or two there before dropping weight.`;
 }
@@ -125,6 +144,17 @@ function plateauVolumeNote(exName) {
    session score, or progression — only working sets do. */
 function isWarmup(st) { return st && st.type === 'warmup'; }
 function workingSets(sets) { return (sets || []).filter(st => !isWarmup(st)); }
+
+/* Dumbbell and single-arm work is logged PER HAND. Stating the convention is the
+   only way the number means anything a month later; volume doubles it so
+   "weight moved" stays comparable with barbell work. */
+function perHandLift(name) {
+  return /dumbbell|\bdb\b|hammer curl|lateral raise|goblet|single.?arm|one.?arm|kettlebell/i.test(name);
+}
+function setLoadKg(exName, st) {
+  const w = Math.max(st.weight || 0, 0);
+  return perHandLift(exName) ? w * 2 : w;
+}
 
 /* est. 1RM (Epley), capped at 12 reps for sanity */
 function e1rm(weight, reps) {
@@ -188,6 +218,17 @@ function exerciseHistory(name) {
   return out;
 }
 
+/* heaviest working set ever logged on a lift, in kg */
+function bestWorkingWeightKg(name) {
+  const key = name.toLowerCase();
+  let best = 0;
+  getWorkouts().forEach(s => (s.exercises || []).forEach(ex => {
+    if (ex.name.toLowerCase() !== key) return;
+    workingSets(ex.sets).forEach(st => { if ((st.weight || 0) > best) best = st.weight; });
+  }));
+  return best;
+}
+
 /* PR indexes within a history array */
 function prIndexes(hist) {
   const idx = [];
@@ -226,6 +267,32 @@ function detectPlateaus() {
 }
 function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; } return h; }
 
+/* Same eligibility test as detectPlateaus: ≥4 sessions and a weighted best.
+   Surfaced when nothing is flagged so the alert engine is visible before it
+   ever has cause to fire — otherwise a new user waits 3 weeks to learn it exists. */
+function plateauWatchCount() {
+  const names = new Set();
+  getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
+  let n = 0;
+  names.forEach(name => {
+    const hist = exerciseHistory(name);
+    if (hist.length >= 4 && Math.max(...hist.map(h => h.bestE1rm)) > 0) n++;
+  });
+  return n;
+}
+
+function plateauWatchRow() {
+  const n = plateauWatchCount();
+  return `
+  <div class="alert good">
+    <span class="a-ico">✓</span>
+    <div class="a-body"><b>${n ? `Watching ${n} lift${n > 1 ? 's' : ''} — everything progressing` : 'Plateau watch is on'}</b>
+    ${n
+      ? 'Peak flags any lift that goes 3 sessions and 21 days without a PR, then deloads it and walks you back up.'
+      : 'Log a lift 4 times and Peak starts tracking it for plateaus — you get told the moment it stalls, and what to do about it.'}</div>
+  </div>`;
+}
+
 /* which template day is next */
 function nextDayIndex() {
   const p = getProfile();
@@ -236,8 +303,8 @@ function nextDayIndex() {
 
 /* ---------- auto-progression (double progression) ----------
    Rule: hit every prescribed set at the target reps → add weight next session.
-   Fall short → repeat the weight and chase the missing reps. Stalled (plateau
-   detected) → deload ~10% and build back. Bodyweight work progresses by reps. */
+   Fall short → repeat the weight and chase the missing reps. Stalled at your
+   best weight → deload ~10% once, then climb back. Bodyweight work adds reps. */
 
 function parseTarget(t) {
   const m = /^(\d+)\s*[×x]\s*(\d+)/.exec((t || '').trim());
@@ -256,8 +323,23 @@ function lastSessionSets(name) {
   return { date: s.date, sets: workingSets(ex.sets).filter(st => st.reps > 0), allSets: (ex.sets || []).filter(st => st.reps > 0) };
 }
 
-function incrementLb(name) {
-  return /squat|deadlift|leg press|hip thrust|lunge|calf raise/i.test(name) ? 10 : 5;
+/* Increment scales with the load instead of a flat 5 lb, which was a 25% jump on
+   a lateral raise and a rounding error on a heavy squat. */
+function incrementW(name, currentDisp) {
+  const pct = (currentDisp || 0) * 0.025;
+  if (perHandLift(name)) {
+    const s = isMetric() ? 1.25 : 2.5;   // dumbbells step in smaller pairs
+    return Math.max(s, Math.round(pct / s) * s);
+  }
+  const step = wStep();
+  if (/squat|deadlift|leg press|hip thrust|calf raise/i.test(name)) {
+    return Math.max(step, Math.round(pct * 2 / step) * step);   // big lowers tolerate more
+  }
+  return Math.max(step, Math.round(pct / step) * step);
+}
+function roundW(v, name) {
+  const s = perHandLift(name) ? (isMetric() ? 1.25 : 2.5) : wStep();
+  return Math.max(s, Math.round(v / s) * s);
 }
 
 /* the prescribed sets×reps for an exercise, looked up from the user's template */
@@ -273,9 +355,9 @@ function findTargetFor(name) {
   }
   return '';
 }
-function roundLb5(lb) { return Math.max(5, Math.round(lb / 5) * 5); }
 
-/* → {type, lb, sets, reps, text, lastText} */
+/* → {type, w, sets, reps, text, short, lastText, rebuilding} — w is in the
+   user's display unit (lb or kg), 0 for bodyweight, undefined for a new lift */
 function nextTarget(name, targetStr, stalledNames) {
   const tgt = parseTarget(targetStr) || { sets: 3, reps: 8 };
   const last = lastSessionSets(name);
@@ -288,44 +370,59 @@ function nextTarget(name, targetStr, stalledNames) {
   const when = prettyDate(last.date).replace(/^\w+, /, '');
 
   if (maxKg <= 0) { // bodyweight / timed
-    return { type: 'add_reps', lb: 0, sets: tgt.sets, reps: bestReps + 1, short: `last ${bestReps} reps`,
+    return { type: 'add_reps', w: 0, sets: tgt.sets, reps: bestReps + 1, short: `last ${bestReps} reps`,
       text: `Beat ${bestReps} — aim ${bestReps + 1}+ this time.`,
       lastText: `${bestReps} reps · ${when}` };
   }
 
-  const lastLb = kgToLb(maxKg);
-  const lastText = `${Math.round(lastLb)} lb × ${bestReps} · ${when}`;
-  const stalled = (stalledNames || new Set(detectPlateaus().map(p => p.name.toLowerCase()))).has(name.toLowerCase());
-  if (stalled) {
-    const lb = roundLb5(lastLb * 0.9);
-    return { type: 'deload', lb, sets: tgt.sets, reps: tgt.reps, lastText,
-      short: `stalled at ${Math.round(lastLb)} lb — deload`,
-      text: `Stalled — deload to ${lb} lb × ${tgt.reps}, then add ${incrementLb(name)} lb a session.` };
-  }
-
+  const u = wUnit();
+  const lastDisp = toW(maxKg);
+  const lastText = `${Math.round(lastDisp)} ${u} × ${bestReps} · ${when}`;
   const topSets = last.sets.filter(s => Math.abs((s.weight || 0) - maxKg) < 0.01);
   const allHit = topSets.length >= tgt.sets && topSets.every(s => s.reps >= tgt.reps);
+
+  /* Completing the prescription always earns the increment. Testing the stall
+     flag first is what turned one deload into an endless staircase down: the
+     all-time best stays unbeaten while you rebuild, so the lift reads as stalled
+     every session and got cut another 10% off the already-reduced weight. */
   if (allHit) {
-    const lb = roundLb5(lastLb + incrementLb(name));
-    return { type: 'add_weight', lb, sets: tgt.sets, reps: tgt.reps, lastText,
-      short: `up from ${Math.round(lastLb)} lb`,
-      text: `Hit all ${tgt.sets}×${tgt.reps} — go up to ${lb} lb.` };
+    const inc = incrementW(name, lastDisp);
+    const val = roundW(lastDisp + inc, name);
+    return { type: 'add_weight', w: val, sets: tgt.sets, reps: tgt.reps, lastText,
+      short: `up from ${Math.round(lastDisp)} ${u}`,
+      text: `Hit all ${tgt.sets}×${tgt.reps} — go up to ${val} ${u}.` };
   }
-  const lb = roundLb5(lastLb);
+
+  const stalled = (stalledNames || new Set(detectPlateaus().map(p => p.name.toLowerCase()))).has(name.toLowerCase());
+  const bestDisp = toW(bestWorkingWeightKg(name));
+
+  // Deload only from the top. Below your best you are already climbing back.
+  if (stalled && lastDisp >= bestDisp * 0.98) {
+    const val = roundW(lastDisp * 0.9, name);
+    const inc = incrementW(name, val);
+    return { type: 'deload', w: val, sets: tgt.sets, reps: tgt.reps, lastText,
+      short: `stalled at ${Math.round(lastDisp)} ${u} — deload`,
+      text: `Stalled — deload to ${val} ${u} × ${tgt.reps}, then add ${inc} ${u} each session you complete until you pass ${Math.round(bestDisp)} ${u}.` };
+  }
+
+  const val = roundW(lastDisp, name);
   const spread = topSets.map(s => s.reps).join('/');
-  return { type: 'add_reps', lb, sets: tgt.sets, reps: tgt.reps, lastText,
-    short: `last ${spread} — finish the sets`,
-    text: `Stay at ${lb} lb — last time ${spread}. Get all ${tgt.sets} sets to ${tgt.reps}.` };
+  const rebuilding = stalled && lastDisp < bestDisp * 0.98;
+  return { type: 'add_reps', w: val, sets: tgt.sets, reps: tgt.reps, lastText, rebuilding,
+    short: rebuilding ? `rebuilding — ${Math.round(lastDisp)} of ${Math.round(bestDisp)} ${u}` : `last ${spread} — finish the sets`,
+    text: rebuilding
+      ? `Climbing back to ${Math.round(bestDisp)} ${u} — stay at ${val} ${u} and get all ${tgt.sets} sets to ${tgt.reps}.`
+      : `Stay at ${val} ${u} — last time ${spread}. Get all ${tgt.sets} sets to ${tgt.reps}.` };
 }
 
 /* ---------- progress / volume engine ----------
-   "Weight moved" = external load only (sets × reps × weight). Bodyweight work
-   contributes 0 so the number stays honest and comparable over time. */
+   "Weight moved" = external load only (sets × reps × weight, doubled for
+   per-hand work). Bodyweight contributes 0 so the number stays honest. */
 
 function sessionVolumeKg(s) {
   if (s.cardio) return 0;
   return (s.exercises || []).reduce((v, e) =>
-    v + workingSets(e.sets).reduce((x, st) => x + Math.max(st.weight || 0, 0) * (st.reps || 0), 0), 0);
+    v + workingSets(e.sets).reduce((x, st) => x + setLoadKg(e.name, st) * (st.reps || 0), 0), 0);
 }
 function volumeInDays(days) {
   return getWorkouts().reduce((v, s) => {
@@ -336,6 +433,7 @@ function volumeInDays(days) {
 function lifetimeVolumeKg() {
   return getWorkouts().reduce((v, s) => v + sessionVolumeKg(s), 0);
 }
+/* returns display-unit values */
 function weeklyVolumeSeries(weeks) {
   const out = [];
   for (let w = weeks - 1; w >= 0; w--) {
@@ -344,7 +442,7 @@ function weeklyVolumeSeries(weeks) {
       const d = daysBetween(s.date, todayKey());
       if (d >= w * 7 && d < (w + 1) * 7) sum += sessionVolumeKg(s);
     });
-    out.push(kgToLb(sum));
+    out.push(toW(sum));
   }
   return out;
 }
@@ -354,14 +452,16 @@ function sessionsInDays(days, liftsOnly) {
     return d >= 0 && d < days && (!liftsOnly || !s.cardio);
   }).length;
 }
-/* consecutive weeks meeting (planned − 1) sessions; the current partial week
-   counts only if it already qualifies */
+/* consecutive weeks meeting (planned − 1) LIFTING sessions; the current partial
+   week counts only if it already qualifies. Cardio is tracked but never stands
+   in for a lift, or five walks would keep a lifting streak alive. */
 function weekStreak(target) {
   const bar = Math.max(1, target - 1);
   let streak = 0;
   for (let w = 0; w < 104; w++) {
     let n = 0;
     getWorkouts().forEach(s => {
+      if (s.cardio) return;
       const d = daysBetween(s.date, todayKey());
       if (d >= w * 7 && d < (w + 1) * 7) n++;
     });
@@ -371,13 +471,19 @@ function weekStreak(target) {
   }
   return streak;
 }
-function fmtVol(lb) {
-  if (lb >= 1e6) return (lb / 1e6).toFixed(2) + 'M';
-  if (lb >= 1e5) return Math.round(lb / 1000) + 'k';
-  if (lb >= 1e4) return (lb / 1000).toFixed(1) + 'k';
-  return Math.round(lb).toLocaleString();
+function fmtVol(v) {
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+  if (v >= 1e5) return Math.round(v / 1000) + 'k';
+  if (v >= 1e4) return (v / 1000).toFixed(1) + 'k';
+  return Math.round(v).toLocaleString();
 }
-const VOLUME_MILESTONES = [25e3, 50e3, 100e3, 250e3, 500e3, 1e6, 2e6, 5e6, 10e6];
+/* kg in → formatted display-unit string */
+function fmtWt(kg) { return fmtVol(toW(kg)); }
+function volumeMilestones() {
+  return isMetric()
+    ? [10e3, 25e3, 50e3, 100e3, 250e3, 500e3, 1e6, 2e6, 5e6]
+    : [25e3, 50e3, 100e3, 250e3, 500e3, 1e6, 2e6, 5e6, 10e6];
+}
 
 /* best est. 1RM per lift + 30-day movement, heaviest first */
 function prBoard(limit) {
@@ -390,10 +496,18 @@ function prBoard(limit) {
     const older = hist.filter(h => daysBetween(h.date, todayKey()) > 30).map(h => h.bestE1rm);
     const oldBest = older.length ? Math.max(...older) : 0;
     return {
-      name: n, bestLb: Math.round(kgToLb(best)), sessions: hist.length, hist,
-      deltaLb: oldBest ? Math.round(kgToLb(best - oldBest)) : null
+      name: n, best, bestDisp: Math.round(toW(best)), sessions: hist.length, hist,
+      deltaDisp: oldBest ? Math.round(toW(best - oldBest)) : null
     };
-  }).filter(Boolean).sort((a, b) => b.bestLb - a.bestLb).slice(0, limit || 6);
+  }).filter(Boolean).sort((a, b) => b.best - a.best).slice(0, limit || 6);
+}
+
+/* The headline "top lift" ranked by absolute load always crowned the leg press,
+   which says nothing. Restrict the hero number to the lifts people actually
+   measure themselves by. */
+const CORE_LIFTS = /^(back squat|squat|front squat|bench press|incline bench press|deadlift|romanian deadlift|overhead press|barbell row|weighted pull-?up)$/i;
+function topCoreLift() {
+  return prBoard(60).find(r => CORE_LIFTS.test(r.name.trim())) || null;
 }
 
 /* last N days as a weekday-aligned dot grid */
@@ -418,6 +532,25 @@ const CUE = { add_weight: '▲', add_reps: '→', deload: '▼', baseline: '●'
 function cueColor(type) {
   return type === 'add_weight' ? 'var(--good)' : type === 'deload' ? 'var(--warning)' : 'var(--ink-2)';
 }
+
+/* ---------- session persistence ----------
+   An in-progress workout used to live only in App.activeSession, so a reload or
+   an OS purge between sets took the whole session — PRs included — with no
+   warning. Every mutation now mirrors it to storage. */
+const ACTIVE_KEY = 'activeSession', REST_KEY = 'restState';
+function persistSession() {
+  if (App.activeSession) Store.set(ACTIVE_KEY, App.activeSession); else Store.remove(ACTIVE_KEY);
+  if (App.rest) Store.set(REST_KEY, App.rest); else Store.remove(REST_KEY);
+}
+function restoreSession() {
+  const s = Store.get(ACTIVE_KEY, null);
+  if (!s || !Array.isArray(s.exercises)) return null;
+  App.activeSession = s;
+  const r = Store.get(REST_KEY, null);
+  if (r && r.endsAt > Date.now()) App.rest = r;   // endsAt is absolute, so it just resumes
+  return s;
+}
+function clearPersistedSession() { Store.remove(ACTIVE_KEY); Store.remove(REST_KEY); }
 
 /* ---------- render ---------- */
 /* The Train tab is a dashboard with drill-ins, not one long scroll:
@@ -474,56 +607,61 @@ function renderTrainHome() {
   const all = getWorkouts();
 
   // glance numbers
-  const weekLb = kgToLb(volumeInDays(7));
-  const lifeLb = kgToLb(lifetimeVolumeKg());
-  const wkSessions = sessionsInDays(7);
+  const weekKg = volumeInDays(7);
+  const lifeKg = lifetimeVolumeKg();
+  const wkLifts = sessionsInDays(7, true);
+  const wkCardio = sessionsInDays(7) - wkLifts;
   const streak = weekStreak(p.gymDays);
-  const prs = prBoard(1);
-  const topPr = prs.length ? prs[0] : null;
+  const topPr = topCoreLift();
 
   // muscle-volume summary for the nav row
   const mv = muscleSetsInDays(7);
-  const low = MUSCLES.filter(m => mv[m] < MUSCLE_LANDMARKS[m][0]).length;
+  const low = MUSCLES.filter(m => mv.sets[m] < MUSCLE_LANDMARKS[m][0]).length;
   const hasLifts = all.some(s => !s.cardio);
 
-  const quip = volumeQuip(lifeLb, weekLb);
+  const quip = volumeQuip(lifeKg, weekKg);
   if (quip && quip.fresh) { setTimeout(() => { toast(quip.text); settleQuip(); }, 400); }
 
   return `
   ${plateaus.map(pl => {
     const dl = nextTarget(pl.name, findTargetFor(pl.name), stalledNames);
+    const body = dl.type === 'deload' || dl.rebuilding ? dl.text : pl.tip;
     return `
     <div class="alert">
-      <span class="a-ico">⚠</span>
-      <div class="a-body"><b>${esc(pl.name)} has stalled — no PR in ${pl.sessions} sessions (${pl.days} days)</b>
-      ${dl.type === 'deload' ? esc(dl.text) : esc(pl.tip)}${esc(plateauVolumeNote(pl.name))}</div>
+      <span class="a-ico">${dl.rebuilding ? '▲' : '⚠'}</span>
+      <div class="a-body"><b>${dl.rebuilding
+        ? `${esc(pl.name)} — climbing back after a deload`
+        : `Plateau: ${esc(pl.name)} — no PR in ${pl.sessions} sessions (${pl.days} days)`}</b>
+      ${esc(body)}${esc(plateauVolumeNote(pl.name))}</div>
     </div>`;
   }).join('')}
+  ${plateaus.length ? '' : plateauWatchRow()}
 
   ${renderTodaysSession(tpl, day, nextIdx, stalledNames)}
 
   <div class="card">
     <div class="glance">
       <button class="gl" data-action="train-nav" data-view="moved">
-        <span class="gv">${weekLb > 0 ? fmtVol(weekLb) : '—'}</span><span class="gl-l">lb this week</span></button>
+        <span class="gv">${weekKg > 0 ? fmtWt(weekKg) : '—'}</span><span class="gl-l">${wUnit()} this week</span></button>
       <button class="gl" data-action="train-nav" data-view="consistency">
-        <span class="gv">${wkSessions}/${p.gymDays}</span><span class="gl-l">sessions</span></button>
+        <span class="gv">${wkLifts}/${p.gymDays}</span><span class="gl-l">lift sessions</span></button>
       <button class="gl" data-action="train-nav" data-view="consistency">
         <span class="gv">${streak}</span><span class="gl-l">week streak</span></button>
       <button class="gl" data-action="train-nav" data-view="records">
-        <span class="gv">${topPr ? topPr.bestLb : '—'}</span><span class="gl-l">${topPr ? 'top lift lb' : 'no PRs yet'}</span></button>
+        <span class="gv">${topPr ? topPr.bestDisp : '—'}</span><span class="gl-l">${topPr ? `${esc(topPr.name.toLowerCase())} ${wUnit()}` : 'no PRs yet'}</span></button>
     </div>
+    ${wkCardio ? `<div class="muted small mt">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week — tracked separately from the lifting plan.</div>` : ''}
     ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
   </div>
 
   <div class="card">
     <h2>Explore</h2>
     ${navRow('muscles', '💪', 'Weekly sets by muscle',
-      !hasLifts ? 'no data yet' : low ? `${low} below range` : 'all in range',
-      !hasLifts ? '' : low ? 'warn' : 'good')}
-    ${navRow('moved', '🏋', 'Weight moved', lifeLb > 0 ? `${fmtVol(lifeLb)} lb lifetime` : 'starts with set one')}
-    ${navRow('records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestLb} lb` : 'none yet')}
-    ${navRow('consistency', '📅', 'Consistency', streak ? `${streak}-week streak` : `${wkSessions} this week`)}
+      !hasLifts ? 'no data yet' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
+      !hasLifts ? '' : (mv.unclassified.length || low) ? 'warn' : 'good')}
+    ${navRow('moved', '🏋', 'Weight moved', lifeKg > 0 ? `${fmtWt(lifeKg)} ${wUnit()} lifetime` : 'starts with set one')}
+    ${navRow('records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
+    ${navRow('consistency', '📅', 'Consistency', streak ? `${streak}-week streak` : `${wkLifts} this week`)}
     ${navRow('history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
   </div>
 
@@ -557,6 +695,7 @@ function navRow(view, ico, label, value, tone) {
 function renderTodaysSession(tpl, day, nextIdx, stalledNames) {
   const plannedSets = day.ex.reduce((n, [, t]) => n + (parseTarget(t)?.sets || 3), 0);
   const estMin = Math.max(20, Math.round(plannedSets * 2.6 / 5) * 5);
+  const u = wUnit();
   return `
   <div class="card">
     <div class="spread">
@@ -570,11 +709,10 @@ function renderTodaysSession(tpl, day, nextIdx, stalledNames) {
     <div class="plan mt">
       ${day.ex.map(([n, tstr]) => {
         const pr = nextTarget(n, tstr, stalledNames);
-        const val = pr.lb > 0 ? `${pr.lb}<span class="unit"> × ${pr.reps}</span>`
-          : pr.lb === 0 ? `<span class="unit">${pr.reps} reps</span>`
+        const val = pr.w > 0 ? `${pr.w}<span class="unit"> × ${pr.reps}${perHandLift(n) ? ` ${u}/hand` : ''}</span>`
+          : pr.w === 0 ? `<span class="unit">${pr.reps} reps</span>`
           : '<span class="unit">pick a weight</span>';
-        // only a deload needs explaining here; "pick a weight" already says it for a new lift
-        const note = pr.type === 'deload' ? 'deload' : '';
+        const note = pr.type === 'deload' ? 'deload' : pr.rebuilding ? 'climbing back' : '';
         return `
         <div class="plan-row">
           <span class="pl-cue" style="color:${cueColor(pr.type)}">${CUE[pr.type] || '→'}</span>
@@ -588,33 +726,35 @@ function renderTodaysSession(tpl, day, nextIdx, stalledNames) {
 
 /* ---------- 2. weight moved: the number that only goes up ---------- */
 function renderVolumeCard(all) {
-  const lifeLb = kgToLb(lifetimeVolumeKg());
-  if (lifeLb <= 0) {
+  const lifeKg = lifetimeVolumeKg();
+  const u = wUnit();
+  if (lifeKg <= 0) {
     return `
     <div class="card">
       <h2>Weight moved</h2>
-      <div class="muted small">Log your first session and this starts counting — every pound, every set, for as long as you use Peak.</div>
+      <div class="muted small">Log your first session and this starts counting — every ${u}, every set, for as long as you use Peak.</div>
     </div>`;
   }
+  const lifeDisp = toW(lifeKg);
   const tiles = [
-    ['today', kgToLb(volumeInDays(1))],
-    ['7 days', kgToLb(volumeInDays(7))],
-    ['30 days', kgToLb(volumeInDays(30))],
-    ['this year', kgToLb(volumeInDays(365))]
+    ['today', volumeInDays(1)],
+    ['7 days', volumeInDays(7)],
+    ['30 days', volumeInDays(30)],
+    ['this year', volumeInDays(365)]
   ];
   const series = weeklyVolumeSeries(8);
   const showTrend = series.filter(v => v > 0).length >= 2;
-  const next = VOLUME_MILESTONES.find(m => m > lifeLb);
+  const next = volumeMilestones().find(m => m > lifeDisp);
   const sets = all.reduce((n, s) => n + (s.exercises || []).reduce((x, e) => x + workingSets(e.sets).length, 0), 0);
-  const quip = volumeQuip(lifeLb, kgToLb(volumeInDays(7)));
+  const quip = volumeQuip(lifeKg, volumeInDays(7));
   if (quip && quip.fresh) { setTimeout(() => { toast(quip.text); settleQuip(); }, 400); }
   return `
   <div class="card">
-    <h2>Weight moved <span class="h2-right">lb lifted</span></h2>
+    <h2>Weight moved <span class="h2-right">${u} lifted</span></h2>
     ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}">${esc(quip.text)}</div>` : ''}
     <div class="grid-4">
-      ${tiles.map(([label, lb]) => `
-        <div class="stat"><div class="sv">${lb > 0 ? fmtVol(lb) : '—'}</div><div class="sl">${label}</div></div>`).join('')}
+      ${tiles.map(([label, kg]) => `
+        <div class="stat"><div class="sv">${kg > 0 ? fmtWt(kg) : '—'}</div><div class="sl">${label}</div></div>`).join('')}
     </div>
     ${showTrend ? `
       <div class="spread mt">
@@ -624,13 +764,14 @@ function renderVolumeCard(all) {
     <div class="mt" style="border-top:1px solid var(--grid);padding-top:10px">
       <div class="spread">
         <span class="muted small">Lifetime</span>
-        <b>${fmtVol(lifeLb)} lb</b>
+        <b>${fmtWt(lifeKg)} ${u}</b>
       </div>
       <div class="spread" style="margin-top:4px">
         <span class="muted small">Sessions · sets</span>
         <span class="small">${all.length} · ${sets}</span>
       </div>
-      ${next ? `<div class="chart-note mt">${fmtVol(next - lifeLb)} lb to go until you've moved ${fmtVol(next)} lb.</div>` : ''}
+      ${next ? `<div class="chart-note mt">${fmtVol(next - lifeDisp)} ${u} to go until you've moved ${fmtVol(next)} ${u}.</div>` : ''}
+      <div class="chart-note">Dumbbell and single-arm lifts are logged per hand and counted for both.</div>
     </div>
   </div>`;
 }
@@ -638,7 +779,7 @@ function renderVolumeCard(all) {
 /* ---------- 2b. weekly sets per muscle ---------- */
 function renderMuscleVolumeCard(all) {
   if (!all.filter(s => !s.cardio).length) return '';
-  const t = muscleSetsInDays(7);
+  const { sets: t, unclassified } = muscleSetsInDays(7);
   const rows = MUSCLES.map(m => {
     const [mev, mrv] = MUSCLE_LANDMARKS[m];
     const v = Math.round(t[m] * 2) / 2;
@@ -656,6 +797,16 @@ function renderMuscleVolumeCard(all) {
     : `<span style="color:${CHART.good}">Every muscle in range</span>`;
 
   return `
+  ${unclassified.length ? `
+  <div class="alert" style="border-left-color:var(--warning)">
+    <span class="a-ico">?</span>
+    <div class="a-body"><b>${unclassified.length} lift${unclassified.length > 1 ? 's' : ''} not counted yet</b>
+    Peak doesn't know which muscles these train, so their sets are missing from the numbers below — and volume advice stays switched off until they're tagged.
+    <div class="mt">${unclassified.map(x => `
+      <button class="btn small mt" data-action="tag-muscle" data-name="${esc(x.name)}" style="width:100%;text-align:left">
+        Tag ${esc(x.name)} <span class="muted">· ${x.sets} set${x.sets !== 1 ? 's' : ''} this week</span></button>`).join('')}
+    </div></div>
+  </div>` : ''}
   <div class="card">
     <h2>Weekly sets per muscle <span class="h2-right">last 7 days</span></h2>
     <div class="small" style="margin-bottom:12px">${headline}</div>
@@ -678,10 +829,36 @@ function renderMuscleVolumeCard(all) {
   </div>`;
 }
 
+/* teach Peak what an unrecognised lift trains */
+function openTagMuscleModal(name) {
+  const cur = musclesFor(name);
+  openModal(`
+    <h3>What does ${esc(name)} train?</h3>
+    <div class="modal-sub">Peak counts primary movers as a full set and secondary movers as half. This is remembered for every future session.</div>
+    <label>Primary movers</label>
+    <div class="mus-grid" id="tm-primary">
+      ${MUSCLES.map(m => `<button data-m="${m}" class="${cur.p.includes(m) ? 'on' : ''}">${MUSCLE_LABEL[m]}</button>`).join('')}
+    </div>
+    <label>Secondary movers (optional)</label>
+    <div class="mus-grid" id="tm-secondary">
+      ${MUSCLES.map(m => `<button data-m="${m}" class="${cur.s.includes(m) ? 'on' : ''}">${MUSCLE_LABEL[m]}</button>`).join('')}
+    </div>
+    <button class="btn primary mt" data-action="save-muscle-tag" data-name="${esc(name)}">Save</button>
+  `);
+}
+function saveMuscleTag(name) {
+  const pick = id => [...document.querySelectorAll(`#${id} button.on`)].map(b => b.dataset.m);
+  const p = pick('tm-primary'), s = pick('tm-secondary').filter(m => !p.includes(m));
+  if (!p.length) { toast('Pick at least one primary muscle'); return; }
+  setMuscleOverride(name, p, s);
+  closeModal(); toast(`${name} tagged`); App.render();
+}
+
 /* ---------- 3. consistency: showing up ---------- */
 function renderConsistencyCard(p, all) {
   if (!all.length) return '';
-  const wk = sessionsInDays(7), mo = sessionsInDays(30);
+  const wk = sessionsInDays(7, true), mo = sessionsInDays(30, true);
+  const wkC = sessionsInDays(7) - wk, moC = sessionsInDays(30) - mo;
   const streak = weekStreak(p.gymDays);
   return `
   <div class="card">
@@ -693,11 +870,12 @@ function renderConsistencyCard(p, all) {
       <span><i style="background:var(--surface-2)"></i>rest</span>
     </div>
     <div class="grid-4 mt" style="border-top:1px solid var(--grid);padding-top:10px">
-      <div class="stat"><div class="sv">${wk}</div><div class="sl">this week</div></div>
+      <div class="stat"><div class="sv">${wk}</div><div class="sl">lifts this week</div></div>
       <div class="stat"><div class="sv">${p.gymDays}</div><div class="sl">planned</div></div>
-      <div class="stat"><div class="sv">${mo}</div><div class="sl">30 days</div></div>
+      <div class="stat"><div class="sv">${mo}</div><div class="sl">lifts / 30d</div></div>
       <div class="stat"><div class="sv">${streak}</div><div class="sl">week streak</div></div>
     </div>
+    <div class="chart-note">${wkC} cardio this week, ${moC} in 30 days. Cardio is counted separately — it never fills a lifting slot.</div>
   </div>`;
 }
 
@@ -705,18 +883,19 @@ function renderConsistencyCard(p, all) {
 function renderRecordsCard(limit) {
   const prs = prBoard(limit || 6);
   if (!prs.length) return '';
+  const u = wUnit();
   return `
   <div class="card">
     <h2>Personal records <span class="h2-right">est. 1RM · vs 30 days ago</span></h2>
     ${prs.map(r => `
       <div class="list-item">
         <div class="li-main">
-          <div class="li-title">${esc(r.name)}</div>
+          <div class="li-title">${esc(r.name)}${perHandLift(r.name) ? ' <span class="muted small">per hand</span>' : ''}</div>
           <div class="li-sub">${r.sessions} session${r.sessions !== 1 ? 's' : ''}${
-            r.deltaLb != null ? ` · <span style="color:${r.deltaLb > 0 ? CHART.good : 'var(--muted)'}">${r.deltaLb > 0 ? '+' + r.deltaLb + ' lb' : 'holding'}</span>` : ''}</div>
+            r.deltaDisp != null ? ` · <span style="color:${r.deltaDisp > 0 ? CHART.good : 'var(--muted)'}">${r.deltaDisp > 0 ? '+' + r.deltaDisp + ' ' + u : 'holding'}</span>` : ''}</div>
         </div>
-        ${r.hist.length >= 2 ? sparkline(r.hist.map(h => kgToLb(h.bestE1rm)), { markers: prIndexes(r.hist), color: CHART.blue, w: 108, h: 34 }) : ''}
-        <div class="li-val">${r.bestLb}<span class="unit"> lb</span></div>
+        ${r.hist.length >= 2 ? sparkline(r.hist.map(h => toW(h.bestE1rm)), { markers: prIndexes(r.hist), color: CHART.blue, w: 108, h: 34 }) : ''}
+        <div class="li-val">${r.bestDisp}<span class="unit"> ${u}</span></div>
       </div>`).join('')}
   </div>`;
 }
@@ -728,6 +907,7 @@ function renderRecentCard(all, limit) {
     return `<div class="card"><h2>Recent sessions</h2>
       <div class="muted center" style="padding:10px 0">No sessions yet. Your first one sets the baseline.</div></div>`;
   }
+  const u = wUnit();
   return `
   <div class="card">
     <h2>Recent sessions</h2>
@@ -735,7 +915,7 @@ function renderRecentCard(all, limit) {
       const scoreChip = s.score != null ? `<span class="pill ${s.score >= 75 ? 'good' : s.score >= 50 ? 'warn' : ''}">${s.score}</span>` : '';
       const sub = s.cardio
         ? `${prettyDate(s.date)} · ${s.durationMin} min ${esc(s.intensity)} · ~${s.kcalEst} kcal`
-        : `${prettyDate(s.date)} · ${(s.exercises || []).reduce((n, e) => n + workingSets(e.sets).length, 0)} sets · ${fmtVol(kgToLb(sessionVolumeKg(s)))} lb`;
+        : `${prettyDate(s.date)} · ${(s.exercises || []).reduce((n, e) => n + workingSets(e.sets).length, 0)} sets · ${fmtWt(sessionVolumeKg(s))} ${u}`;
       return `
       <div class="list-item">
         <div class="li-main">
@@ -754,6 +934,7 @@ function startWorkout(dayIdx, freestyle = false) {
   const p = getProfile();
   const tpl = TEMPLATES[p.template];
   const day = freestyle ? null : tpl.days[dayIdx];
+  const stalled = new Set(detectPlateaus().map(x => x.name.toLowerCase()));
   App.activeSession = {
     id: 'w' + Date.now(),
     date: todayKey(),
@@ -761,9 +942,26 @@ function startWorkout(dayIdx, freestyle = false) {
     template: p.template,
     dayName: freestyle ? 'Freestyle' : day.name,
     freestyle,
-    exercises: freestyle ? [] : day.ex.map(([name, target]) => ({ name, target, sets: [] }))
+    exercises: freestyle ? [] : day.ex.map(([name, target]) => ({ name, target, sets: plannedSetsFor(name, target, stalled) }))
   };
+  persistSession();
   App.render();
+}
+
+/* The prescription is already known, so build its rows up front. Creating them
+   by hand was 20 taps before a single number could be entered. */
+function plannedSetsFor(name, target, stalled) {
+  const t = parseTarget(target) || { sets: 3, reps: 8 };
+  const pr = nextTarget(name, target, stalled);
+  const sets = [];
+  for (let i = 0; i < t.sets; i++) {
+    sets.push({
+      weight: pr.w > 0 ? fromW(pr.w) : null,
+      reps: pr.reps ?? t.reps,
+      type: 'normal', done: false, planned: true
+    });
+  }
+  return sets;
 }
 
 /* ---------- in-gym helpers ---------- */
@@ -773,32 +971,33 @@ const SET_BADGE = { normal: null, warmup: 'W', failure: 'F', drop: 'D' };
 const SET_BADGE_COLOR = { warmup: 'var(--warning)', failure: 'var(--critical)', drop: 'var(--violet)' };
 
 function isBarbellLift(name) {
-  return /squat|bench|deadlift|overhead press|barbell|row|hip thrust|lunge/i.test(name)
-    && !/dumbbell|db |cable|machine|lat pulldown|pushdown|pull-?up|fly|raise/i.test(name);
+  return /squat|bench|deadlift|overhead press|barbell|\brow\b|hip thrust/i.test(name)
+    && !/dumbbell|\bdb\b|cable|machine|smith|pulldown|pushdown|pull-?up|chin-?up|fly|raise|goblet/i.test(name);
 }
 
 /* plates per side for a target weight — returns null if the bar alone is heavier */
-function plateMath(totalLb, barLb) {
-  const PLATES = [45, 35, 25, 10, 5, 2.5];
-  let perSide = (totalLb - barLb) / 2;
+function plateMath(totalDisp, barDisp) {
+  const PLATES = isMetric() ? [25, 20, 15, 10, 5, 2.5, 1.25] : [45, 35, 25, 10, 5, 2.5];
+  let perSide = (totalDisp - barDisp) / 2;
   if (perSide < 0) return null;
   if (perSide === 0) return { list: [], exact: true, off: 0 };
   const list = [];
   PLATES.forEach(p => { while (perSide >= p - 0.001) { list.push(p); perSide -= p; } });
   return { list, exact: perSide < 0.001, off: Math.round(perSide * 2 * 10) / 10 };
 }
-function plateLine(totalLb, barLb) {
-  const m = plateMath(totalLb, barLb);
+function plateLine(totalDisp, barDisp) {
+  const m = plateMath(totalDisp, barDisp);
+  const u = wUnit();
   if (!m) return '';
-  if (!m.list.length) return `just the ${barLb} lb bar`;
+  if (!m.list.length) return `just the ${Math.round(barDisp)} ${u} bar`;
   const counts = [];
   let i = 0;
   while (i < m.list.length) {
     let j = i; while (j < m.list.length && m.list[j] === m.list[i]) j++;
-    counts.push((j - i > 1 ? (j - i) + '×' : '') + m.list[i]);
+    counts.push((j - i) + '×' + m.list[i]);
     i = j;
   }
-  return counts.join(' + ') + ' per side' + (m.exact ? '' : ` (${m.off} lb short)`);
+  return counts.join(' + ') + ' per side' + (m.exact ? '' : ` (${m.off} ${u} short)`);
 }
 
 /* rest timer — driven off a timestamp so throttled/background tabs stay accurate */
@@ -810,6 +1009,7 @@ function suggestedRestSec(name) {
 }
 function startRest(sec, label) {
   App.rest = { endsAt: Date.now() + sec * 1000, total: sec, label };
+  persistSession();
   paintRest();
 }
 function paintRest() {
@@ -817,7 +1017,7 @@ function paintRest() {
   if (!root) return;
   if (!App.rest) { root.innerHTML = ''; return; }
   const left = Math.ceil((App.rest.endsAt - Date.now()) / 1000);
-  if (left <= -2) { App.rest = null; root.innerHTML = ''; return; }
+  if (left <= -2) { App.rest = null; persistSession(); root.innerHTML = ''; return; }
   const done = left <= 0;
   if (done && !App.rest.beeped) { App.rest.beeped = true; restBeep(); }
   const pct = done ? 100 : Math.min(100, (1 - left / App.rest.total) * 100);
@@ -863,7 +1063,7 @@ function checkSetPR(exName, st) {
 
   let msg = null;
   if (val > 0 && val > histBestE1rm + 0.01 && val > seen.e1rm + 0.01 && histBestE1rm > 0) {
-    msg = `🎉 ${exName} PR — ${Math.round(kgToLb(val))} lb est. 1RM`;
+    msg = `🎉 ${exName} PR — ${Math.round(toW(val))} ${wUnit()} est. 1RM`;
   } else if (!st.weight) {
     const histBestReps = Math.max(0, ...hist.map(h => h.topSet?.reps || 0));
     if (st.reps > histBestReps && st.reps > seen.reps && histBestReps > 0) {
@@ -880,31 +1080,37 @@ function checkSetPR(exName, st) {
 
 function sessionLiveStats() {
   const s = App.activeSession;
-  let sets = 0, volKg = 0, warm = 0;
+  let sets = 0, volKg = 0, warm = 0, planned = 0;
   s.exercises.forEach(ex => (ex.sets || []).forEach(st => {
-    if (!st.done || !st.reps) return;
+    if (!st.done) { if (!isWarmup(st)) planned++; return; }
+    if (!st.reps) return;
     if (isWarmup(st)) { warm++; return; }
-    sets++; volKg += Math.max(st.weight || 0, 0) * st.reps;
+    sets++; volKg += setLoadKg(ex.name, st) * st.reps;
   }));
-  return { sets, volLb: kgToLb(volKg), warm };
+  return { sets, volKg, warm, remaining: planned };
 }
 
 function renderActiveSession() {
   const s = App.activeSession;
   const live = sessionLiveStats();
   const elapsed = s.startedAt ? Math.floor((Date.now() - s.startedAt) / 1000) : 0;
+  const stale = s.date !== todayKey();
   return `
+  ${stale ? `<div class="alert" style="border-left-color:var(--warning)"><span class="a-ico">⏳</span>
+    <div class="a-body"><b>This session is from ${prettyDate(s.date)}.</b>
+    Finish it to save it under that date, or discard it.</div></div>` : ''}
   <div class="card">
     <div class="spread">
       <h2 class="mb0">${esc(s.dayName)} — in progress</h2>
       <span class="muted small" id="sess-timer">${fmtClock(elapsed)}</span>
     </div>
     <div class="grid-4 mt">
-      <div class="stat"><div class="sv" id="live-sets">${live.sets}</div><div class="sl">sets</div></div>
-      <div class="stat"><div class="sv" id="live-vol">${live.volLb > 0 ? fmtVol(live.volLb) : '—'}</div><div class="sl">lb moved</div></div>
-      <div class="stat"><div class="sv">${s.exercises.length}</div><div class="sl">lifts</div></div>
+      <div class="stat"><div class="sv">${live.sets}</div><div class="sl">sets done</div></div>
+      <div class="stat"><div class="sv">${live.volKg > 0 ? fmtWt(live.volKg) : '—'}</div><div class="sl">${wUnit()} moved</div></div>
+      <div class="stat"><div class="sv">${live.remaining}</div><div class="sl">sets left</div></div>
       <div class="stat"><div class="sv">${live.warm}</div><div class="sl">warmups</div></div>
     </div>
+    <div class="chart-note">Sets are pre-filled from your plan — adjust the numbers if they differ and tap ✓ as you finish each one. Only ticked or edited sets are saved.</div>
   </div>
   ${s.exercises.map((ex, xi) => renderExerciseBlock(ex, xi)).join('')}
   <button class="btn mt" data-action="add-exercise">＋ Add exercise</button>
@@ -920,21 +1126,25 @@ function renderExerciseBlock(ex, xi) {
   const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
   const last = lastSessionSets(ex.name);
   const prevWork = last ? last.sets : [];
+  const u = wUnit();
+  const perHand = perHandLift(ex.name);
   const prevLine = prevWork.length
-    ? prevWork.map(s => s.weight > 0 ? `${Math.round(kgToLb(s.weight))}×${s.reps}` : `${s.reps}`).join('  ')
+    ? prevWork.map(s => s.weight > 0 ? `${Math.round(toW(s.weight))}×${s.reps}` : `${s.reps}`).join('  ')
     : '';
   // plate math for the working weight (entered top set, else the prescription)
-  const entered = Math.max(0, ...(ex.sets || []).filter(s => !isWarmup(s)).map(s => kgToLb(s.weight || 0)));
-  const target = entered > 0 ? entered : (pr.lb || 0);
-  const plates = (target > 0 && isBarbellLift(ex.name)) ? plateLine(target, getSettings().barLb || 45) : '';
+  const entered = Math.max(0, ...(ex.sets || []).filter(s => !isWarmup(s)).map(s => toW(s.weight || 0)));
+  const target = entered > 0 ? entered : (pr.w || 0);
+  const plates = (target > 0 && isBarbellLift(ex.name)) ? plateLine(target, toW(getSettings().barKg)) : '';
+  const allDone = ex.sets.length > 0 && ex.sets.every(st => st.done);
   return `
-  <div class="card">
+  <div class="card ${allDone ? 'ex-complete' : ''}">
     <div class="ex-head">
-      <span class="ex-name">${esc(ex.name)}</span>
+      <span class="ex-name">${esc(ex.name)}${allDone ? ' <span class="pill good">done</span>' : ''}</span>
       <span class="ex-target">${ex.target ? 'target ' + esc(ex.target) : ''}</span>
+      <button class="x-btn" data-action="del-exercise" data-xi="${xi}" aria-label="Remove ${esc(ex.name)} from this session">✕</button>
     </div>
     <div class="last-time" style="color:${cueColor(pr.type)};font-weight:600">${CUE[pr.type] || '→'} ${esc(pr.text)}</div>
-    ${prevLine ? `<div class="last-time">Previous: ${esc(prevLine)}</div>` : ''}
+    ${prevLine ? `<div class="last-time">Previous: ${esc(prevLine)}${perHand ? ` ${u}/hand` : ''}</div>` : ''}
     ${plates ? `<div class="last-time" style="color:var(--ink-2)">🏋 ${esc(plates)}</div>` : ''}
     ${(() => { let workIdx = 0; return ex.sets.map((st, si) => {
       const type = st.type || 'normal';
@@ -943,20 +1153,21 @@ function renderExerciseBlock(ex, xi) {
       const badge = SET_BADGE[type];
       // previous-session hints belong on working sets only, matched by working index
       const prevSet = warm ? null : prevWork[workIdx - 1];
-      const wPlace = prevSet && prevSet.weight > 0 ? String(Math.round(kgToLb(prevSet.weight) * 10) / 10) : 'lb';
+      const wPlace = prevSet && prevSet.weight > 0 ? String(Math.round(toW(prevSet.weight) * 10) / 10) : (perHand ? `${u}/hand` : u);
       const rPlace = prevSet ? String(prevSet.reps) : 'reps';
       return `
-      <div class="set-row ${st.done ? 'done' : ''}">
+      <div class="set-row ${st.done ? 'done' : ''} ${st.planned && !st.done ? 'planned' : ''}">
         <button class="set-no ${badge ? 'typed' : ''}" data-action="set-type" data-xi="${xi}" data-si="${si}"
           style="${badge ? `color:${SET_BADGE_COLOR[type]};font-weight:800` : ''}"
           title="Tap to change set type">${badge || workIdx}</button>
-        <input type="number" step="any" placeholder="${wPlace}" value="${st.weight != null && st.weight !== 0 ? Math.round(kgToLb(st.weight) * 10) / 10 : ''}"
+        <input type="number" step="any" inputmode="decimal" aria-label="Weight in ${perHand ? u + ' per hand' : u}"
+          placeholder="${wPlace}" value="${st.weight != null && st.weight !== 0 ? Math.round(toW(st.weight) * 10) / 10 : ''}"
           data-set-w data-xi="${xi}" data-si="${si}">
-        <input type="number" placeholder="${rPlace}" value="${st.reps ?? ''}"
+        <input type="number" inputmode="numeric" aria-label="Reps" placeholder="${rPlace}" value="${st.reps ?? ''}"
           data-set-r data-xi="${xi}" data-si="${si}">
         <button class="done-btn ${st.done ? 'on' : ''}" data-action="set-done" data-xi="${xi}" data-si="${si}"
-          aria-label="Mark set complete">✓</button>
-        <button class="x-btn" data-action="del-set" data-xi="${xi}" data-si="${si}">✕</button>
+          aria-label="Mark set ${workIdx} complete">✓</button>
+        <button class="x-btn" data-action="del-set" data-xi="${xi}" data-si="${si}" aria-label="Delete set ${workIdx}">✕</button>
       </div>`;
     }).join(''); })()}
     <div class="row mt">
@@ -973,8 +1184,9 @@ function addSet(xi) {
   else {
     // pre-fill the first working set with today's prescribed target
     const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
-    ex.sets.push({ weight: pr.lb ? lbToKg(pr.lb) : null, reps: pr.reps ?? null, type: 'normal', done: false });
+    ex.sets.push({ weight: pr.w ? fromW(pr.w) : null, reps: pr.reps ?? null, type: 'normal', done: false });
   }
+  persistSession();
   App.render();
 }
 
@@ -982,9 +1194,10 @@ function addSet(xi) {
 function addWarmup(xi) {
   const ex = App.activeSession.exercises[xi];
   const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
-  const workLb = pr.lb || Math.round(kgToLb(Math.max(0, ...workingSets(ex.sets).map(s => s.weight || 0))));
-  const warmLb = workLb > 0 ? roundLb5(workLb * 0.55) : 0;
-  ex.sets.unshift({ weight: warmLb ? lbToKg(warmLb) : null, reps: Math.max(5, (pr.reps || 8) + 2), type: 'warmup', done: false });
+  const workDisp = pr.w || Math.round(toW(Math.max(0, ...workingSets(ex.sets).map(s => s.weight || 0))));
+  const warmDisp = workDisp > 0 ? roundW(workDisp * 0.55, ex.name) : 0;
+  ex.sets.unshift({ weight: warmDisp ? fromW(warmDisp) : null, reps: Math.max(5, (pr.reps || 8) + 2), type: 'warmup', done: false });
+  persistSession();
   App.render();
 }
 
@@ -993,6 +1206,8 @@ function cycleSetType(xi, si) {
   const st = App.activeSession.exercises[xi].sets[si];
   const i = SET_TYPES.indexOf(st.type || 'normal');
   st.type = SET_TYPES[(i + 1) % SET_TYPES.length];
+  st.touched = true;
+  persistSession();
   App.render();
 }
 
@@ -1004,17 +1219,49 @@ function toggleSetDone(xi, si) {
   st.done = !st.done;
   if (st.done) {
     if (!st.reps) { st.done = false; toast('Enter reps first'); App.render(); return; }
+    st.planned = false;
     const pr = checkSetPR(ex.name, st);
     if (pr) toast(pr);
     if (!isWarmup(st)) startRest(suggestedRestSec(ex.name), ex.name);
   }
+  persistSession();
+  App.render();
+}
+
+/* deletes are undoable — the ✕ sits next to ✓ and gets hit by accident */
+function deleteSet(xi, si) {
+  readSetInputs();
+  const ex = App.activeSession.exercises[xi];
+  const [removed] = ex.sets.splice(si, 1);
+  App.undo = { kind: 'set', xi, si, set: removed };
+  persistSession();
+  App.render();
+  toast('Set removed', { label: 'Undo', action: 'undo-last' });
+}
+function deleteExercise(xi) {
+  readSetInputs();
+  const [removed] = App.activeSession.exercises.splice(xi, 1);
+  App.undo = { kind: 'exercise', xi, exercise: removed };
+  persistSession();
+  App.render();
+  toast(`${removed.name} removed`, { label: 'Undo', action: 'undo-last' });
+}
+function undoLast() {
+  const u = App.undo;
+  if (!u) return;
+  if (u.kind === 'set' && App.activeSession) App.activeSession.exercises[u.xi]?.sets.splice(u.si, 0, u.set);
+  if (u.kind === 'exercise' && App.activeSession) App.activeSession.exercises.splice(u.xi, 0, u.exercise);
+  if (u.kind === 'food') restoreFoodEntry(u.key, u.entry);
+  App.undo = null;
+  if (App.activeSession) persistSession();
   App.render();
 }
 
 function readSetInputs() {
+  if (!App.activeSession) return;
   document.querySelectorAll('[data-set-w]').forEach(inp => {
     const st = App.activeSession.exercises[inp.dataset.xi]?.sets[inp.dataset.si];
-    if (st) st.weight = inp.value === '' ? null : lbToKg(Number(inp.value));
+    if (st) st.weight = inp.value === '' ? null : fromW(Number(inp.value));
   });
   document.querySelectorAll('[data-set-r]').forEach(inp => {
     const st = App.activeSession.exercises[inp.dataset.xi]?.sets[inp.dataset.si];
@@ -1022,15 +1269,29 @@ function readSetInputs() {
   });
 }
 
+/* Typing marks a set as touched so an edited-but-unticked set is still saved,
+   and mirrors the session to storage without re-rendering (which would steal focus). */
+let _typeTimer = null;
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!App.activeSession || !el.dataset) return;
+  if (el.dataset.setW === undefined && el.dataset.setR === undefined) return;
+  const st = App.activeSession.exercises[el.dataset.xi]?.sets[el.dataset.si];
+  if (st) { st.touched = true; st.planned = false; }
+  clearTimeout(_typeTimer);
+  _typeTimer = setTimeout(() => { readSetInputs(); persistSession(); }, 400);
+});
+
 function finishWorkout() {
   readSetInputs();
   const s = App.activeSession;
-  // reps are required; weight is optional (0 = bodyweight, e.g. ab work)
+  // Only sets the user ticked or edited count. Rows are pre-filled now, so
+  // "has reps" alone would save a whole workout nobody performed.
   s.exercises = s.exercises
-    .map(ex => ({ ...ex, sets: ex.sets.filter(st => st.reps > 0)
+    .map(ex => ({ ...ex, sets: ex.sets.filter(st => (st.done || st.touched) && st.reps > 0)
       .map(st => ({ weight: st.weight || 0, reps: st.reps, type: st.type || 'normal' })) }))
     .filter(ex => ex.sets.length > 0);
-  if (!s.exercises.length) { toast('No completed sets — add reps or discard'); return; }
+  if (!s.exercises.length) { toast('Tick ✓ on the sets you completed first'); return; }
   // PR check (weighted lifts only)
   const prs = [];
   s.exercises.forEach(ex => {
@@ -1043,14 +1304,18 @@ function finishWorkout() {
   saveWorkout(s);
   App.activeSession = null;
   App.rest = null;
+  App.undo = null;
+  clearPersistedSession();
   App.trainView = 'home';
+  paintRest();
   toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${s.score}` : `Workout saved — score ${s.score} 💪`);
   App.render();
 }
 
 const EXTRA_EXERCISES = [
   'Crunch', 'Cable Crunch', 'Ab Wheel Rollout', 'Russian Twist', 'Sit-up', 'Decline Sit-up',
-  'Leg Raise', 'Plank (seconds)', 'Side Plank (seconds)', 'Dead Bug', 'Back Extension', 'Farmer Carry'
+  'Leg Raise', 'Hanging Leg Raise', 'Plank (seconds)', 'Side Plank (seconds)', 'Dead Bug',
+  'Back Extension', 'Farmer Carry', 'Glute Ham Raise', 'Kettlebell Swing', 'Landmine Press', 'Sled Push'
 ];
 
 function openAddExercise() {
@@ -1063,7 +1328,7 @@ function openAddExercise() {
     <label>Exercise name</label>
     <input id="ax-name" list="ax-list" placeholder="e.g. Cable Crunch">
     <datalist id="ax-list">${[...names].sort().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
-    <div class="chart-note">Bodyweight ab work: leave the weight blank and just log reps (or seconds).</div>
+    <div class="chart-note">Bodyweight ab work: leave the weight blank and just log reps (or seconds). Dumbbell lifts are logged per hand.</div>
     <button class="btn primary mt" data-action="confirm-add-exercise">Add</button>
   `);
   setTimeout(() => document.getElementById('ax-name')?.focus(), 50);
@@ -1072,6 +1337,7 @@ function openAddExercise() {
 function viewWorkoutModal(id) {
   const s = getWorkouts().find(w => w.id === id);
   if (!s) return;
+  const u = wUnit();
   openModal(`
     <h3>${esc(s.dayName)}</h3>
     <div class="modal-sub">${prettyDate(s.date)}${s.score != null ? ` · score ${s.score}/100` : ''}</div>
@@ -1079,10 +1345,10 @@ function viewWorkoutModal(id) {
       ? `<div class="muted small">${s.durationMin} min · ${esc(s.intensity)} intensity · ~${s.kcalEst} kcal burned</div>`
       : (s.exercises || []).map(ex => `
       <div class="exercise-block">
-        <div class="ex-head"><span class="ex-name">${esc(ex.name)}</span></div>
+        <div class="ex-head"><span class="ex-name">${esc(ex.name)}${perHandLift(ex.name) ? ' <span class="muted small">per hand</span>' : ''}</span></div>
         ${(ex.sets || []).map((st, i) => {
           const tag = st.type && st.type !== 'normal' ? ` <span style="color:${SET_BADGE_COLOR[st.type] || 'var(--muted)'}">${st.type}</span>` : '';
-          return `<div class="muted small">Set ${i + 1}: ${st.weight ? Math.round(kgToLb(st.weight)) + ' lb × ' + st.reps : st.reps + ' reps'}${tag}</div>`;
+          return `<div class="muted small">Set ${i + 1}: ${st.weight ? Math.round(toW(st.weight)) + ' ' + u + ' × ' + st.reps : st.reps + ' reps'}${tag}</div>`;
         }).join('')}
       </div>`).join('')}
     ${s.score != null && !s.cardio ? `<div class="chart-note mt">Score = intensity vs your bests (50) + sets vs plan (35) + PR bonus (15).</div>` : ''}
@@ -1096,8 +1362,10 @@ function openCardioModal() {
     <h3>Log cardio</h3>
     <label>Type</label>
     <select id="cd-type">${CARDIO_TYPES.map(t => `<option>${esc(t)}</option>`).join('')}</select>
-    <label>Duration (minutes)</label>
-    <input id="cd-min" type="number" placeholder="e.g. 25">
+    <div class="grid-2">
+      <div><label>Duration (minutes)</label><input id="cd-min" type="number" inputmode="numeric" placeholder="e.g. 25"></div>
+      <div><label>Date</label><input id="cd-date" type="date" value="${todayKey()}" max="${todayKey()}"></div>
+    </div>
     <label>Intensity</label>
     <div class="seg" id="cd-int">
       <button data-v="easy">Easy</button>
@@ -1105,19 +1373,21 @@ function openCardioModal() {
       <button data-v="hard">Hard</button>
     </div>
     <button class="btn primary mt" data-action="save-cardio">Save</button>
+    <div class="chart-note center">Cardio is tracked on its own — it never counts toward your lifting sessions.</div>
   `);
 }
 
 function saveCardio() {
   const min = Number(document.getElementById('cd-min').value);
   if (!min || min < 1) { toast('Enter the duration'); return; }
+  const date = document.getElementById('cd-date').value || todayKey();
   const type = document.getElementById('cd-type').value;
   const intensity = document.querySelector('#cd-int button.on')?.dataset.v || 'moderate';
   const kg = getProfile().weightKg;
   const kcalEst = Math.round(CARDIO_MET[intensity] * 3.5 * kg / 200 * min);
   const score = scoreCardio(min, intensity);
   saveWorkout({
-    id: 'c' + Date.now(), date: todayKey(), cardio: true, freestyle: true,
+    id: 'c' + Date.now(), date, cardio: true, freestyle: true,
     dayName: 'Cardio · ' + type, type, durationMin: min, intensity, kcalEst, score, exercises: []
   });
   closeModal();
