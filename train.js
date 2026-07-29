@@ -38,6 +38,89 @@ const TEMPLATES = {
 };
 const TEMPLATE_FOR_DAYS = { 2: 'fb3', 3: 'fb3', 4: 'ul4', 5: 'ppl5', 6: 'ppl6', 7: 'ppl6' };
 
+/* ---------- muscle mapping & weekly set volume ----------
+   Sets per muscle per week is the standard hypertrophy dose metric. Primary
+   movers score a full set, secondary movers half. Ranges below are the widely
+   used evidence-based landmarks (minimum effective → maximum recoverable
+   weekly sets, per Renaissance Periodization's volume-landmark framework) —
+   general guidance for a trained lifter, not precise personal limits. */
+
+const MUSCLES = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'calves', 'abs'];
+const MUSCLE_LABEL = {
+  chest: 'Chest', back: 'Back', shoulders: 'Shoulders', biceps: 'Biceps', triceps: 'Triceps',
+  quads: 'Quads', hamstrings: 'Hamstrings', glutes: 'Glutes', calves: 'Calves', abs: 'Abs'
+};
+const MUSCLE_LANDMARKS = {   // [minimum effective, maximum recoverable] sets/week
+  chest: [8, 22], back: [10, 25], shoulders: [8, 24], biceps: [8, 26], triceps: [6, 22],
+  quads: [8, 20], hamstrings: [6, 20], glutes: [4, 16], calves: [8, 20], abs: [6, 25]
+};
+
+/* order matters — most specific patterns first ("leg curl" before "curl") */
+const MUSCLE_RULES = [
+  { re: /calf raise|calf press|calves|soleus/i, p: ['calves'] },
+  { re: /pull.?through|reverse hyper/i, p: ['glutes'], s: ['hamstrings'] },
+  { re: /hip abduct|hip adduct|abductor|adductor/i, p: ['glutes'] },
+  { re: /leg curl|nordic|ham(string)? curl/i, p: ['hamstrings'] },
+  { re: /leg extension/i, p: ['quads'] },
+  { re: /romanian deadlift|\brdl\b|stiff.?leg/i, p: ['hamstrings'], s: ['glutes', 'back'] },
+  { re: /hip thrust|glute bridge|glute kick/i, p: ['glutes'], s: ['hamstrings'] },
+  { re: /back extension|hyperextension/i, p: ['hamstrings'], s: ['glutes', 'back'] },
+  { re: /front squat/i, p: ['quads'], s: ['glutes', 'abs'] },
+  { re: /hack squat|leg press|bulgarian|split squat|step.?up/i, p: ['quads'], s: ['glutes'] },
+  { re: /lunge/i, p: ['quads', 'glutes'] },
+  { re: /squat/i, p: ['quads'], s: ['glutes', 'hamstrings'] },
+  { re: /deadlift|good morning/i, p: ['hamstrings', 'back'], s: ['glutes', 'quads'] },
+  { re: /lateral raise|side raise|upright row/i, p: ['shoulders'] },
+  { re: /rear delt|face pull|reverse fly/i, p: ['shoulders'], s: ['back'] },
+  { re: /overhead press|shoulder press|military|arnold/i, p: ['shoulders'], s: ['triceps'] },
+  { re: /incline (bench|db|dumbbell|barbell)?\s*press|incline press/i, p: ['chest'], s: ['shoulders', 'triceps'] },
+  { re: /bench press|chest press|push.?up|\bdip\b|chest fly|pec/i, p: ['chest'], s: ['triceps', 'shoulders'] },
+  { re: /pushdown|skull.?crusher|overhead extension|triceps|kickback|close.?grip/i, p: ['triceps'] },
+  { re: /pull.?up|chin.?up|pulldown|\blat\b/i, p: ['back'], s: ['biceps'] },
+  { re: /shrug|\btrap\b/i, p: ['back'] },
+  { re: /\brow\b/i, p: ['back'], s: ['biceps'] },
+  { re: /pullover/i, p: ['back'], s: ['chest'] },
+  { re: /curl/i, p: ['biceps'] },
+  { re: /crunch|sit.?up|leg raise|knee raise|plank|ab wheel|rollout|russian twist|dead bug|hollow|woodchop|oblique/i, p: ['abs'] },
+  { re: /farmer|carry/i, p: ['back'], s: ['abs'] },
+  { re: /fly|flye/i, p: ['chest'], s: ['shoulders'] }
+];
+
+function musclesFor(name) {
+  for (const r of MUSCLE_RULES) if (r.re.test(name)) return { p: r.p || [], s: r.s || [] };
+  return { p: [], s: [] };
+}
+
+/* weighted sets per muscle over the trailing N days */
+function muscleSetsInDays(days) {
+  const tally = {};
+  MUSCLES.forEach(m => { tally[m] = 0; });
+  getWorkouts().forEach(s => {
+    const d = daysBetween(s.date, todayKey());
+    if (d < 0 || d >= days || s.cardio) return;
+    (s.exercises || []).forEach(ex => {
+      const n = workingSets(ex.sets).filter(st => st.reps > 0).length;
+      if (!n) return;
+      const m = musclesFor(ex.name);
+      m.p.forEach(x => { if (tally[x] != null) tally[x] += n; });
+      m.s.forEach(x => { if (tally[x] != null) tally[x] += n * 0.5; });
+    });
+  });
+  return tally;
+}
+
+/* if a stalled lift's primary muscle is under-trained, say so — that's a
+   volume problem, not a programming problem */
+function plateauVolumeNote(exName) {
+  const t = muscleSetsInDays(7);
+  const lacking = musclesFor(exName).p.filter(x => MUSCLE_LANDMARKS[x] && t[x] < MUSCLE_LANDMARKS[x][0]);
+  if (!lacking.length) return '';
+  const names = lacking.map(x => MUSCLE_LABEL[x].toLowerCase()).join(' and ');
+  const got = lacking.map(x => Math.round(t[x] * 2) / 2).join('/');
+  const need = lacking.map(x => MUSCLE_LANDMARKS[x][0]).join('/');
+  return ` Also: your ${names} volume is only ${got} sets this week versus an effective minimum of ${need} — try adding a set or two there before dropping weight.`;
+}
+
 /* Warmup sets are logged but must never count toward volume, PRs, est. 1RM,
    session score, or progression — only working sets do. */
 function isWarmup(st) { return st && st.type === 'warmup'; }
@@ -354,12 +437,13 @@ function renderTrain() {
     <div class="alert">
       <span class="a-ico">⚠</span>
       <div class="a-body"><b>${esc(pl.name)} has stalled — no PR in ${pl.sessions} sessions (${pl.days} days)</b>
-      ${dl.type === 'deload' ? esc(dl.text) : esc(pl.tip)}</div>
+      ${dl.type === 'deload' ? esc(dl.text) : esc(pl.tip)}${esc(plateauVolumeNote(pl.name))}</div>
     </div>`;
   }).join('')}
 
   ${renderTodaysSession(tpl, day, nextIdx, stalledNames)}
   ${renderVolumeCard(all)}
+  ${renderMuscleVolumeCard(all)}
   ${renderConsistencyCard(p, all)}
   ${renderRecordsCard()}
   ${renderRecentCard(all)}`;
@@ -428,9 +512,12 @@ function renderVolumeCard(all) {
   const showTrend = series.filter(v => v > 0).length >= 2;
   const next = VOLUME_MILESTONES.find(m => m > lifeLb);
   const sets = all.reduce((n, s) => n + (s.exercises || []).reduce((x, e) => x + workingSets(e.sets).length, 0), 0);
+  const quip = volumeQuip(lifeLb, kgToLb(volumeInDays(7)));
+  if (quip && quip.fresh) { setTimeout(() => { toast(quip.text); settleQuip(); }, 400); }
   return `
   <div class="card">
     <h2>Weight moved <span class="h2-right">lb lifted</span></h2>
+    ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}">${esc(quip.text)}</div>` : ''}
     <div class="grid-4">
       ${tiles.map(([label, lb]) => `
         <div class="stat"><div class="sv">${lb > 0 ? fmtVol(lb) : '—'}</div><div class="sl">${label}</div></div>`).join('')}
@@ -451,6 +538,49 @@ function renderVolumeCard(all) {
       </div>
       ${next ? `<div class="chart-note mt">${fmtVol(next - lifeLb)} lb to go until you've moved ${fmtVol(next)} lb.</div>` : ''}
     </div>
+  </div>`;
+}
+
+/* ---------- 2b. weekly sets per muscle ---------- */
+function renderMuscleVolumeCard(all) {
+  if (!all.filter(s => !s.cardio).length) return '';
+  const t = muscleSetsInDays(7);
+  const rows = MUSCLES.map(m => {
+    const [mev, mrv] = MUSCLE_LANDMARKS[m];
+    const v = Math.round(t[m] * 2) / 2;
+    return { m, v, mev, mrv, state: v < mev ? 'under' : v > mrv ? 'over' : 'in' };
+  });
+  const under = rows.filter(r => r.state === 'under');
+  const over = rows.filter(r => r.state === 'over');
+  // problems first, then heaviest-trained
+  const order = [...rows].sort((a, b) =>
+    (a.state === 'under' ? -1 : 0) - (b.state === 'under' ? -1 : 0) || b.v - a.v);
+
+  const headline = under.length
+    ? `<span style="color:var(--warning)">${under.length} muscle${under.length > 1 ? 's' : ''} below effective volume</span>`
+    : over.length ? `<span style="color:var(--critical)">${over.length} above recoverable volume</span>`
+    : `<span style="color:${CHART.good}">Every muscle in range</span>`;
+
+  return `
+  <div class="card">
+    <h2>Weekly sets per muscle <span class="h2-right">last 7 days</span></h2>
+    <div class="small" style="margin-bottom:12px">${headline}</div>
+    ${order.map(r => {
+      const color = r.state === 'under' ? CHART.warning : r.state === 'over' ? CHART.critical : CHART.aqua;
+      const pct = Math.min(r.v / r.mrv * 100, 100);
+      return `
+      <div class="mv-row">
+        <div class="macro-head">
+          <span class="name">${MUSCLE_LABEL[r.m]}</span>
+          <span class="val" style="color:${r.state === 'in' ? 'var(--ink-2)' : color}">${r.v} <span class="muted">/ ${r.mev}–${r.mrv}</span></span>
+        </div>
+        <div class="bar-track mv-track">
+          <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
+          <div class="mv-mev" style="left:${Math.min(r.mev / r.mrv * 100, 99)}%" title="minimum effective volume"></div>
+        </div>
+      </div>`;
+    }).join('')}
+    <div class="chart-note">Bar fills toward your max recoverable volume; the tick marks the effective minimum. Secondary movers count as half a set. Ranges are general guidance for a trained lifter — adjust to how you actually recover.</div>
   </div>`;
 }
 

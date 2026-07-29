@@ -1,8 +1,8 @@
 /* Peak service worker — cache app shell, never cache API calls */
-const CACHE = 'peak-v20';
+const CACHE = 'peak-v21';
 const SHELL = [
   './', 'index.html', 'style.css',
-  'store.js', 'charts.js', 'api.js', 'food.js', 'train.js', 'sleep.js', 'grocery.js', 'app.js',
+  'store.js', 'charts.js', 'quips.js', 'api.js', 'food.js', 'train.js', 'sleep.js', 'grocery.js', 'app.js',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 
