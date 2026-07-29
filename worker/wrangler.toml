@@ -1,0 +1,19 @@
+name = "peak-scan"
+main = "src/index.js"
+compatibility_date = "2026-07-29"
+
+[vars]
+# Tunable without shipping an app update — that's the point of them living here.
+FREE_SCANS_PER_DAY = "3"
+GLOBAL_DAILY_CAP   = "5000"   # ~$6/day worst case on 2.5 Flash. Set it to what you'd tolerate losing.
+MODEL              = "gemini-2.5-flash"
+ALLOWED_ORIGIN     = "https://tripod110.github.io"
+
+# Create with: wrangler kv namespace create PEAK_KV
+# then paste the id below.
+[[kv_namespaces]]
+binding = "PEAK_KV"
+id = "REPLACE_ME"
+
+# Secret, never in this file:
+#   wrangler secret put GEMINI_API_KEY

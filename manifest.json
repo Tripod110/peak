@@ -1,7 +1,7 @@
 {
-  "name": "Peak — Fuel, Train, Recover",
+  "name": "Peak — Break Your Plateaus",
   "short_name": "Peak",
-  "description": "Calorie tracking with AI meal scanning, workout log with plateau detection, sleep scores, and smart grocery lists.",
+  "description": "Flags a lift when it stops progressing, deloads it, and walks you back up to a new PR. Plus weekly volume vs MEV/MRV, AI meal scanning, and sleep scores.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

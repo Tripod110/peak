@@ -76,35 +76,47 @@ function pickComparison(lb, used) {
 }
 
 /* Called while rendering the volume card. Fires at most one new quip per
-   threshold crossing and keeps showing it until the next one. */
-function volumeQuip(lifeLb, weekLb) {
+   threshold crossing and keeps showing it until the next one.
+   Takes kg (the storage unit); the comparison table is in lb, so tiers and
+   ratios are computed in lb while the headline number is shown in whichever
+   unit the user has chosen. */
+function volumeQuip(lifeKg, weekKg) {
   const st = Store.get('quips', { used: [], lifeTier: 0, weekTier: 0, weekOf: '', current: null });
   if (!Array.isArray(st.used)) st.used = [];
 
   const anchor = weekAnchor();
   if (st.weekOf !== anchor) { st.weekOf = anchor; st.weekTier = 0; }
 
+  const lifeLb = kgToLb(lifeKg), weekLb = kgToLb(weekKg);
   const lt = highestTierPassed(lifeLb, LIFETIME_TIERS);
   const wt = highestTierPassed(weekLb, WEEK_TIERS);
 
   let fired = null;
-  if (lt > (st.lifeTier || 0)) { fired = { scope: 'all-time', lb: lifeLb }; st.lifeTier = lt; }
-  else if (wt > (st.weekTier || 0)) { fired = { scope: 'this week', lb: weekLb }; st.weekTier = wt; }
+  if (lt > (st.lifeTier || 0)) { fired = { scope: 'all-time', lb: lifeLb, kg: lifeKg }; st.lifeTier = lt; }
+  else if (wt > (st.weekTier || 0)) { fired = { scope: 'this week', lb: weekLb, kg: weekKg }; st.weekTier = wt; }
 
   if (fired) {
     const pick = pickComparison(fired.lb, st.used);
     if (pick) {
       st.used.push(pick.id);
-      const n = fired.lb / pick.lb;
-      st.current = {
-        text: `You've moved ${fmtVol(fired.lb)} lb ${fired.scope} — about ${fmtCount(n)} ${n >= 1.95 ? pick.many : pick.one} ${pick.emoji}`,
-        fresh: true
-      };
+      // Store the DATA, not the rendered sentence. A baked-in string keeps saying
+      // "lb" forever after the user switches to kg.
+      st.current = { scope: fired.scope, kg: fired.kg, lb: fired.lb, pickId: pick.id, fresh: true };
     }
   }
 
   Store.set('quips', st);
-  return st.current || null;
+  return st.current ? { ...st.current, text: quipText(st.current) } : null;
+}
+
+/* render a stored quip in whichever unit is active right now */
+function quipText(cur) {
+  if (!cur) return '';
+  if (cur.text) return cur.text;                     // pre-v25 quips were pre-rendered
+  const pick = COMPARISONS.find(c => c.id === cur.pickId);
+  if (!pick) return '';
+  const n = cur.lb / pick.lb;
+  return `You've moved ${fmtWt(cur.kg)} ${wUnit()} ${cur.scope} — about ${fmtCount(n)} ${n >= 1.95 ? pick.many : pick.one} ${pick.emoji}`;
 }
 
 /* mark the current quip as seen so it stops pulsing after one view */
@@ -112,3 +124,12 @@ function settleQuip() {
   const st = Store.get('quips', null);
   if (st && st.current && st.current.fresh) { st.current.fresh = false; Store.set('quips', st); }
 }
+
+/* Migrate a pre-v25 pre-rendered quip so it re-renders in the active unit. */
+(function migrateQuips() {
+  const st = Store.get('quips', null);
+  if (st && st.current && st.current.text && st.current.pickId == null) {
+    st.current = null;      // it will re-fire on the next tier crossing
+    Store.set('quips', st);
+  }
+})();

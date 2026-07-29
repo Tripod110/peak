@@ -2,9 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Peak</title>
-<meta name="description" content="Calorie tracking, AI meal scanning, workout log, sleep scores, and smart grocery lists.">
+<!-- no user-scalable=no: blocking pinch-zoom fails WCAG 1.4.4 and there is no
+     good reason for it here — viewport-fit=cover is what the edge-to-edge
+     layout actually needs. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Peak — the training log that catches your plateaus</title>
+<meta name="description" content="Peak flags a lift the moment it stops progressing, deloads it, and walks you back up to a new PR. Weekly volume vs MEV/MRV, AI meal scanning, sleep scores. Free, offline, no account.">
 <meta name="theme-color" content="#0d0d0d">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
@@ -13,7 +16,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Peak">
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
 
@@ -44,15 +47,15 @@
 <div id="modal-root"></div>
 <div id="toast-root"></div>
 
-<script src="store.js?v=24"></script>
-<script src="charts.js?v=24"></script>
-<script src="quips.js?v=24"></script>
-<script src="api.js?v=24"></script>
-<script src="food.js?v=24"></script>
-<script src="train.js?v=24"></script>
-<script src="sleep.js?v=24"></script>
-<script src="grocery.js?v=24"></script>
-<script src="app.js?v=24"></script>
+<script src="store.js?v=27"></script>
+<script src="charts.js?v=27"></script>
+<script src="quips.js?v=27"></script>
+<script src="api.js?v=27"></script>
+<script src="food.js?v=27"></script>
+<script src="train.js?v=27"></script>
+<script src="sleep.js?v=27"></script>
+<script src="grocery.js?v=27"></script>
+<script src="app.js?v=27"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
