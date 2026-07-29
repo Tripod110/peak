@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -107,10 +107,6 @@ function renderToday() {
   const slColor = slScore == null ? CHART.muted : slScore >= 75 ? CHART.good : slScore >= 50 ? CHART.warning : CHART.critical;
 
   return `
-  <div class="card center" style="border:1px solid var(--orange);padding:10px">
-    <div style="font-size:22px;font-weight:800;color:var(--orange)">Peak ${APP_VERSION}</div>
-    <div class="muted small">Look at the very bottom of your screen: is the strip below the tab bar MAGENTA/pink, or still black? Tell me which.</div>
-  </div>
   ${plateaus.slice(0, 2).map(pl => `
     <div class="alert">
       <span class="a-ico">⚠</span>

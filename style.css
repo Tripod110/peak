@@ -27,10 +27,7 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-/* TEMP v14 paintability test: bright magenta canvas behind the app. If a magenta
-   strip shows below the tab bar, the web view CAN paint the physical bottom and
-   the gap is fixable; if it stays black, iOS has walled that strip off. */
-html { height: 100%; background: #ff00ff; }
+html { height: 100%; overflow: hidden; }
 /* body fills the viewport iOS provides (position:fixed; inset:0) and never
    scrolls — scrolling happens inside .view. With the opaque `black` status-bar
    style, iOS sizes this viewport to sit below the status bar and above the home
