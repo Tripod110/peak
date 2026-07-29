@@ -1,5 +1,5 @@
 /* Peak service worker — cache app shell, never cache API calls */
-const CACHE = 'peak-v16';
+const CACHE = 'peak-v17';
 const SHELL = [
   './', 'index.html', 'style.css',
   'store.js', 'charts.js', 'api.js', 'food.js', 'train.js', 'sleep.js', 'grocery.js', 'app.js',
@@ -22,6 +22,8 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
+  // Delete ALL old caches (any name != current) so a corrupted entry from a
+  // previous version can never survive an update.
   e.waitUntil(
     caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
@@ -35,8 +37,12 @@ self.addEventListener('fetch', e => {
   // network-first (bypassing the HTTP cache) so updates always land; cache fallback for offline
   e.respondWith(
     fetch(new Request(e.request, { cache: 'reload' })).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy));
+      // ONLY cache genuinely-good responses. Caching a 4xx/5xx/opaque/partial
+      // response (the old bug) is what served a broken app → white screen.
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+      }
       return res;
     }).catch(() => caches.match(e.request, { ignoreSearch: true }))
   );
