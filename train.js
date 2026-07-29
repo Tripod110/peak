@@ -145,6 +145,92 @@ function nextDayIndex() {
   return count % tpl.days.length;
 }
 
+/* ---------- auto-progression (double progression) ----------
+   Rule: hit every prescribed set at the target reps → add weight next session.
+   Fall short → repeat the weight and chase the missing reps. Stalled (plateau
+   detected) → deload ~10% and build back. Bodyweight work progresses by reps. */
+
+function parseTarget(t) {
+  const m = /^(\d+)\s*[×x]\s*(\d+)/.exec((t || '').trim());
+  return m ? { sets: +m[1], reps: +m[2] } : null;
+}
+
+/* every logged set of this exercise from its most recent session */
+function lastSessionSets(name) {
+  const key = name.toLowerCase();
+  const sessions = getWorkouts()
+    .filter(s => !s.cardio && (s.exercises || []).some(e => e.name.toLowerCase() === key))
+    .sort((a, b) => a.date < b.date ? 1 : -1);
+  if (!sessions.length) return null;
+  const s = sessions[0];
+  const ex = s.exercises.find(e => e.name.toLowerCase() === key);
+  return { date: s.date, sets: (ex.sets || []).filter(st => st.reps > 0) };
+}
+
+function incrementLb(name) {
+  return /squat|deadlift|leg press|hip thrust|lunge|calf raise/i.test(name) ? 10 : 5;
+}
+
+/* the prescribed sets×reps for an exercise, looked up from the user's template */
+function findTargetFor(name) {
+  const key = name.toLowerCase();
+  const p = getProfile();
+  const order = [TEMPLATES[p?.template], ...Object.values(TEMPLATES)].filter(Boolean);
+  for (const tpl of order) {
+    for (const d of tpl.days) {
+      const hit = d.ex.find(e => e[0].toLowerCase() === key);
+      if (hit) return hit[1];
+    }
+  }
+  return '';
+}
+function roundLb5(lb) { return Math.max(5, Math.round(lb / 5) * 5); }
+
+/* → {type, lb, sets, reps, text, lastText} */
+function nextTarget(name, targetStr, stalledNames) {
+  const tgt = parseTarget(targetStr) || { sets: 3, reps: 8 };
+  const last = lastSessionSets(name);
+  if (!last || !last.sets.length) {
+    return { type: 'baseline', sets: tgt.sets, reps: tgt.reps,
+      text: `First time — find a working weight for ${tgt.sets}×${tgt.reps}. That's your baseline.` };
+  }
+  const maxKg = Math.max(...last.sets.map(s => s.weight || 0));
+  const bestReps = Math.max(...last.sets.map(s => s.reps));
+  const when = prettyDate(last.date).replace(/^\w+, /, '');
+
+  if (maxKg <= 0) { // bodyweight / timed
+    return { type: 'add_reps', lb: 0, sets: tgt.sets, reps: bestReps + 1,
+      text: `Beat ${bestReps} — aim ${bestReps + 1}+ this time.`,
+      lastText: `${bestReps} reps · ${when}` };
+  }
+
+  const lastLb = kgToLb(maxKg);
+  const lastText = `${Math.round(lastLb)} lb × ${bestReps} · ${when}`;
+  const stalled = (stalledNames || new Set(detectPlateaus().map(p => p.name.toLowerCase()))).has(name.toLowerCase());
+  if (stalled) {
+    const lb = roundLb5(lastLb * 0.9);
+    return { type: 'deload', lb, sets: tgt.sets, reps: tgt.reps, lastText,
+      text: `Stalled — deload to ${lb} lb × ${tgt.reps}, then add ${incrementLb(name)} lb a session.` };
+  }
+
+  const topSets = last.sets.filter(s => Math.abs((s.weight || 0) - maxKg) < 0.01);
+  const allHit = topSets.length >= tgt.sets && topSets.every(s => s.reps >= tgt.reps);
+  if (allHit) {
+    const lb = roundLb5(lastLb + incrementLb(name));
+    return { type: 'add_weight', lb, sets: tgt.sets, reps: tgt.reps, lastText,
+      text: `Hit all ${tgt.sets}×${tgt.reps} — go up to ${lb} lb.` };
+  }
+  const lb = roundLb5(lastLb);
+  const spread = topSets.map(s => s.reps).join('/');
+  return { type: 'add_reps', lb, sets: tgt.sets, reps: tgt.reps, lastText,
+    text: `Stay at ${lb} lb — last time ${spread}. Get all ${tgt.sets} sets to ${tgt.reps}.` };
+}
+
+const CUE = { add_weight: '▲', add_reps: '→', deload: '▼', baseline: '●' };
+function cueColor(type) {
+  return type === 'add_weight' ? 'var(--good)' : type === 'deload' ? 'var(--warning)' : 'var(--ink-2)';
+}
+
 /* ---------- render ---------- */
 function renderTrain() {
   if (App.activeSession) return renderActiveSession();
@@ -155,21 +241,37 @@ function renderTrain() {
   const recent = getWorkouts().slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 6);
   const week = getWorkouts().filter(s => daysBetween(s.date, todayKey()) < 7).length;
 
+  const stalledNames = new Set(plateaus.map(pl => pl.name.toLowerCase()));
+  const day = tpl.days[nextIdx];
+
   return `
-  ${plateaus.map(pl => `
+  ${plateaus.map(pl => {
+    const dl = nextTarget(pl.name, findTargetFor(pl.name), stalledNames);
+    return `
     <div class="alert">
       <span class="a-ico">⚠</span>
       <div class="a-body"><b>${esc(pl.name)} has stalled — no PR in ${pl.sessions} sessions (${pl.days} days)</b>
-      ${esc(pl.tip)}</div>
-    </div>`).join('')}
+      ${dl.type === 'deload' ? esc(dl.text) : esc(pl.tip)}</div>
+    </div>`;
+  }).join('')}
 
   <div class="card">
     <h2>Next up <span class="h2-right">${esc(tpl.name)} · ${week}/${p.gymDays} sessions this week</span></h2>
-    <div class="spread">
-      <div>
-        <div class="hero-num" style="font-size:24px">${esc(tpl.days[nextIdx].name)}</div>
-        <div class="muted small">${tpl.days[nextIdx].ex.map(e => esc(e[0])).join(' · ')}</div>
-      </div>
+    <div class="hero-num" style="font-size:24px">${esc(day.name)}</div>
+    <div class="muted small">Today's targets — computed from your last session</div>
+    <div class="mt">
+      ${day.ex.map(([n, tstr]) => {
+        const pr = nextTarget(n, tstr, stalledNames);
+        return `
+        <div class="list-item">
+          <div class="li-main">
+            <div class="li-title">${esc(n)}</div>
+            <div class="li-sub" style="color:${cueColor(pr.type)}">${CUE[pr.type] || '→'} ${esc(pr.text)}</div>
+          </div>
+          <div class="li-val">${pr.lb > 0 ? pr.lb + '<span class="unit"> lb</span>'
+            : pr.lb === 0 ? '<span class="unit">bodyweight</span>' : '<span class="unit">set it</span>'}</div>
+        </div>`;
+      }).join('')}
     </div>
     <button class="btn accent mt" data-action="start-workout" data-idx="${nextIdx}">Start workout</button>
     <div class="row mt">
@@ -263,20 +365,15 @@ function renderActiveSession() {
 }
 
 function renderExerciseBlock(ex, xi) {
-  const hist = exerciseHistory(ex.name);
-  const last = hist.length ? hist[hist.length - 1] : null;
-  const lastTxt = last
-    ? (last.topSet.weight > 0
-      ? `Last time: ${Math.round(kgToLb(last.topSet.weight))} lb × ${last.topSet.reps} (${prettyDate(last.date)}) — beat it.`
-      : `Last time: ${last.topSet.reps} reps (${prettyDate(last.date)}) — beat it.`)
-    : 'First time logging this — set the baseline.';
+  const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
   return `
   <div class="card">
     <div class="ex-head">
       <span class="ex-name">${esc(ex.name)}</span>
       <span class="ex-target">${ex.target ? 'target ' + esc(ex.target) : ''}</span>
     </div>
-    <div class="last-time">${lastTxt}</div>
+    <div class="last-time" style="color:${cueColor(pr.type)};font-weight:600">${CUE[pr.type] || '→'} ${esc(pr.text)}</div>
+    ${pr.lastText ? `<div class="last-time">Last: ${esc(pr.lastText)}</div>` : ''}
     ${ex.sets.map((st, si) => `
       <div class="set-row">
         <span class="set-no">${si + 1}</span>
@@ -295,9 +392,9 @@ function addSet(xi) {
   const prev = ex.sets[ex.sets.length - 1];
   if (prev) { ex.sets.push({ weight: prev.weight, reps: prev.reps }); }
   else {
-    const hist = exerciseHistory(ex.name);
-    const last = hist.length ? hist[hist.length - 1].topSet : null;
-    ex.sets.push({ weight: last ? last.weight : null, reps: last ? last.reps : null });
+    // pre-fill the first set with today's prescribed target
+    const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
+    ex.sets.push({ weight: pr.lb ? lbToKg(pr.lb) : null, reps: pr.reps ?? null });
   }
   App.render();
 }

@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v17';
+const APP_VERSION = 'v18';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -61,20 +61,6 @@ const App = {
     App._renderedTab = App.tab;
   }
 };
-
-/* Mobile keyboards can pan/resize the viewport and leave the app shifted with
-   dead space under the tab bar. The window itself never scrolls in our layout,
-   so snapping it back whenever the keyboard closes is always safe. */
-function snapViewport() {
-  const ae = document.activeElement;
-  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return; // keyboard still open
-  window.scrollTo(0, 0);
-  document.documentElement.scrollTop = 0;
-}
-document.addEventListener('focusout', () => setTimeout(snapViewport, 60));
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', () => setTimeout(snapViewport, 60));
-}
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -151,7 +137,72 @@ function renderToday() {
     </div>
   </div>
 
+  ${renderWeeklyReview()}
   ${renderStreaks()}`;
+}
+
+/* Rolling 7-day review: the four numbers that matter + one recommendation
+   aimed at the weakest link. */
+function renderWeeklyReview() {
+  const p = getProfile();
+  const t = computeTargets(p);
+
+  let kcalSum = 0, protSum = 0, foodDays = 0;
+  for (let i = 0; i < 7; i++) {
+    const k = todayKey(-i);
+    if (foodForDay(k).length) { foodDays++; const d = dayTotals(k); kcalSum += d.kcal; protSum += d.protein; }
+  }
+  const sleepAll = getSleep();
+  let sleepSum = 0, nights = 0;
+  for (let i = 0; i < 7; i++) {
+    const k = todayKey(-i);
+    if (sleepAll[k]) { nights++; sleepSum += sleepAll[k].durationMin; }
+  }
+  const weekSessions = getWorkouts().filter(s => {
+    const d = daysBetween(s.date, todayKey());
+    return d >= 0 && d < 7;
+  });
+  const lifts = weekSessions.filter(s => !s.cardio);
+  const scores = weekSessions.map(s => s.score).filter(v => typeof v === 'number');
+  const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+
+  if (foodDays < 2 && !nights && !weekSessions.length) return '';
+
+  const avgKcal = foodDays ? Math.round(kcalSum / foodDays) : null;
+  const avgProt = foodDays ? Math.round(protSum / foodDays) : null;
+  const avgSleep = nights ? Math.round(sleepSum / nights) : null;
+  const ws = getWeights().filter(w => daysBetween(w.date, todayKey()) <= 7);
+  const wChange = ws.length >= 2 ? Math.round((kgToLb(ws[ws.length - 1].kg) - kgToLb(ws[0].kg)) * 10) / 10 : null;
+
+  let ico, rec;
+  if (avgSleep != null && avgSleep < 420) {
+    ico = '☾'; rec = `Sleep is your bottleneck at ${fmtDur(avgSleep)} a night. Pull bedtime 30 min earlier — it feeds every lift more than any program tweak.`;
+  } else if (avgProt != null && avgProt < t.protein * 0.85) {
+    ico = '🥩'; rec = `Protein averaged ${avgProt}g against a ${t.protein}g target. Add one protein anchor a day — Grocery → Snacks has the cheap ones.`;
+  } else if (lifts.length < p.gymDays - 1) {
+    ico = '🏋'; rec = `${lifts.length} of ${p.gymDays} planned sessions. Consistency outranks intensity — just get in the gym.`;
+  } else if (avgScore != null && avgScore < 60) {
+    ico = '▲'; rec = `Session scores averaging ${avgScore}. Finish the prescribed sets — Train now shows the exact target for each lift.`;
+  } else {
+    ico = '✓'; rec = `Everything's tracking. Repeat this week exactly and let progression do the work.`;
+  }
+
+  const tile = (val, sub) => `<div><div class="hero-num" style="font-size:20px">${val}</div><div class="muted small">${sub}</div></div>`;
+  return `
+  <div class="card">
+    <h2>This week <span class="h2-right">rolling 7 days</span></h2>
+    <div class="grid-2">
+      ${tile(avgKcal ? avgKcal.toLocaleString() : '—', `avg kcal · target ${t.kcal.toLocaleString()}`)}
+      ${tile(avgProt != null ? avgProt + 'g' : '—', `avg protein · target ${t.protein}g`)}
+      ${tile(avgSleep ? fmtDur(avgSleep) : '—', `avg sleep · ${nights} night${nights !== 1 ? 's' : ''}`)}
+      ${tile(lifts.length + (weekSessions.length > lifts.length ? ` +${weekSessions.length - lifts.length}` : ''),
+        avgScore != null ? `sessions · avg score ${avgScore}` : `of ${p.gymDays} planned sessions`)}
+    </div>
+    ${wChange != null ? `<div class="muted small mt">Body weight ${wChange > 0 ? '+' : ''}${wChange} lb over the week</div>` : ''}
+    <div class="alert mt mb0" style="border-left-color:var(--blue)">
+      <span class="a-ico">${ico}</span><div class="a-body">${esc(rec)}</div>
+    </div>
+  </div>`;
 }
 
 function renderStreaks() {
