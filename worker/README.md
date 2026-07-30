@@ -5,6 +5,8 @@ Hosted meal scanning, so users don't need their own Gemini API key.
 **Status: scaffolded, not deployed.** Peak v27 still ships bring-your-own-key. This goes
 live in v29 (week 3 — see [../ROADMAP.md](../ROADMAP.md)).
 
+**The request/response contract is in [API.md](API.md)** — read that before wiring the app up.
+
 ## Why this exists
 
 An API key embedded in a PWA is a public key. The app's source ships to every device —

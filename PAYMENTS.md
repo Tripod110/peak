@@ -38,7 +38,10 @@ involves verification delays measured in days) is completely independent of it, 
 
 ## Phase 0 — decide two things
 
-Everything downstream depends on these. Both are genuine judgement calls.
+Everything downstream depends on these. Both are genuine judgement calls, and both are tracked
+as open entries in [DECISIONS.md](DECISIONS.md) — **[D-01](DECISIONS.md#d-01)** (merchant of
+record) and **[D-02](DECISIONS.md#d-02)** (what a user is). Record the outcome there when you
+decide, so the reasoning survives.
 
 ### Decision 1: Stripe direct, or a merchant of record?
 
@@ -231,6 +234,8 @@ trial endings, and dunning transitions. `checkout.session.completed` mainly tell
 ---
 
 ## The Play Store conflict — read before Month 1
+
+*Tracked as [D-03](DECISIONS.md#d-03).*
 
 `ROADMAP.md` sequences **Google Play in Month 1** and **Stripe in Month 2**. Those two plans
 can collide: Google Play's policy has historically required in-app purchases of digital

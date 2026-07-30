@@ -96,10 +96,17 @@ support via a service worker. Charts are hand-rolled inline SVG.
 
 | | |
 |---|---|
+| [CHANGELOG.md](CHANGELOG.md) | What shipped in every release, traceable to its commit |
 | [ROADMAP.md](ROADMAP.md) | Where this is going, with the gates that decide whether it keeps going |
+| [DECISIONS.md](DECISIONS.md) | Why it's built this way — and the three decisions still open |
+| [AUDIT.md](AUDIT.md) | The 2026-07 UX audit: 30 findings, each traced to its fix and its proof |
 | [SHIPPING.md](SHIPPING.md) | Release runbook — pre-flight checks, the push, rollback |
 | [PAYMENTS.md](PAYMENTS.md) | Getting Peak Pro sellable: Stripe setup and what blocks it |
 | [worker/README.md](worker/README.md) | The hosted meal-scan proxy (scaffolded, ships in v29) |
+| [worker/API.md](worker/API.md) | The Worker's API contract — `/scan` as built, plus what's planned |
+
+Current release: **v28** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
+the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run.
 
 Releasing? Never hand-edit version strings — one version lives in 22 places:
 
