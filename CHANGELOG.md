@@ -3,6 +3,10 @@
 Every release, newest first. Each heading carries the commit it shipped in, so any line here
 can be traced to a diff with `git show <hash>`.
 
+> **Convention:** a commit cannot cite its own hash — amending to insert it changes the hash
+> again. So an entry's hash is always added by the *next* commit. If a hash here isn't in
+> `git log`, it's an orphan from an amend and should be corrected.
+
 Peak has no build step, so "release" means: version bumped with
 [`tools/release.mjs`](tools/release.mjs), committed, pushed to `main`, served by GitHub Pages.
 See [SHIPPING.md](SHIPPING.md).
@@ -43,7 +47,7 @@ versioned assets and only drops the old bundle when `CACHE` changes, so editing 
 would have reached nobody.
 
 ### Documentation
-`ad832e2` · docs-only follow-up — no app code changed, so no version bump.
+`385dda1` · docs-only follow-up — no app code changed, so no version bump.
 
 - **[CHANGELOG.md](CHANGELOG.md)** — this file. Every release traced to its commit.
 - **[AUDIT.md](AUDIT.md)** — the 30 audit findings, each traced to the symbol that fixed it and
