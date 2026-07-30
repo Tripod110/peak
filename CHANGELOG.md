@@ -19,7 +19,7 @@ See [SHIPPING.md](SHIPPING.md).
 ---
 
 ## v29 — the plateau engine gets it right
-`216b66c` · 2026-07-29
+`216b66c` · 2026-07-29 · **pending push**
 
 The headline feature was wrong about three quarters of the time. This release is entirely
 about making the one thing Peak is named for trustworthy.
@@ -62,7 +62,7 @@ Full detail with verification evidence: [AUDIT.md](AUDIT.md) findings 31–34.
 ---
 
 ## v28 — backup nudge, release tooling, process docs
-`d5f2c02` · 2026-07-29 · **not yet pushed**
+`d5f2c02` · 2026-07-29 · **live**
 
 **Added**
 - **Backup nudge.** Prompts for a JSON export once there is history worth losing (≥10 logged
@@ -106,7 +106,7 @@ would have reached nobody.
 ---
 
 ## v27 — reposition around plateau detection; UX audit fixes
-`5f0a417` · 2026-07-29 · **live**
+`5f0a417` · 2026-07-29
 
 This release carries two distinct bodies of work.
 
@@ -119,7 +119,7 @@ This release carries two distinct bodies of work.
 - **Feedback channel** in Settings.
 - Positioning rewritten around plateau detection (README, in-app copy).
 - `worker/` scaffolded — a Cloudflare scan proxy so users don't need their own API key.
-  **Not deployed;** ships in v29.
+  **Not deployed** — see ROADMAP week 3.
 
 ### UX audit — ~30 fixes
 Full itemisation with verification evidence in **[AUDIT.md](AUDIT.md)**. The three that

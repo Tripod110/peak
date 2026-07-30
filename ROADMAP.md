@@ -2,10 +2,11 @@
 
 *Written 2026-07-29. Revisit at every gate below; delete anything that stops being true.*
 
-> **Status — 2026-07-29.** **v27 is live** on GitHub Pages. Four of its five hardening items
-> shipped in it; the fifth (backup nudge) is in **v28**, not yet pushed — it needed its own
-> version because the service worker is cache-first and only drops the old bundle when
-> `CACHE` changes, so an in-place edit to v27 would never have reached anyone.
+> **Status — 2026-07-29.** **v28 is live** on GitHub Pages; **v29 is committed and pending
+> push.** All five v27 hardening items are done. v29 is a correctness release on the north star
+> itself: plateau detection was firing on roughly three of four lifters who were progressing
+> fine, and the service worker was defeating its own cache-busting. Both fixed and verified —
+> see [AUDIT.md](AUDIT.md) findings 31–34.
 > What remains before this counts as *shipped* is not code: instrumentation, and putting it in
 > front of real people. A UX audit also pre-empted two of Week 2's four predicted issues (see
 > notes there), leaving onboarding drop-off and iOS PWA behaviour as the live risks — neither
@@ -41,12 +42,12 @@ reachable.
 
 - [x] **v27 hardening** (see `#v27` below) — pinned the Gemini model, killed thinking tokens,
       requested persistent storage, added a feedback channel *(live in v27)* and a backup
-      nudge *(v28, pending push)*. All five done.
+      nudge *(v28)*. All five done and live.
 - [ ] **Instrumentation.** Right now there is zero visibility. Minimum viable: a
       privacy-respecting counter (self-hosted Umami, or a Worker endpoint) for installs,
       tab views, first workout logged, and day-7 return. No personal data, no third-party
       trackers — it would contradict the privacy promise in the README.
-- [x] **Ship it.** v27 is live on GitHub Pages. *(v28 still to push — follow
+- [x] **Ship it.** v27 and v28 are live on GitHub Pages. *(v29 still to push — follow
       [SHIPPING.md](SHIPPING.md), including the real-device pass, which has never been run.)*
 - [ ] **Get 10–20 humans on it.** Friends, gym floor, one lifting Discord. Watch at least
       three of them do onboarding *without helping them*. That hour is worth more than a
@@ -81,7 +82,7 @@ reason.
 ---
 
 ## Week 3 — Remove the scan cliff
-**Aug 13 → Aug 19** · release **v29**
+**Aug 13 → Aug 19** · release **v30**
 
 - [ ] **Cloudflare Worker scan proxy** goes live. Key server-side, prompt and schema
       server-side, so the endpoint can only ever return food JSON.
