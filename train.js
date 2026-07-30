@@ -245,37 +245,98 @@ const PLATEAU_TIPS = [
   'Swap in a close variation for 4 weeks (e.g. pause reps, incline, front squat).'
 ];
 
-/* An exercise is plateaued when its best est. 1RM was first reached ≥3 sessions
-   and ≥21 days ago and hasn't been beaten since (min 4 sessions logged). */
+/* ---------- plateau detection ----------
+   This is the whole product, so a false positive is the most expensive bug the
+   app can have: it tells someone who is progressing to cut their weight.
+
+   A lift is plateaued when ALL of these hold:
+     1. still in the program   — trained within DORMANT_DAYS
+     2. enough evidence        — ≥4 sessions since the last training break
+     3. no PR                  — best e1RM first hit ≥3 sessions and ≥21 days ago
+     4. not currently climbing — recent sessions are no better than the ones before
+
+   (2) and (4) exist because (3) alone is fooled in three common ways:
+     · an abandoned lift stays flagged forever, since the old rule compared the
+       PR date to the last session rather than to today
+     · one fluke PR poisons a lift permanently — a lifter adding 5 lb every
+       session sits under an outlier from months ago and reads as "stalled"
+     · returning from a layoff looks identical to stalling, because the old best
+       is still unbeaten while you rebuild toward it */
+
+const DORMANT_DAYS = 21;   // not trained this recently → dormant, not stalled
+const LAYOFF_DAYS = 28;    // a gap this long resets the evidence window
+
+/* history since the most recent training break — you cannot have plateaued in
+   the three sessions since coming back from six weeks off */
+function historySinceLayoff(hist) {
+  let start = 0;
+  for (let i = 1; i < hist.length; i++) {
+    if (daysBetween(hist[i - 1].date, hist[i].date) >= LAYOFF_DAYS) start = i;
+  }
+  return hist.slice(start);
+}
+
+/* is the lift's recent best better than the block before it? */
+function isClimbing(hist) {
+  const w = Math.min(3, Math.floor(hist.length / 2));
+  if (w < 2) return false;                       // too little data to tell
+  const best = a => Math.max(...a.map(h => h.bestE1rm));
+  const recent = best(hist.slice(-w));
+  const prior = best(hist.slice(-2 * w, -w));
+  return recent > prior * 1.01;                  // >1% ignores rounding noise
+}
+
 function detectPlateaus() {
   const names = new Set();
   getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
   const flags = [];
   names.forEach(name => {
-    const hist = exerciseHistory(name);
+    const full = exerciseHistory(name);
+    if (!full.length) return;
+
+    // 1. dormant lifts are not stalled — they're not being trained
+    const idleDays = daysBetween(full[full.length - 1].date, todayKey());
+    if (idleDays > DORMANT_DAYS) return;
+
+    // 2. only judge what happened since the last real break
+    const hist = historySinceLayoff(full);
     if (hist.length < 4) return;
+
     const max = Math.max(...hist.map(h => h.bestE1rm));
     if (max <= 0) return; // bodyweight-only exercises aren't plateau-tracked
+
+    // 4. still climbing → not stalled, whatever the all-time best says
+    if (isClimbing(hist)) return;
+
+    // 3. no PR for long enough
     const firstBestIdx = hist.findIndex(h => h.bestE1rm >= max - 0.01);
     const sessionsSince = hist.length - 1 - firstBestIdx;
     const daysSince = daysBetween(hist[firstBestIdx].date, hist[hist.length - 1].date);
     if (sessionsSince >= 3 && daysSince >= 21) {
-      flags.push({ name, sessions: sessionsSince, days: daysSince, tip: PLATEAU_TIPS[Math.abs(hashCode(name)) % PLATEAU_TIPS.length] });
+      flags.push({
+        name, sessions: sessionsSince, days: daysSince,
+        sinceLayoff: hist.length !== full.length,
+        tip: PLATEAU_TIPS[Math.abs(hashCode(name)) % PLATEAU_TIPS.length]
+      });
     }
   });
   return flags;
 }
 function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; } return h; }
 
-/* Same eligibility test as detectPlateaus: ≥4 sessions and a weighted best.
-   Surfaced when nothing is flagged so the alert engine is visible before it
-   ever has cause to fire — otherwise a new user waits 3 weeks to learn it exists. */
+/* Same eligibility gates as detectPlateaus, so "watching N lifts" only ever
+   counts lifts that could actually be flagged. Surfaced when nothing is flagged
+   so the alert engine is visible before it ever has cause to fire — otherwise a
+   new user waits three weeks to learn it exists. */
 function plateauWatchCount() {
   const names = new Set();
   getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
   let n = 0;
   names.forEach(name => {
-    const hist = exerciseHistory(name);
+    const full = exerciseHistory(name);
+    if (!full.length) return;
+    if (daysBetween(full[full.length - 1].date, todayKey()) > DORMANT_DAYS) return;
+    const hist = historySinceLayoff(full);
     if (hist.length >= 4 && Math.max(...hist.map(h => h.bestE1rm)) > 0) n++;
   });
   return n;
@@ -288,7 +349,7 @@ function plateauWatchRow() {
     <span class="a-ico">✓</span>
     <div class="a-body"><b>${n ? `Watching ${n} lift${n > 1 ? 's' : ''} — everything progressing` : 'Plateau watch is on'}</b>
     ${n
-      ? 'Peak flags any lift that goes 3 sessions and 21 days without a PR, then deloads it and walks you back up.'
+      ? 'Peak flags a lift that goes 3 sessions and 21 days without a PR — but not while it is still climbing, and not after time off. Then it deloads once and walks you back up.'
       : 'Log a lift 4 times and Peak starts tracking it for plateaus — you get told the moment it stalls, and what to do about it.'}</div>
   </div>`;
 }
@@ -625,13 +686,21 @@ function renderTrainHome() {
   return `
   ${plateaus.map(pl => {
     const dl = nextTarget(pl.name, findTargetFor(pl.name), stalledNames);
-    const body = dl.type === 'deload' || dl.rebuilding ? dl.text : pl.tip;
+    /* The prescription is always concrete, so lead with it. A generic tip only
+       earns space when the prescription is "hold and finish the sets", which on
+       its own doesn't tell you how to break out. Never show a tip that can
+       contradict the plan row — "drop the weight 10%" beside "▲ go up to 165"
+       is the app arguing with itself. */
+    const body = dl.type === 'add_reps' && !dl.rebuilding ? `${dl.text} ${pl.tip}` : dl.text;
+    const heading = dl.rebuilding
+      ? `${esc(pl.name)} — climbing back after a deload`
+      : dl.type === 'add_weight'
+        ? `${esc(pl.name)} — ${pl.sessions} sessions at the same weight`
+        : `Plateau: ${esc(pl.name)} — no PR in ${pl.sessions} sessions (${pl.days} days)`;
     return `
     <div class="alert">
-      <span class="a-ico">${dl.rebuilding ? '▲' : '⚠'}</span>
-      <div class="a-body"><b>${dl.rebuilding
-        ? `${esc(pl.name)} — climbing back after a deload`
-        : `Plateau: ${esc(pl.name)} — no PR in ${pl.sessions} sessions (${pl.days} days)`}</b>
+      <span class="a-ico">${dl.rebuilding || dl.type === 'add_weight' ? '▲' : '⚠'}</span>
+      <div class="a-body"><b>${heading}</b>
       ${esc(body)}${esc(plateauVolumeNote(pl.name))}</div>
     </div>`;
   }).join('')}

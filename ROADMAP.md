@@ -148,9 +148,11 @@ Sequenced by whatever month-2 feedback actually demands. Current best guesses:
 - **iOS App Store** via Capacitor. More work than Play, but iOS is where fitness spending
   concentrates.
 - **Custom program builder** — the most-requested feature in every training app, ever.
-- **Deeper plateau intelligence.** The current rule (3 sessions + 21 days, no e1RM PR) is a
-  good v1. Obvious upgrades: rep-quality and volume trend as inputs, per-lift sensitivity,
-  distinguishing "stalled" from "recovering from a bad week."
+- **Deeper plateau intelligence.** *Partly done in v29* — the rule now also requires the lift to
+  be currently trained, resets its evidence window after a layoff, and stays quiet while the
+  lift is climbing, which is what "distinguishing stalled from recovering" amounted to. Still
+  open: rep-quality as an input, per-lift sensitivity, and using volume trend (not just e1RM) as
+  a progress signal. See [D-12](DECISIONS.md#d-12).
 - **Apple Health / Google Fit import** for bodyweight and sleep.
 
 **Gate — end of Month 6 (Jan 2027), the honest one:**

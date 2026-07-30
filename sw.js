@@ -12,12 +12,12 @@
    The previous build was network-first for everything, which fixed stale updates
    at the cost of a network timeout on every single launch offline or on 1 bar.
 */
-const CACHE = 'peak-v28';
+const CACHE = 'peak-v29';
 const SHELL = [
   './', 'index.html',
-  'style.css?v=28',
-  'store.js?v=28', 'charts.js?v=28', 'quips.js?v=28', 'api.js?v=28',
-  'food.js?v=28', 'train.js?v=28', 'sleep.js?v=28', 'grocery.js?v=28', 'app.js?v=28',
+  'style.css?v=29',
+  'store.js?v=29', 'charts.js?v=29', 'quips.js?v=29', 'api.js?v=29',
+  'food.js?v=29', 'train.js?v=29', 'sleep.js?v=29', 'grocery.js?v=29', 'app.js?v=29',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 
@@ -74,15 +74,18 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // cache-first for everything else, with a background refresh so a changed file
-  // under an unchanged URL still lands by the next launch
+  /* Cache-first for everything else — but matched EXACTLY, query included.
+     Using ignoreSearch here was a serious bug: it strips the version query, so
+     every version of a file collapsed onto a single cache entry and a release
+     could serve the PREVIOUS build's script in response to a request for the new
+     one. That defeated the entire cache-busting mechanism and could hand out a
+     mixed bundle — some files new, some old — on the first load after a deploy.
+
+     An exact miss is exactly what we want on a version bump: fall through to the
+     network once, cache under the new URL, and let activate() drop the old cache.
+     No background revalidation either — a versioned URL's content never changes,
+     so re-fetching on every hit is pure waste. */
   e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then(hit => {
-      if (hit) {
-        fetch(new Request(req, { cache: 'reload' })).then(res => putIfOk(req, res)).catch(() => {});
-        return hit;
-      }
-      return fetch(req).then(res => putIfOk(req, res));
-    })
+    caches.match(req).then(hit => hit || fetch(req).then(res => putIfOk(req, res)))
   );
 });

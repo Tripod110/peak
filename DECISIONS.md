@@ -19,6 +19,7 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-09](#d-09) | Cardio never fills a lifting slot | 🟢 Decided · v27 |
 | [D-10](#d-10) | No build step | 🟢 Decided · v1 |
 | [D-11](#d-11) | Unmatched exercises fail loud, not to zero | 🟢 Decided · v27 |
+| [D-12](#d-12) | A plateau requires four gates, not one | 🟢 Decided · v29 |
 
 ---
 
@@ -110,8 +111,14 @@ offline or on weak signal — a gym-floor app.
 references and must never be stale. Versioned assets are cache-first, because their URL
 changes whenever their content does, so a cache hit is always correct.
 
-**Accepted cost:** an edit to a same-URL asset lands on the *second* launch. This is why
-[SHIPPING.md](SHIPPING.md) says hard-reload twice, and why [D-05a] below exists.
+**Accepted cost:** an edit that does *not* change the URL never lands, which is why every
+release must bump the version — see the corollary below.
+
+**Amended v29.** The original implementation matched the cache with `ignoreSearch: true`, which
+strips `?v=NN` — so every version of a file collapsed onto one cache entry and a bump could
+serve the previous build's script in response to a request for the new one, or hand out a mixed
+bundle. Matching is now exact. A bump is therefore always a cache miss, goes to the network,
+and lands on the *first* load.
 
 **D-05a, corollary:** a release must bump `CACHE`. `activate()` only clears old caches when the
 name changes, so an in-place edit reaches nobody. This bit us for real — the v28 backup nudge
@@ -195,3 +202,26 @@ was the problem, not the coverage.
 
 **Open risk:** this only works if users tag. Tracked in [ROADMAP.md](ROADMAP.md) week 2 as
 something to observe rather than assume.
+
+## <a name="d-12"></a>D-12 · A plateau requires four gates, not one
+**🟢 Decided.** v29 · `train.js` · `detectPlateaus`
+
+"Best e1RM unbeaten for ≥3 sessions and ≥21 days" fired on roughly three out of four plausible
+training histories — an abandoned lift, a lift sitting under one fluke PR while adding weight
+every session, and a lift rebuilding after time off. See [AUDIT.md](AUDIT.md) finding 31.
+
+**Decided:** a lift is stalled only if it is *(1)* still being trained (within 21 days),
+*(2)* has ≥4 sessions since the last ≥28-day break, *(3)* has no PR in ≥3 sessions and ≥21 days,
+and *(4)* is not currently climbing (recent 3-session best ≤ prior 3-session best × 1.01).
+
+**Why this bias:** on the app's defining feature, a false positive costs far more than a false
+negative. Telling a progressing lifter to deload is actively harmful and unrecoverable trust;
+missing a plateau for one extra session costs almost nothing, because the next session will
+catch it. All four gates are therefore tuned to stay quiet when uncertain.
+
+**Rejected:** tuning the thresholds on the single existing rule. The rule wasn't mis-tuned, it
+was missing context — no amount of threshold adjustment distinguishes "stalled" from "just came
+back from holiday."
+
+**Rejected:** persisting a per-lift state machine. All four gates are derived from history, so
+there is nothing to migrate and existing users' data is reinterpreted correctly on upgrade.

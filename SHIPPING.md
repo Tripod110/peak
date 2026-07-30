@@ -71,10 +71,11 @@ node tools/release.mjs 28 && git add -A && git commit -m "v28: <what changed>" &
 
 Pages takes 30–60 seconds. Then:
 
-- [ ] Hard-reload the live URL twice. **Twice matters.** The service worker is cache-first for
-      versioned assets, so the first load can still serve the previous bundle and the new one
-      lands on the second. This is intentional (it's what makes cold starts on gym wifi
-      instant) but it means "I pushed and nothing changed" is expected once.
+- [ ] Reload the live URL **once**. The new version should be live immediately — versioned
+      assets are cached under their exact `?v=NN` URL, so a bump is always a cache miss and
+      goes to the network. If you see the *old* version, something is wrong; don't shrug it off
+      as caching. (Before v29 this genuinely took two loads and could serve a mixed bundle —
+      the service worker matched with `ignoreSearch`, which stripped the version query.)
 - [ ] Settings shows the new version number
 - [ ] DevTools → Application → Cache Storage shows **only** `peak-vNN`; no older caches
 - [ ] Open the *installed* PWA on a phone and confirm it updated too — installed instances

@@ -185,6 +185,81 @@ saying "lb" after a switch to kg. Now stores the data and renders at display tim
 
 ---
 
+---
+
+## Follow-up findings — 2026-07-29, fixed in v29
+
+Found by stress-testing the plateau engine after v28 shipped, against seven hand-built
+training histories rather than one seeded month. The audit above tested whether the app's
+features worked; this pass asked whether the **headline feature is right**, and found it was
+mostly wrong.
+
+### 31. Plateau detection had a ~75% false-positive rate
+`train.js` · `detectPlateaus`, `historySinceLayoff`, `isClimbing`, `DORMANT_DAYS`, `LAYOFF_DAYS`
+
+Three distinct ways the old rule ("best e1RM unbeaten for ≥3 sessions and ≥21 days") fired on
+lifters who were doing fine. Each is independently sufficient to destroy trust in the one
+feature the product is named for.
+
+| Case | Old behaviour | Why it was wrong |
+|---|---|---|
+| Lift not trained for 150 days | flagged forever | The rule compared the PR date to the *last session*, never to today. An abandoned lift stayed on the Train home permanently. |
+| One fluke `185×8`, then `150→180 lb` over 7 sessions | "no PR in 7 sessions" → deload to 160 | A single outlier PR poisons a lift permanently. This tells the best-progressing lifter in the app to cut weight. |
+| 6 weeks off, back and rebuilding `225→245` | "stalled, 93 days" | Returning from a layoff is indistinguishable from stalling if you only look at the all-time best. |
+
+**Fix.** Three added gates: **dormancy** (not trained within 21 days → dormant, not stalled),
+**layoff window** (evidence resets after a ≥28-day gap, so you can't have plateaued in the three
+sessions since returning), and **climbing** (recent 3-session best > prior 3-session best by
+>1% → not stalled, whatever the all-time max says).
+
+**Verified.** Seven scenarios, all passing: the three false positives above now stay silent;
+a flat 7-session lift, a lift stalled *after* a layoff, and a lift failing to complete its sets
+all still fire. The v27 deload behaviour is unchanged — `145▼ 150▲ 155▲ 160▲ 165▲ 170▲ 175▲ 180▲`,
+exactly one cut, then climbing past the old best.
+
+### 32. The plateau alert could contradict the plan row
+`train.js` · `renderTrainHome`
+
+A lift completing all prescribed sets at a repeated weight is flagged (e1RM is flat) while the
+prescription correctly says "go up." The alert then showed a random tip from `PLATEAU_TIPS` —
+so the app could print *"Drop the weight ~10%"* directly above *"▲ go up to 165 lb"*.
+
+**Fix.** The alert leads with the actual prescription, which is always concrete. A generic tip
+is only appended when the prescription is "hold and finish the sets" — the one case where it
+adds something. The heading also distinguishes "5 sessions at the same weight" from a true
+no-PR plateau.
+
+### 33. The service worker defeated its own cache-busting
+`sw.js` · fetch handler
+
+The cache-first path matched with `ignoreSearch: true`, which **strips the `?v=NN` query**. Every
+version of a file therefore collapsed onto a single cache entry, and a release could serve
+`app.js?v=28`'s content in response to a request for `app.js?v=29` — or hand out a *mixed*
+bundle, some files new and some old, which is worse than being uniformly stale.
+
+Caught in development: the version reported `v29` while the files on disk said `v30`. It also
+means the "hard-reload twice" instruction in `SHIPPING.md` was documenting a bug, not a design
+trade-off.
+
+**Fix.** Exact matching, so a bump is always a cache miss and goes to the network.
+Background revalidation dropped too — a versioned URL's content never changes, so re-fetching
+on every hit was pure waste.
+
+**Verified.** With a warm `peak-v29` cache, bumping to v33 and reloading **once** reported
+`v33`, and `peak-v29` was gone. Previously this needed two loads.
+
+### 34. `tools/release.mjs` rewrote prose
+`tools/release.mjs` · `ASSET_REF`
+
+The bump used a blanket `/\?v=\d+/g` replace, so it edited any text that mentioned a version
+query — including the code comment explaining finding 33, turning it into a sentence that
+compared a version to itself. It also inflated the reference count from 22 to 24.
+
+**Fix.** Only quoted asset references (`'app.js?v=28'`, `"style.css?v=28"`) are matched.
+**Verified.** A bump now leaves the surrounding comment untouched and the count stable at 22.
+
+---
+
 ## Not verified
 
 **Real-device behaviour — the one open item.** Every layout and tap-target claim above was

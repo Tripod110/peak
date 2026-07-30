@@ -18,6 +18,49 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v29 — the plateau engine gets it right
+`<pending>` · 2026-07-29
+
+The headline feature was wrong about three quarters of the time. This release is entirely
+about making the one thing Peak is named for trustworthy.
+
+**Fixed — plateau detection false positives** (`train.js` · `detectPlateaus`)
+
+Three ways the old rule fired on lifters who were progressing fine:
+
+- **An abandoned lift stayed flagged forever.** The rule compared the PR date to the last
+  session, never to today — so a lift untouched for five months still showed "stalled."
+- **One fluke PR poisoned a lift permanently.** A lifter with a single outlier `185×8`, then
+  `150 → 180 lb` across seven sessions, was told "no PR in 7 sessions" and prescribed a
+  deload *down* to 160. The best-progressing lift in the app got the worst advice.
+- **Returning from a layoff looked identical to stalling.** Six weeks off, back and rebuilding
+  `225 → 245`, reported as "stalled, 93 days."
+
+Now gated on four conditions: still being trained (21 days), enough evidence since the last
+≥28-day break, no PR in ≥3 sessions and ≥21 days, and not currently climbing. Verified against
+seven training histories — the three cases above stay silent, and a flat lift, a lift stalled
+*after* a layoff, and a lift failing its sets all still fire. See
+[D-12](DECISIONS.md#d-12) for why this is deliberately biased toward silence.
+
+**Fixed — the alert could contradict the plan row.** A lift completing all its sets is flagged
+(e1RM is flat) while the prescription correctly says go up; the alert then showed a random tip,
+so the app could print "Drop the weight ~10%" above "▲ go up to 165 lb." The alert now leads
+with the actual prescription.
+
+**Fixed — the service worker defeated its own cache-busting.** The cache-first path matched with
+`ignoreSearch: true`, stripping `?v=NN`, so every version collapsed onto one cache entry and a
+release could serve the previous build's script — or a *mixed* bundle. Now matched exactly, so a
+bump lands on the **first** load. This also means the "hard-reload twice" step in `SHIPPING.md`
+was documenting a bug; it's gone.
+
+**Fixed — `tools/release.mjs` rewrote prose.** A blanket `?v=\d+` replace edited any text
+mentioning a version query, including the comment explaining the bug above. Now only quoted
+asset references are touched.
+
+Full detail with verification evidence: [AUDIT.md](AUDIT.md) findings 31–34.
+
+---
+
 ## v28 — backup nudge, release tooling, process docs
 `d5f2c02` · 2026-07-29 · **not yet pushed**
 

@@ -27,15 +27,31 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = f => readFileSync(join(ROOT, f), 'utf8');
 const write = (f, s) => writeFileSync(join(ROOT, f), s);
 
+/* Only ever match a version query inside a quoted asset reference —
+   "app.js?v=28" or 'app.js?v=28'. A blanket /\?v=\d+/ also rewrites prose, which
+   really happened: it silently edited a code comment that mentioned ?v=NN,
+   turning the explanation into nonsense and inflating the reference count. */
+const ASSET_REF = /(["'])([\w.\/-]+\.(?:js|css))\?v=(\d+)\1/g;
+
+function refs(src) {
+  return [...src.matchAll(ASSET_REF)].map(m => ({ file: m[2], version: m[3] }));
+}
+function bumpRefs(src, next) {
+  return src.replace(ASSET_REF, (_, q, file) => `${q}${file}?v=${next}${q}`);
+}
+
 function currentVersions() {
   const app = read('app.js'), html = read('index.html'), sw = read('sw.js');
+  const htmlRefs = refs(html), swRefs = refs(sw);
   return {
     appVersion: (app.match(/const APP_VERSION = 'v(\d+)'/) || [])[1] ?? null,
-    htmlAssets: [...new Set([...html.matchAll(/\?v=(\d+)/g)].map(m => m[1]))],
-    htmlCount: [...html.matchAll(/\?v=(\d+)/g)].length,
+    htmlAssets: [...new Set(htmlRefs.map(r => r.version))],
+    htmlCount: htmlRefs.length,
+    htmlFiles: htmlRefs.map(r => r.file),
     swCache: (sw.match(/const CACHE = 'peak-v(\d+)'/) || [])[1] ?? null,
-    swShell: [...new Set([...sw.matchAll(/\?v=(\d+)/g)].map(m => m[1]))],
-    swCount: [...sw.matchAll(/\?v=(\d+)/g)].length
+    swShell: [...new Set(swRefs.map(r => r.version))],
+    swCount: swRefs.length,
+    swFiles: swRefs.map(r => r.file)
   };
 }
 
@@ -50,10 +66,8 @@ function check() {
   console.log(`sw.js      SHELL ?v=     ${v.swShell.map(x => 'v' + x).join(', ')}  (${v.swCount} refs)`);
 
   // the SHELL list must name every script index.html loads, or the pre-cache misses files
-  const htmlFiles = [...read('index.html').matchAll(/(?:src|href)="([\w.]+\.(?:js|css))\?v=\d+"/g)].map(m => m[1]);
-  const shellFiles = [...read('sw.js').matchAll(/'([\w.]+\.(?:js|css))\?v=\d+'/g)].map(m => m[1]);
-  const missing = htmlFiles.filter(f => !shellFiles.includes(f));
-  const extra = shellFiles.filter(f => !htmlFiles.includes(f));
+  const missing = v.htmlFiles.filter(f => !v.swFiles.includes(f));
+  const extra = v.swFiles.filter(f => !v.htmlFiles.includes(f));
 
   if (missing.length) console.log(`\n✗ in index.html but not pre-cached by sw.js: ${missing.join(', ')}`);
   if (extra.length) console.log(`\n✗ pre-cached by sw.js but not loaded by index.html: ${extra.join(', ')}`);
@@ -77,10 +91,9 @@ function bump(next) {
   }
 
   write('app.js', read('app.js').replace(/const APP_VERSION = 'v\d+'/, `const APP_VERSION = 'v${next}'`));
-  write('index.html', read('index.html').replace(/\?v=\d+/g, `?v=${next}`));
-  write('sw.js', read('sw.js')
-    .replace(/const CACHE = 'peak-v\d+'/, `const CACHE = 'peak-v${next}'`)
-    .replace(/\?v=\d+/g, `?v=${next}`));
+  write('index.html', bumpRefs(read('index.html'), next));
+  write('sw.js', bumpRefs(
+    read('sw.js').replace(/const CACHE = 'peak-v\d+'/, `const CACHE = 'peak-v${next}'`), next));
 
   console.log(`Bumped v${from} → v${next}\n`);
   return check();
