@@ -19,7 +19,7 @@ See [SHIPPING.md](SHIPPING.md).
 ---
 
 ## v29 — the plateau engine gets it right
-`<pending>` · 2026-07-29
+`216b66c` · 2026-07-29
 
 The headline feature was wrong about three quarters of the time. This release is entirely
 about making the one thing Peak is named for trustworthy.
