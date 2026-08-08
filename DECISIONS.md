@@ -20,6 +20,8 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-10](#d-10) | No build step | 🟢 Decided · v1 |
 | [D-11](#d-11) | Unmatched exercises fail loud, not to zero | 🟢 Decided · v27 |
 | [D-12](#d-12) | A plateau requires four gates, not one | 🟢 Decided · v29 |
+| [D-13](#d-13) | The API key stays in plaintext; the blast radius shrinks instead | 🟢 Decided · v30 |
+| [D-14](#d-14) | Model ids are discovered from the user's key, not pinned in source | 🟢 Decided · v30 |
 
 ---
 
@@ -225,3 +227,60 @@ back from holiday."
 
 **Rejected:** persisting a per-lift state machine. All four gates are derived from history, so
 there is nothing to migrate and existing users' data is reinterpreted correctly on upgrade.
+
+## <a name="d-13"></a>D-13 · The API key stays in plaintext; the blast radius shrinks instead
+**🟢 Decided.** v30 · `store.js`, `app.js`, `index.html`
+
+The Gemini key sits in `localStorage` under `forge:settings`, unencrypted, and a user
+reasonably asked whether that should be fixed.
+
+**Decided:** it stays in plaintext, and the three ways it actually escaped get closed.
+
+**Why not encrypt it.** Whatever decrypts the key ships to the same device as the ciphertext.
+A passphrase would have to be typed before every scan to avoid being cached somewhere equally
+readable, which trades the app's fastest feature for protection against an attacker who, by
+definition, already runs code on the device — and who would just read the key at `fetch` time
+instead. Encryption here is a claim, not a control, and a false claim is worse than an honest
+label. The UI now states plainly where the key lives and who can read it.
+
+**What was actually fixed** — each is a path the key took *off* the device:
+
+1. **Exported backups carried it.** A backup is the one Peak artefact meant to leave the
+   device — emailed, synced, attached to a bug report. It contained a live credential in
+   every copy. Stripped on export; the file says so; a restore preserves the key already
+   present rather than blanking it.
+2. **Settings rendered it back into the page.** A field pre-filled with a live credential puts
+   it in the DOM, in autofill, and in any screenshot of that screen, for no benefit — nobody
+   edits an API key in place. Replaced with a masked preview plus Replace / Remove.
+3. **Nothing constrained where it could be sent.** A CSP now names
+   `generativelanguage.googleapis.com` as the only host the app may open a connection to, with
+   `script-src 'self'` and no inline scripts. This is the one control that still works if
+   something hostile *is* executing here: the key can be read, but not exfiltrated.
+
+**The real fix remains [D-07](#d-07) / [worker/](worker/README.md)** — a hosted proxy means the
+app holds no key at all. Everything above is what's worth doing while that is unbuilt, and
+none of it is a substitute for it.
+
+## <a name="d-14"></a>D-14 · Model ids are discovered from the user's key, not pinned in source
+**🟢 Decided.** v30 · `api.js`, `store.js`
+
+v27 pinned the scan model to a stable id rather than a `*-latest` alias, to stop Google
+hot-swapping quality and price underneath us. Correct, and insufficient: on 2026-07-09 Google
+made `gemini-2.5-flash` return 404 "no longer available" months ahead of its announced
+2026-10-16 shutdown. A pinned id is still a guess about someone else's roadmap, and the app
+failed with a valid key and no way for the user to understand why.
+
+**Decided:** hard-coded ids are a *seed list only*. The authority on what works is the key
+itself, via `ListModels`. Settings' picker is populated from it, and a 404 mid-scan triggers a
+discover-repoint-retry rather than an error.
+
+**Why not just bump the pin to 3.5.** That fixes today and re-breaks on Google's next
+deprecation, with the same user-visible symptom and the same required app release. The pin is
+the bug class, not the specific version.
+
+**Existing users are not migrated.** 2.5 still works for them until October and may carry
+different free-tier limits than 3.x; moving someone off a model that works for them is its own
+bug. New installs default to `gemini-3.5-flash`, Settings warns when the selected model is
+scheduled for shutdown, and the automatic repoint catches everyone else the moment it matters.
+
+**Kept from v27:** never a `*-latest` alias, and `thinkingBudget: 0` — both still hold.

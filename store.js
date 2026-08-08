@@ -7,11 +7,40 @@
 const _cache = new Map();
 
 /* Scan models. Pinned, never the *-latest aliases — see the migration in getSettings. */
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const MODEL_ALIASES = {
-  'gemini-flash-latest': 'gemini-2.5-flash',
-  'gemini-flash-lite-latest': 'gemini-2.5-flash-lite'
+  'gemini-flash-latest': 'gemini-3.5-flash',
+  'gemini-flash-lite-latest': 'gemini-3.5-flash-lite'
 };
+
+/* The picker's contents before the app has ever asked Google what this key can
+   actually use, and the fallback chain when the configured model 404s. Ordered
+   best-first. Anything hard-coded here is a guess with a shelf life — Google
+   retires models on its own schedule, which is exactly how the 2.5 default
+   broke — so `refreshModelList()` in api.js replaces this with the real list the
+   moment a key is available, and `scanModelOptions()` prefers that. */
+const SCAN_MODELS = [
+  { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash — best quality' },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite — more scans/day' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash — newest' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash — retiring Oct 2026' },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite — retiring Oct 2026' }
+];
+/* Google's announced shutdown for the 2.5 generation is 2026-10-16, and it has
+   already 404'd once before that date. Worth warning about, not worth forcing:
+   silently moving someone off a model that still works for them is its own bug. */
+const RETIRING_MODEL = /^gemini-2\.5-/;
+
+/* models the key really offers, cached from ListModels — [{id, label}] */
+function cachedModelList() { return Store.get('modelList', null); }
+function setCachedModelList(list) { Store.set('modelList', list); }
+/* the real list when we have one, the guess when we don't, always including
+   whatever is currently selected so the picker can never blank itself out */
+function scanModelOptions(current) {
+  const list = (cachedModelList() || SCAN_MODELS).slice();
+  if (current && !list.some(m => m.id === current)) list.unshift({ id: current, label: current });
+  return list;
+}
 
 const Store = {
   get(key, fallback) {
@@ -35,22 +64,46 @@ const Store = {
     _cache.clear();
   },
 
+  /* The Gemini key is a live credential, and a backup is the one piece of Peak
+     data that deliberately leaves the device — emailed to yourself, dropped in
+     cloud storage, attached to a bug report. None of those are places a working
+     API key should end up, so it is stripped on the way out. Everything else in
+     settings is preferences and travels normally. */
   exportAll() {
     const out = {};
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k.startsWith('forge:')) out[k] = localStorage.getItem(k);
+      if (!k.startsWith('forge:')) continue;
+      let v = localStorage.getItem(k);
+      if (k === 'forge:settings') {
+        try {
+          const s = JSON.parse(v);
+          if (s && s.apiKey) { s.apiKey = ''; v = JSON.stringify(s); }
+        } catch { /* unparseable settings: ship it as-is rather than lose it */ }
+      }
+      out[k] = v;
     }
-    return JSON.stringify({ app: 'peak', version: 2, exported: new Date().toISOString(), data: out }, null, 2);
+    return JSON.stringify({
+      app: 'peak', version: 2, exported: new Date().toISOString(),
+      note: 'Your Gemini API key is deliberately not included in this file.',
+      data: out
+    }, null, 2);
   },
   /* A restore is a replacement, not a merge — otherwise keys absent from an older
-     backup survive and you end up with a hybrid of two states. */
+     backup survive and you end up with a hybrid of two states. The one exception
+     is the API key: backups no longer carry it, so replacing settings wholesale
+     would silently switch scanning off on a device that was working. */
   importAll(json) {
     const parsed = JSON.parse(json);
     if (!parsed || (parsed.app !== 'peak' && parsed.app !== 'forge') || !parsed.data) throw new Error('Not a Peak backup file');
+    const keepKey = getSettings().apiKey;
     Store.wipeAll();
     Object.entries(parsed.data).forEach(([k, v]) => localStorage.setItem(k, v));
     _cache.clear();
+    if (keepKey) {
+      const s = Store.get('settings', {});
+      if (!s.apiKey) { s.apiKey = keepKey; Store.set('settings', s); }
+    }
   }
 };
 

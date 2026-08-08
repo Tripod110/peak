@@ -2,6 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- The Gemini API key lives in localStorage, which means any script that runs
+     here can read it. It can't be encrypted away (whatever decrypts it ships to
+     the same device), so the useful control is the one that stops a stolen value
+     from going anywhere: connect-src names the only host this app is ever
+     allowed to talk to. script-src 'self' is why the service-worker registration
+     moved into app.js — there are no inline scripts left, so an injected one
+     cannot execute. 'unsafe-inline' remains only for style, which cannot run code. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob:;
+  connect-src 'self' https://generativelanguage.googleapis.com;
+  form-action 'none';
+  base-uri 'none';
+  object-src 'none'">
 <!-- no user-scalable=no: blocking pinch-zoom fails WCAG 1.4.4 and there is no
      good reason for it here — viewport-fit=cover is what the edge-to-edge
      layout actually needs. -->
@@ -16,7 +32,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Peak">
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 
@@ -47,19 +63,14 @@
 <div id="modal-root"></div>
 <div id="toast-root"></div>
 
-<script src="store.js?v=29"></script>
-<script src="charts.js?v=29"></script>
-<script src="quips.js?v=29"></script>
-<script src="api.js?v=29"></script>
-<script src="food.js?v=29"></script>
-<script src="train.js?v=29"></script>
-<script src="sleep.js?v=29"></script>
-<script src="grocery.js?v=29"></script>
-<script src="app.js?v=29"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
-}
-</script>
+<script src="store.js?v=30"></script>
+<script src="charts.js?v=30"></script>
+<script src="quips.js?v=30"></script>
+<script src="api.js?v=30"></script>
+<script src="food.js?v=30"></script>
+<script src="train.js?v=30"></script>
+<script src="sleep.js?v=30"></script>
+<script src="grocery.js?v=30"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>

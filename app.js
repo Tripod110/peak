@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v29';
+const APP_VERSION = 'v30';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -70,12 +70,30 @@ function backupBanner() {
     </div></div></div>`;
 }
 
-/* The document scrolls naturally (edge-to-edge flow layout). After the keyboard
-   closes, snap back to the top so a mobile keyboard can't leave the page panned. */
+/* The document scrolls naturally (edge-to-edge flow layout), and opening the
+   mobile keyboard scrolls the page to bring the focused field into view. When it
+   closes, that pan has to be undone or the layout is left sitting at an offset
+   nothing is using any more.
+
+   This used to undo it by scrolling to 0, which is only correct if you were at
+   the top when you started typing. In the gym you are not: a set halfway down a
+   session means every ✓ and every weight entry threw you back to the top of the
+   workout and you had to scroll down again. Remember where the page actually was
+   before the field took focus, and put it back there. */
+let _preFocusScroll = null;
+const isField = el => !!el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+
+document.addEventListener('focusin', e => {
+  // only the first field of a run: tabbing between inputs must not re-record the
+  // keyboard-adjusted position as if it were the resting one
+  if (isField(e.target) && _preFocusScroll === null) _preFocusScroll = window.scrollY || 0;
+});
 function snapViewport() {
-  const ae = document.activeElement;
-  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return; // keyboard still open
-  window.scrollTo(0, 0);
+  if (isField(document.activeElement)) return;   // keyboard still open
+  if (_preFocusScroll === null) return;          // nothing panned it — leave the page alone
+  const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  window.scrollTo(0, Math.min(_preFocusScroll, max));
+  _preFocusScroll = null;
 }
 document.addEventListener('focusout', () => setTimeout(snapViewport, 60));
 
@@ -99,6 +117,7 @@ const App = {
   scanResult: null,
   grocSection: 'staples',
   trainView: 'home',
+  trainDay: null,        // null = whichever day the template has queued next
   todayView: 'home',
   foodView: 'home',
   rest: null,
@@ -839,6 +858,45 @@ function buildProfileFromOb() {
 }
 
 /* ---------- settings ---------- */
+
+/* enough to recognise which key is loaded, not enough to use */
+function maskKey(k) {
+  const s = String(k || '');
+  return s.length <= 10 ? '••••' : s.slice(0, 6) + '…' + s.slice(-4);
+}
+function keyRowHtml(apiKey) {
+  return apiKey
+    ? `<div class="key-set">🔑 ${esc(maskKey(apiKey))}</div>
+       <button class="btn small" data-action="replace-key">Replace</button>
+       <button class="btn small ghost danger" data-action="clear-key">Remove</button>`
+    : `<input id="set-key" type="password" value="" placeholder="AIza…" autocomplete="off" spellcheck="false">`;
+}
+
+/* Ask Google what this key can do, and say so plainly. This is the one control
+   that can diagnose "my key works but scanning says the model is gone" without
+   the user knowing anything about model retirement schedules. */
+async function testApiKey() {
+  const out = document.getElementById('key-status');
+  const field = document.getElementById('set-key');
+  const key = (field && field.value.trim()) || getSettings().apiKey;
+  if (!key) { if (out) { out.style.color = 'var(--warning)'; out.textContent = 'Add a key first'; } return; }
+  if (out) { out.style.color = 'var(--muted)'; out.textContent = 'Checking…'; }
+  try {
+    const list = await fetchModelList(key);
+    if (!list.length) throw new Error('That key works, but offers no scan-capable models.');
+    setCachedModelList(list);
+    const sel = document.getElementById('set-model');
+    if (sel) {
+      const current = sel.value;
+      const keep = list.some(m => m.id === current) ? current : list[0].id;
+      sel.innerHTML = list.map(m => `<option value="${esc(m.id)}" ${m.id === keep ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
+    }
+    if (out) { out.style.color = CHART.good; out.textContent = `✓ Key works · ${list.length} models`; }
+  } catch (e) {
+    if (out) { out.style.color = 'var(--critical)'; out.textContent = e.message; }
+  }
+}
+
 function openSettingsModal() {
   const s = getSettings();
   const p = getProfile();
@@ -859,16 +917,32 @@ function openSettingsModal() {
     <div class="chart-note">Everything is stored metric, so switching back and forth never changes your data.</div>
 
     <label>Google Gemini API key (for AI meal scanning — free)</label>
-    <div class="key-row">
-      <input id="set-key" type="password" value="${esc(s.apiKey)}" placeholder="AIza…" autocomplete="off">
+    ${/* The stored key is never written back into the page. A field pre-filled
+          with a live credential puts it in the DOM, in autofill, and in any
+          screenshot of this screen — for no benefit, since nobody edits an API
+          key in place. Show that one is set, and offer to replace it. */ ''}
+    <div id="key-row" class="key-row">${keyRowHtml(s.apiKey)}</div>
+    <div class="row mt">
+      <button class="btn small" data-action="test-key">Test key &amp; refresh models</button>
+      <span class="small" id="key-status"></span>
     </div>
-    <div class="chart-note">Free: aistudio.google.com/apikey → sign in with Google → Create API key. Stored only on this device.</div>
+    <div class="chart-note">
+      Free: aistudio.google.com/apikey → sign in with Google → Create API key.<br>
+      Stored in this browser's local storage, unencrypted — anything that can run
+      JavaScript on this device can read it. It is never sent anywhere except
+      Google, and it is deliberately left out of exported backups. Treat it as
+      disposable: if you're unsure, delete it in AI Studio and make a new one.
+    </div>
 
     <label>Scan model</label>
     <select id="set-model">
-      <option value="gemini-2.5-flash" ${s.model === 'gemini-2.5-flash' ? 'selected' : ''}>Gemini 2.5 Flash — best quality (free)</option>
-      <option value="gemini-2.5-flash-lite" ${s.model === 'gemini-2.5-flash-lite' ? 'selected' : ''}>Gemini 2.5 Flash-Lite — more scans/day (free)</option>
+      ${scanModelOptions(s.model).map(m => `
+        <option value="${esc(m.id)}" ${s.model === m.id ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
     </select>
+    <div class="chart-note">${cachedModelList()
+      ? 'This list came from your key, so everything in it works.'
+      : 'Google retires models on its own schedule. Tap “Test key” above to replace this list with what your key can actually run.'}${
+      RETIRING_MODEL.test(s.model) ? ' <span style="color:var(--warning)">Your current model is scheduled for shutdown in October 2026 — Peak will switch you automatically when it goes.</span>' : ''}</div>
 
     <div class="grid-2">
       <div><label>Default rest (seconds)</label><input id="set-rest" type="number" inputmode="numeric" value="${s.restSec}"></div>
@@ -964,7 +1038,14 @@ function saveSettings() {
   const s = getSettings();
   const prevUnits = s.units;
   s.units = document.querySelector('#set-units button.on')?.dataset.v || 'imperial';
-  s.apiKey = document.getElementById('set-key').value.trim();
+  /* The key field is only rendered when there is no key, or when Replace was
+     tapped. No field means "keep what's stored" — reading a missing element's
+     value would delete a working key every time someone changed their goal. */
+  const keyField = document.getElementById('set-key');
+  if (keyField) {
+    const typed = keyField.value.trim();
+    if (typed) s.apiKey = typed;
+  }
   s.model = document.getElementById('set-model').value;
   s.timeFmt = document.querySelector('#set-timefmt button.on')?.dataset.v || '12';
   const rest = Number(document.getElementById('set-rest')?.value);
@@ -1015,8 +1096,25 @@ document.addEventListener('click', e => {
 
   switch (a) {
     /* nav */
-    case 'go-tab': readSetInputs(); App.tab = el.dataset.tab; if (App.tab === 'train') App.trainView = 'home'; App.render(); break;
+    case 'go-tab': readSetInputs(); App.tab = el.dataset.tab;
+      if (App.tab === 'train') { App.trainView = 'home'; App.trainDay = null; }
+      App.render(); break;
     case 'open-settings': openSettingsModal(); break;
+    case 'replace-key': {
+      const row = document.getElementById('key-row');
+      if (row) { row.innerHTML = keyRowHtml(''); document.getElementById('set-key')?.focus(); }
+      break;
+    }
+    case 'clear-key': {
+      const st = getSettings();
+      st.apiKey = '';
+      setSettings(st);
+      const row = document.getElementById('key-row');
+      if (row) row.innerHTML = keyRowHtml('');
+      toast('API key removed from this device');
+      break;
+    }
+    case 'test-key': testApiKey(); break;
     case 'dismiss-install': Store.set('installDismissed', true); App.render(); break;
     case 'save-settings': saveSettings(); break;
     case 'modal-backdrop': if (e.target === el) closeModal(); break;
@@ -1099,7 +1197,7 @@ document.addEventListener('click', e => {
     case 'today-back': App.todayView = 'home'; App._renderedTab = null; App.render(); break;
     case 'quick-scan': App.tab = 'food'; App.foodDay = todayKey(); App.render(); openScanModal(); break;
     case 'quick-food': App.tab = 'food'; App.foodDay = todayKey(); App.render(); openManualFood(); break;
-    case 'quick-train': App.tab = 'train'; App.trainView = 'home'; App.render(); break;
+    case 'quick-train': App.tab = 'train'; App.trainView = 'home'; App.trainDay = null; App.render(); break;
     case 'quick-sleep': App.tab = 'sleep'; App.sleepDay = todayKey(); App.render(); openSleepLog(); break;
     case 'quick-weight': openWeightModal(); break;
     case 'save-weight': saveWeightModal(); break;
@@ -1110,9 +1208,13 @@ document.addEventListener('click', e => {
     /* train */
     case 'train-nav': App.trainView = el.dataset.view; App._renderedTab = null; App.render(); break;
     case 'train-back': App.trainView = 'home'; App._renderedTab = null; App.render(); break;
+    case 'pick-day': App.trainDay = Number(el.dataset.idx); App.render(); break;
     case 'start-workout': startWorkout(Number(el.dataset.idx)); break;
-    case 'start-picked': startWorkout(Number(document.getElementById('day-picker').value)); break;
     case 'start-freestyle': startWorkout(0, true); break;
+    case 'edit-load': readSetInputs(); openLoadModal(el.dataset.name); break;
+    case 'save-load-kind':
+      setLoadOverride(el.dataset.name, el.dataset.kind);
+      closeModal(); App.render(); break;
     case 'add-set': readSetInputs(); addSet(Number(el.dataset.xi)); break;
     case 'add-warmup': readSetInputs(); addWarmup(Number(el.dataset.xi)); break;
     case 'set-done': toggleSetDone(Number(el.dataset.xi), Number(el.dataset.si)); break;
@@ -1289,7 +1391,15 @@ function maybeNudgeBackup() {
   }, 2500);
 }
 
+/* Registered here rather than inline in index.html so the page can run under
+   script-src 'self' with no 'unsafe-inline' — see the CSP note in index.html. */
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
 (function boot() {
+  registerServiceWorker();
   requestPersistentStorage();
   if (getProfile()) {
     const s = restoreSession();

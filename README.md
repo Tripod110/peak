@@ -51,10 +51,16 @@ Stalling is rarely only a training problem, so Peak tracks the inputs that feed 
 ## Logging is built to be fast
 
 Sets are pre-filled from your plan, so a working set is one tap. Per-set "beat last time"
-hints, a rest timer that auto-starts and scales per lift, plate math per side, live PR
-toasts the moment you clear one. Warmup, failure, and drop sets are tagged and excluded
-from volume, PR, and progression math. Dumbbell and single-arm lifts log **per hand**;
-volume counts both sides.
+hints, a rest timer that auto-starts and scales per lift, live PR toasts the moment you
+clear one. Warmup, failure, and drop sets are tagged and excluded from volume, PR, and
+progression math. Dumbbell and single-arm lifts log **per hand**; volume counts both sides.
+
+**And it tells you what to load.** Not just for barbells — the leg press, the hack squat and
+the T-bar all take plates and all take them differently, so Peak models each: bar weight
+subtracted where there's a bar, both pegs where there are two, one post where there's one.
+It draws the actual plates, follows the next set you haven't ticked (so a warmup ramp is
+right on every set), updates as you type, and tells you when a number can't be loaded
+exactly. Guessed wrong for your gym? Tap it and correct it once.
 
 ## Built-in splits
 
@@ -66,7 +72,16 @@ counts toward your weekly volume.
 
 All data lives in your browser's local storage — nothing is uploaded anywhere. The only
 network call is the optional AI meal scan, sent directly from your device to the Google
-Gemini API using **your own free API key** (stored on-device only, never in this repo).
+Gemini API using **your own free API key**. A Content-Security-Policy restricts the app to
+that one host, so there is nowhere else for anything to go.
+
+Your API key is stored on this device in plain `localStorage`, and Peak says so in Settings
+rather than implying otherwise — it can't be meaningfully encrypted in a client-side app,
+because whatever decrypts it ships to the same device. What Peak does instead is keep it from
+leaking: it is **stripped from exported backups**, never written back into the Settings field
+(masked preview + Replace/Remove), and the CSP blocks sending it anywhere but Google. If that
+isn't good enough for you, remove the key in Settings — everything except meal scanning works
+without one.
 
 Because everything is local, **clearing your browser data will erase your training
 history.** Export a backup from Settings periodically.
@@ -83,9 +98,14 @@ Peak's training features work with no setup. Meal scanning needs a free Google k
 
 1. Create one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (sign in
    with any Google account — no card needed).
-2. In Peak: ⚙ Settings → paste the key → Save.
+2. In Peak: ⚙ Settings → paste the key → **Test key & refresh models** → Save.
 3. Scanning is free on Gemini's free tier, with a generous daily allowance that resets
    overnight.
+
+Google retires models on its own schedule, so Peak doesn't rely on a model id baked into its
+source. The picker is filled from what *your* key can actually run, and if a model disappears
+mid-scan Peak finds a replacement and retries rather than showing you Google's advice to
+"update your code."
 
 ## Stack
 
@@ -105,8 +125,9 @@ support via a service worker. Charts are hand-rolled inline SVG.
 | [worker/README.md](worker/README.md) | The hosted meal-scan proxy (scaffolded, not deployed) |
 | [worker/API.md](worker/API.md) | The Worker's API contract — `/scan` as built, plus what's planned |
 
-Current release: **v29** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
-the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run.
+Current release: **v30** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
+the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run, and v30's changes are
+mostly gym-floor ergonomics, which is exactly what a desktop browser cannot verify.
 
 Releasing? Never hand-edit version strings — one version lives in 22 places:
 

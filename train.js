@@ -664,10 +664,13 @@ function renderTrainHome() {
   const nextIdx = nextDayIndex();
   const plateaus = detectPlateaus();
   const stalledNames = new Set(plateaus.map(pl => pl.name.toLowerCase()));
-  const day = tpl.days[nextIdx];
+  /* The queued day unless you've picked another. Switching days used to mean
+     opening a collapsed section, choosing from a <select> and pressing a second
+     Start — three taps and a hidden control for something people do weekly. */
+  const dayIdx = (App.trainDay != null && tpl.days[App.trainDay]) ? App.trainDay : nextIdx;
+  const day = tpl.days[dayIdx];
   const all = getWorkouts();
 
-  // glance numbers
   const weekKg = volumeInDays(7);
   const lifeKg = lifetimeVolumeKg();
   const wkLifts = sessionsInDays(7, true);
@@ -684,6 +687,11 @@ function renderTrainHome() {
   if (quip && quip.fresh) { setTimeout(() => { toast(quip.text); settleQuip(); }, 400); }
 
   return `
+  ${renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames)}
+
+  ${/* Directly under the plan, because these alerts are what explain the ▼ and ▲
+        cues in it — they are the reasoning behind today's numbers, not general
+        news, and they read as noise anywhere else. */ ''}
   ${plateaus.map(pl => {
     const dl = nextTarget(pl.name, findTargetFor(pl.name), stalledNames);
     /* The prescription is always concrete, so lead with it. A generic tip only
@@ -706,47 +714,25 @@ function renderTrainHome() {
   }).join('')}
   ${plateaus.length ? '' : plateauWatchRow()}
 
-  ${renderTodaysSession(tpl, day, nextIdx, stalledNames)}
-
-  <div class="card">
-    <div class="glance">
-      <button class="gl" data-action="train-nav" data-view="moved">
-        <span class="gv">${weekKg > 0 ? fmtWt(weekKg) : '—'}</span><span class="gl-l">${wUnit()} this week</span></button>
-      <button class="gl" data-action="train-nav" data-view="consistency">
-        <span class="gv">${wkLifts}/${p.gymDays}</span><span class="gl-l">lift sessions</span></button>
-      <button class="gl" data-action="train-nav" data-view="consistency">
-        <span class="gv">${streak}</span><span class="gl-l">week streak</span></button>
-      <button class="gl" data-action="train-nav" data-view="records">
-        <span class="gv">${topPr ? topPr.bestDisp : '—'}</span><span class="gl-l">${topPr ? `${esc(topPr.name.toLowerCase())} ${wUnit()}` : 'no PRs yet'}</span></button>
-    </div>
-    ${wkCardio ? `<div class="muted small mt">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week — tracked separately from the lifting plan.</div>` : ''}
-    ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
+  <div class="grid-2">
+    <button class="btn" data-action="start-freestyle">✎ Freestyle lift</button>
+    <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
   </div>
+  <div class="chart-note center" style="margin-bottom:14px">Freestyle logs anything off-plan. Cardio is tracked separately and never fills a lifting slot.</div>
 
   <div class="card">
-    <h2>Explore</h2>
+    <h2>Your training <span class="h2-right">tap any row</span></h2>
     ${navRow('muscles', '💪', 'Weekly sets by muscle',
       !hasLifts ? 'no data yet' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
       !hasLifts ? '' : (mv.unclassified.length || low) ? 'warn' : 'good')}
-    ${navRow('moved', '🏋', 'Weight moved', lifeKg > 0 ? `${fmtWt(lifeKg)} ${wUnit()} lifetime` : 'starts with set one')}
+    ${navRow('moved', '🏋', 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
     ${navRow('records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
-    ${navRow('consistency', '📅', 'Consistency', streak ? `${streak}-week streak` : `${wkLifts} this week`)}
+    ${navRow('consistency', '📅', 'Consistency',
+      `${wkLifts}/${p.gymDays} this week${streak ? ` · ${streak}-week streak` : ''}`)}
     ${navRow('history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
-  </div>
-
-  <div class="grid-2">
-    <button class="btn" data-action="start-freestyle">Freestyle lift</button>
-    <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
-  </div>
-  <details class="adv">
-    <summary>Train a different day</summary>
-    <div class="row mt">
-      <select id="day-picker" class="grow">
-        ${tpl.days.map((d, i) => `<option value="${i}" ${i === nextIdx ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
-      </select>
-      <button class="btn small" data-action="start-picked">Start</button>
-    </div>
-  </details>`;
+    ${wkCardio ? `<div class="chart-note">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week.</div>` : ''}
+    ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
+  </div>`;
 }
 
 function navRow(view, ico, label, value, tone) {
@@ -760,36 +746,67 @@ function navRow(view, ico, label, value, tone) {
   </button>`;
 }
 
-/* ---------- 1. the hero: what to do today ---------- */
-function renderTodaysSession(tpl, day, nextIdx, stalledNames) {
+/* ---------- 1. the hero: what to do today ----------
+   Read then act, in that order: the plan is what tells you whether to start, so
+   Start sits under it rather than above it. Everything you might reasonably do
+   from this screen is now visible without opening anything. */
+
+const CUE_LEGEND = {
+  add_weight: 'go up',
+  add_reps: 'same weight, chase the reps',
+  deload: 'drop back and rebuild',
+  baseline: 'new lift — set a baseline'
+};
+
+function renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames) {
   const plannedSets = day.ex.reduce((n, [, t]) => n + (parseTarget(t)?.sets || 3), 0);
   const estMin = Math.max(20, Math.round(plannedSets * 2.6 / 5) * 5);
   const u = wUnit();
+  const isNext = dayIdx === nextIdx;
+  const prescriptions = day.ex.map(([n, tstr]) => [n, nextTarget(n, tstr, stalledNames)]);
+  const cuesUsed = [...new Set(prescriptions.map(([, pr]) => pr.type))];
+
   return `
   <div class="card">
     <div class="spread">
       <div>
-        <div class="muted small">Today · ${esc(tpl.name)}</div>
+        <div class="muted small">${isNext ? 'Up next' : 'Training instead'} · ${esc(tpl.name)}</div>
         <div class="hero-num" style="font-size:30px">${esc(day.name)}</div>
       </div>
       <div class="muted small center" style="line-height:1.5">${day.ex.length} lifts<br>${plannedSets} sets<br>~${estMin} min</div>
     </div>
-    <button class="btn accent mt" data-action="start-workout" data-idx="${nextIdx}">Start workout</button>
-    <div class="plan mt">
-      ${day.ex.map(([n, tstr]) => {
-        const pr = nextTarget(n, tstr, stalledNames);
+
+    <div class="day-chips" role="group" aria-label="Choose which day to train">
+      ${tpl.days.map((d, i) => `
+        <button class="day-chip ${i === dayIdx ? 'on' : ''}" data-action="pick-day" data-idx="${i}"
+          aria-pressed="${i === dayIdx}">${esc(d.name)}${i === nextIdx ? '<span class="dc-next">next</span>' : ''}</button>`).join('')}
+    </div>
+
+    <div class="plan">
+      ${prescriptions.map(([n, pr]) => {
         const val = pr.w > 0 ? `${pr.w}<span class="unit"> × ${pr.reps}${perHandLift(n) ? ` ${u}/hand` : ''}</span>`
           : pr.w === 0 ? `<span class="unit">${pr.reps} reps</span>`
           : '<span class="unit">pick a weight</span>';
         const note = pr.type === 'deload' ? 'deload' : pr.rebuilding ? 'climbing back' : '';
+        // what to actually put on the bar, so the number above isn't homework
+        const spec = pr.w > 0 ? loadSpec(n) : null;
+        const m = spec ? plateMath(pr.w, spec.baseDisp, spec.sides) : null;
+        const plates = m && m.list.length ? plateSummary(m, spec) : '';
         return `
         <div class="plan-row">
-          <span class="pl-cue" style="color:${cueColor(pr.type)}">${CUE[pr.type] || '→'}</span>
-          <span class="pl-name">${esc(n)}${note ? ` <span class="pl-note">${esc(note)}</span>` : ''}</span>
+          <span class="pl-cue" style="color:${cueColor(pr.type)}" aria-hidden="true">${CUE[pr.type] || '→'}</span>
+          <span class="pl-name">
+            <span class="pl-nm">${esc(n)}${note ? ` <span class="pl-note">${esc(note)}</span>` : ''}</span>
+            ${plates ? `<span class="pl-plates">${esc(plates)}</span>` : ''}</span>
           <span class="pl-val">${val}</span>
         </div>`;
       }).join('')}
     </div>
+    <div class="cue-key">
+      ${cuesUsed.map(t => `<span><b style="color:${cueColor(t)}">${CUE[t] || '→'}</b> ${esc(CUE_LEGEND[t] || '')}</span>`).join('')}
+    </div>
+
+    <button class="btn accent mt" data-action="start-workout" data-idx="${dayIdx}">Start ${esc(day.name)}</button>
   </div>`;
 }
 
@@ -1039,34 +1056,142 @@ const SET_TYPES = ['normal', 'warmup', 'failure', 'drop'];
 const SET_BADGE = { normal: null, warmup: 'W', failure: 'F', drop: 'D' };
 const SET_BADGE_COLOR = { warmup: 'var(--warning)', failure: 'var(--critical)', drop: 'var(--violet)' };
 
-function isBarbellLift(name) {
-  return /squat|bench|deadlift|overhead press|barbell|\brow\b|hip thrust/i.test(name)
-    && !/dumbbell|\bdb\b|cable|machine|smith|pulldown|pushdown|pull-?up|chin-?up|fly|raise|goblet/i.test(name);
+/* ---------- plate math ----------
+   "What do I load?" is arithmetic nobody should be doing between sets, and it is
+   different arithmetic per machine: a barbell has two sleeves and weighs
+   something, a leg press has two pegs and a sled whose weight isn't part of what
+   you log, a T-bar has one post and takes the whole load on it. Printing the
+   wrong answer is worse than printing none, so anything unrecognised shows
+   nothing until it's taught — same contract as the muscle map. */
+
+const PLATE_SIZES = { metric: [25, 20, 15, 10, 5, 2.5, 1.25], imperial: [45, 35, 25, 10, 5, 2.5] };
+/* IWF colours for kg, the matching convention for lb — a plate reads faster as a
+   colour than as a number, which is the entire point of showing this at all */
+const PLATE_COLOR = {
+  metric: { 25: '#d03b3b', 20: '#3987e5', 15: '#fab219', 10: '#199e70', 5: '#e6e6e2', 2.5: '#9a4b4b', 1.25: '#8f8f8c' },
+  imperial: { 45: '#3987e5', 35: '#fab219', 25: '#199e70', 10: '#e6e6e2', 5: '#7a7a78', 2.5: '#5c5c5a' }
+};
+const DARK_PLATES = /^(#e6e6e2|#fab219|#8f8f8c)$/;   // need dark text on them
+
+const LOAD_RULES = [
+  /* one loading post: the whole load goes on a single end */
+  { re: /t.?bar row|landmine/i, kind: 'post' },
+  /* plate-loaded machines: two pegs, nothing to subtract — the sled's own weight
+     varies by machine and isn't what you logged */
+  { re: /leg press|hack squat|pendulum squat|belt squat|plate.?loaded|iso.?lateral/i, kind: 'sled' },
+  /* nothing to load. Smith machines are deliberately here: their bar weighs
+     anywhere from 6 to 25 kg depending on the counterweight, so any number shown
+     would be wrong on most of them. */
+  { re: /dumbbell|\bdb\b|kettlebell|goblet|cable|pulldown|pushdown|smith|leg curl|leg extension|pec deck|\bfly\b|flye|lateral raise|face pull|rear delt|pull.?up|chin.?up|\bdip\b|push.?up|plank|crunch|sit.?up|leg raise|knee raise|rollout|machine|band/i, kind: null },
+  /* loaded on an Olympic bar */
+  { re: /squat|bench|deadlift|overhead press|military|barbell|\brow\b|hip thrust|shrug|good morning|\brdl\b|romanian|clean|snatch|press/i, kind: 'bar' }
+];
+
+/* User-taught loading wins over the patterns, because half the ambiguous cases
+   are genuinely gym-specific — a chest-supported row is a barbell in one gym and
+   a stack in the next, and only the person standing in front of it knows. */
+function getLoadMap() { return Store.get('loadMap', {}); }
+function setLoadOverride(name, kind) {
+  const m = getLoadMap();
+  if (kind === 'auto') delete m[String(name).toLowerCase()];
+  else m[String(name).toLowerCase()] = kind;
+  Store.set('loadMap', m);
+}
+function loadKind(name) {
+  const o = getLoadMap()[String(name || '').toLowerCase()];
+  if (o !== undefined) return o === 'none' ? null : o;
+  for (const r of LOAD_RULES) if (r.re.test(name)) return r.kind;
+  return null;
+}
+/* → {kind, sides, baseDisp, baseLabel} in display units, or null if this lift
+   isn't plate-loaded at all */
+function loadSpec(name) {
+  const kind = loadKind(name);
+  if (!kind) return null;
+  const u = wUnit();
+  if (kind === 'bar') {
+    const bar = Math.round(toW(getSettings().barKg) * 10) / 10;
+    return { kind, sides: 2, baseDisp: bar, baseLabel: `${bar} ${u} bar`, per: 'per side' };
+  }
+  if (kind === 'sled') return { kind, sides: 2, baseDisp: 0, baseLabel: '', per: 'per side' };
+  return { kind, sides: 1, baseDisp: 0, baseLabel: '', per: 'on the post' };
 }
 
-/* plates per side for a target weight — returns null if the bar alone is heavier */
-function plateMath(totalDisp, barDisp) {
-  const PLATES = isMetric() ? [25, 20, 15, 10, 5, 2.5, 1.25] : [45, 35, 25, 10, 5, 2.5];
-  let perSide = (totalDisp - barDisp) / 2;
-  if (perSide < 0) return null;
-  if (perSide === 0) return { list: [], exact: true, off: 0 };
+/* plates for one side (or the one post) — null if the base alone already exceeds
+   the target, which is a real answer: you cannot load 30 lb on a 45 lb bar */
+function plateMath(totalDisp, baseDisp, sides) {
+  const PLATES = PLATE_SIZES[isMetric() ? 'metric' : 'imperial'];
+  let per = (totalDisp - baseDisp) / (sides || 2);
+  if (per < -0.001) return null;
   const list = [];
-  PLATES.forEach(p => { while (perSide >= p - 0.001) { list.push(p); perSide -= p; } });
-  return { list, exact: perSide < 0.001, off: Math.round(perSide * 2 * 10) / 10 };
+  PLATES.forEach(p => { while (per >= p - 0.001) { list.push(p); per -= p; } });
+  return { list, exact: per < 0.001, off: Math.round(per * (sides || 2) * 10) / 10 };
 }
-function plateLine(totalDisp, barDisp) {
-  const m = plateMath(totalDisp, barDisp);
-  const u = wUnit();
-  if (!m) return '';
-  if (!m.list.length) return `just the ${Math.round(barDisp)} ${u} bar`;
+
+/* "2×45 + 10 per side" */
+function plateSummary(m, spec) {
   const counts = [];
   let i = 0;
   while (i < m.list.length) {
     let j = i; while (j < m.list.length && m.list[j] === m.list[i]) j++;
-    counts.push((j - i) + '×' + m.list[i]);
+    counts.push((j - i > 1 ? (j - i) + '×' : '') + m.list[i]);
     i = j;
   }
-  return counts.join(' + ') + ' per side' + (m.exact ? '' : ` (${m.off} ${u} short)`);
+  return counts.join(' + ') + ' ' + spec.per;
+}
+
+/* The whole indicator: a row of plates drawn at relative size, then the same
+   thing in words. Returns '' when there is nothing useful to say. */
+function plateStack(name, totalDisp) {
+  const spec = loadSpec(name);
+  if (!spec || !(totalDisp > 0)) return '';
+  const m = plateMath(totalDisp, spec.baseDisp, spec.sides);
+  const u = wUnit();
+  if (!m) return `<div class="plates"><span class="pl-none">${esc(spec.baseLabel || 'the machine')} alone is heavier than ${Math.round(totalDisp)} ${u}</span></div>`;
+  if (!m.list.length) {
+    return spec.baseLabel
+      ? `<div class="plates"><span class="pl-none">just the ${esc(spec.baseLabel)} — no plates</span></div>`
+      : '';
+  }
+  const colors = PLATE_COLOR[isMetric() ? 'metric' : 'imperial'];
+  const biggest = PLATE_SIZES[isMetric() ? 'metric' : 'imperial'][0];
+  const chips = m.list.map(p => {
+    const c = colors[p] || '#8f8f8c';
+    const h = Math.round(20 + 22 * Math.sqrt(p / biggest));
+    return `<span class="pl-plate" style="height:${h}px;background:${c};color:${DARK_PLATES.test(c) ? '#1a1a19' : '#fff'}">${p}</span>`;
+  }).join('');
+  return `
+    <div class="plates">
+      <div class="pl-stack">
+        ${spec.baseLabel ? `<span class="pl-base">${esc(spec.baseLabel)}</span>` : ''}
+        ${chips}
+      </div>
+      <div class="pl-text">${esc(plateSummary(m, spec))} → ${Math.round(totalDisp)} ${u}${
+        m.exact ? '' : ` <span style="color:var(--warning)">(${m.off} ${u} short — nearest you can load)</span>`}</div>
+    </div>`;
+}
+
+/* teach Peak how a lift is loaded when the patterns get it wrong */
+const LOAD_LABELS = {
+  auto: 'Work it out from the name',
+  bar: 'Olympic barbell — two sleeves, bar weight subtracted',
+  sled: 'Plate-loaded machine — two pegs, no bar weight',
+  post: 'Single post — every plate on one end',
+  none: 'Not plate-loaded (dumbbell, cable, stack, bodyweight)'
+};
+function openLoadModal(name) {
+  const cur = getLoadMap()[String(name).toLowerCase()];
+  const auto = LOAD_RULES.find(r => r.re.test(name))?.kind ?? null;
+  openModal(`
+    <h3>How is ${esc(name)} loaded?</h3>
+    <div class="modal-sub">This decides the plate numbers Peak shows you. Remembered for every future session.</div>
+    ${Object.entries(LOAD_LABELS).map(([k, label]) => `
+      <button class="btn mt" style="justify-content:flex-start;text-align:left;${(cur === undefined ? k === 'auto' : cur === k) ? 'border-color:var(--blue)' : ''}"
+        data-action="save-load-kind" data-name="${esc(name)}" data-kind="${k}">
+        ${esc(label)}${k === 'auto' ? ` <span class="muted">· currently ${esc(auto ? LOAD_LABELS[auto].split(' —')[0] : 'not plate-loaded')}</span>` : ''}
+      </button>`).join('')}
+    <div class="chart-note">Set your barbell's weight in Settings — plate math for barbell lifts subtracts it.</div>
+  `);
 }
 
 /* rest timer — driven off a timestamp so throttled/background tabs stay accurate */
@@ -1180,6 +1305,10 @@ function renderActiveSession() {
       <div class="stat"><div class="sv">${live.warm}</div><div class="sl">warmups</div></div>
     </div>
     <div class="chart-note">Sets are pre-filled from your plan — adjust the numbers if they differ and tap ✓ as you finish each one. Only ticked or edited sets are saved.</div>
+    ${/* Finish used to live only under every exercise, so ending a session early —
+          or after the last set of a long day — meant scrolling the whole workout
+          to reach it. It belongs where the session summary is too. */ ''}
+    <button class="btn primary mt" data-action="finish-workout">✓ Finish workout${live.remaining ? ` (${live.remaining} set${live.remaining > 1 ? 's' : ''} left)` : ''}</button>
   </div>
   ${s.exercises.map((ex, xi) => renderExerciseBlock(ex, xi)).join('')}
   <button class="btn mt" data-action="add-exercise">＋ Add exercise</button>
@@ -1200,10 +1329,6 @@ function renderExerciseBlock(ex, xi) {
   const prevLine = prevWork.length
     ? prevWork.map(s => s.weight > 0 ? `${Math.round(toW(s.weight))}×${s.reps}` : `${s.reps}`).join('  ')
     : '';
-  // plate math for the working weight (entered top set, else the prescription)
-  const entered = Math.max(0, ...(ex.sets || []).filter(s => !isWarmup(s)).map(s => toW(s.weight || 0)));
-  const target = entered > 0 ? entered : (pr.w || 0);
-  const plates = (target > 0 && isBarbellLift(ex.name)) ? plateLine(target, toW(getSettings().barKg)) : '';
   const allDone = ex.sets.length > 0 && ex.sets.every(st => st.done);
   return `
   <div class="card ${allDone ? 'ex-complete' : ''}">
@@ -1214,7 +1339,7 @@ function renderExerciseBlock(ex, xi) {
     </div>
     <div class="last-time" style="color:${cueColor(pr.type)};font-weight:600">${CUE[pr.type] || '→'} ${esc(pr.text)}</div>
     ${prevLine ? `<div class="last-time">Previous: ${esc(prevLine)}${perHand ? ` ${u}/hand` : ''}</div>` : ''}
-    ${plates ? `<div class="last-time" style="color:var(--ink-2)">🏋 ${esc(plates)}</div>` : ''}
+    <div id="plates-${xi}">${plateBlock(ex)}</div>
     ${(() => { let workIdx = 0; return ex.sets.map((st, si) => {
       const type = st.type || 'normal';
       const warm = type === 'warmup';
@@ -1239,11 +1364,46 @@ function renderExerciseBlock(ex, xi) {
         <button class="x-btn" data-action="del-set" data-xi="${xi}" data-si="${si}" aria-label="Delete set ${workIdx}">✕</button>
       </div>`;
     }).join(''); })()}
+    ${/* The set number doubles as the set-type control, which no tooltip can teach
+          on a phone. Say it once, on the first exercise, rather than never. */
+      xi === 0 ? '<div class="chart-note">Tap a set\'s number to mark it a warmup, a failure set, or a drop set — those are logged but never counted toward volume or PRs.</div>' : ''}
     <div class="row mt">
       <button class="btn small grow" data-action="add-set" data-xi="${xi}">＋ Add set</button>
       <button class="btn small" data-action="add-warmup" data-xi="${xi}">＋ Warmup</button>
     </div>
   </div>`;
+}
+
+/* The weight you are about to load — the next set you haven't ticked, not the
+   heaviest of the session. A warmup ramp changes the plates on every set, and an
+   indicator showing the top set while you're loading the first one is a wrong
+   answer delivered confidently. */
+function plateWeightFor(ex) {
+  const next = (ex.sets || []).find(st => !st.done);
+  if (next && next.weight > 0) return toW(next.weight);
+  const heaviest = Math.max(0, ...(ex.sets || []).filter(s => !isWarmup(s)).map(s => toW(s.weight || 0)));
+  if (heaviest > 0) return heaviest;
+  return nextTarget(ex.name, ex.target || findTargetFor(ex.name)).w || 0;
+}
+
+function plateBlock(ex) {
+  const w = plateWeightFor(ex);
+  const stack = plateStack(ex.name, w);
+  if (stack) {
+    return `<button class="plate-btn" data-action="edit-load" data-name="${esc(ex.name)}"
+      aria-label="Plates for ${esc(ex.name)} — tap to change how this lift is loaded">${stack}</button>`;
+  }
+  // nothing to load, or Peak doesn't know — offer the fix rather than staying silent
+  if (!(w > 0) || perHandLift(ex.name)) return '';
+  return `<button class="plate-hint" data-action="edit-load" data-name="${esc(ex.name)}">🏋 Plate math off — set how this lift is loaded</button>`;
+}
+
+/* Typing a weight has to move the plates with it; the set inputs deliberately
+   never trigger a re-render, so this patches the one block that changed. */
+function repaintPlates(xi) {
+  const el = document.getElementById('plates-' + xi);
+  const ex = App.activeSession?.exercises[xi];
+  if (el && ex) el.innerHTML = plateBlock(ex);
 }
 
 function addSet(xi) {
@@ -1347,6 +1507,11 @@ document.addEventListener('input', e => {
   if (el.dataset.setW === undefined && el.dataset.setR === undefined) return;
   const st = App.activeSession.exercises[el.dataset.xi]?.sets[el.dataset.si];
   if (st) { st.touched = true; st.planned = false; }
+  if (st && el.dataset.setW !== undefined) {
+    // apply this one field immediately so the plate indicator tracks what you type
+    st.weight = el.value === '' ? null : fromW(Number(el.value));
+    repaintPlates(el.dataset.xi);
+  }
   clearTimeout(_typeTimer);
   _typeTimer = setTimeout(() => { readSetInputs(); persistSession(); }, 400);
 });
@@ -1376,6 +1541,7 @@ function finishWorkout() {
   App.undo = null;
   clearPersistedSession();
   App.trainView = 'home';
+  App.trainDay = null;   // the template queues the next day; a manual pick is spent
   paintRest();
   toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${s.score}` : `Workout saved — score ${s.score} 💪`);
   App.render();

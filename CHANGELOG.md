@@ -18,6 +18,75 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v30 — the gym-floor release
+`pending` · 2026-08-08 · **pending push**
+
+Five things reported from actually using Peak in a gym. Four are fixes; one is the feature
+that should have shipped with set logging.
+
+**Fixed — ticking a set threw you back to the top of the workout.** The single worst thing
+about logging a session. `snapViewport` undid the mobile keyboard's pan by scrolling to 0,
+which is only the right answer if you were at the top when you started typing — and in a gym
+you never are. Every ✓ and every weight entry on the fourth exercise sent you to the top of
+the page and you scrolled back down by hand. It now records the scroll position *before* the
+field takes focus and restores that. (`app.js`)
+
+**Added — plate math for everything that takes plates, not just barbells.** The old
+`isBarbellLift` check meant the leg press — the lift most likely to need the arithmetic —
+showed nothing. Loading is now modelled per lift as one of: Olympic bar (two sleeves, bar
+weight subtracted), plate-loaded machine (two pegs, nothing to subtract), single post (T-bar,
+landmine — every plate on one end), or not plate-loaded. The indicator is visual: the plates
+you need, drawn at relative size in IWF colours, above the same thing in words. It tracks the
+weight field as you type, follows the *next unticked set* rather than the session's top set
+(so a warmup ramp shows the right plates on every set), and says how far off it is when the
+number can't be made exactly. Any lift Peak guesses wrong can be corrected by tapping the
+indicator — the same "teach it once" contract as the muscle map. (`train.js`, `style.css`)
+
+**Fixed — meal scanning died with a valid API key.** Google pulled `gemini-2.5-flash` and the
+app surfaced its raw reply: *"This model is no longer available. Please update your code."* —
+addressed to a user who wrote no code, with nothing in the UI explaining it. Three changes:
+
+- A 404 or "no longer available" now triggers a `ListModels` call against the user's own key,
+  repoints to the best model it actually offers, saves it, and retries the scan. The user sees
+  one toast instead of a dead end.
+- Settings' model picker is populated from that same list, so it shows what the key can really
+  run rather than two hard-coded ids with a shelf life. **Test key & refresh models** does it
+  on demand and reports whether the key works — the missing diagnostic for "is it my key or
+  their model?"
+- The default for new users moves to `gemini-3.5-flash`. Existing users are *not* moved: 2.5
+  still works for them until Google's 2026-10-16 shutdown, and Settings now says so.
+
+(`api.js`, `store.js`, `app.js`)
+
+**Fixed — exported backups contained your API key in plaintext.** A backup is the one piece of
+Peak data that deliberately leaves the device: emailed to yourself, dropped in cloud storage,
+attached to a bug report. It carried a live Google credential in every one. The key is now
+stripped on export and the file says so; a restore keeps the key already on the device rather
+than blanking it. Also: the key is no longer written back into the Settings field (a masked
+preview plus Replace/Remove), and a CSP names `generativelanguage.googleapis.com` as the only
+host this app may ever talk to — the useful control, since a key in `localStorage` cannot be
+encrypted away. See [D-13](DECISIONS.md#d-13). (`store.js`, `app.js`, `index.html`)
+
+**Changed — the Train tab reads as one screen instead of four.** It opened with a status
+alert, then a Start button *above* the plan it referred to, then four stat tiles that were
+really navigation, then five nav rows repeating those same four numbers, then the day picker
+collapsed inside a `<details>` behind a `<select>` and a second Start.
+
+- The plan comes first and Start sits under it — you read, then act.
+- The day switcher is a row of chips, one tap, with the queued day marked. Was three taps
+  behind a disclosure triangle.
+- The `▲ → ▼ ●` cue column now has a legend, listing only the cues in today's plan. It was
+  the plan's entire vocabulary and nothing on screen defined it.
+- Plateau alerts sit directly under the plan, because they explain its ▼ and ▲ cues.
+- The four glance tiles are gone; every number they held was already in the nav rows below.
+- In-session: Finish is in the summary card at the top as well as the bottom, so ending a
+  long day doesn't mean scrolling past it; and the set-number button says once that it sets
+  warmup / failure / drop, which no tooltip can teach on a phone.
+
+(`train.js`, `app.js`, `style.css`)
+
+---
+
 ## v29 — the plateau engine gets it right
 `216b66c` · 2026-07-29 · **pending push**
 

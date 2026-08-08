@@ -379,10 +379,64 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 }
 .plan-row + .plan-row { border-top: 1px solid rgba(255,255,255,0.04); }
 .pl-cue { font-weight: 800; font-size: 12px; }
-.pl-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-name { font-size: 14px; min-width: 0; }
 .pl-note { font-size: 11px; color: var(--muted); }
 .pl-val { font-size: 14px; font-weight: 700; white-space: nowrap; }
 .pl-val .unit { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+/* ---------- day switcher ---------- */
+.day-chips { display: flex; gap: 6px; overflow-x: auto; margin: 14px -2px 12px; padding: 0 2px 2px; scrollbar-width: none; }
+.day-chips::-webkit-scrollbar { display: none; }
+.day-chip {
+  flex: 0 0 auto; position: relative;
+  padding: 9px 13px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+  min-height: 40px;
+}
+.day-chip.on { background: var(--surface-2); border-color: var(--orange); color: var(--ink); }
+.dc-next {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--orange); margin-left: 6px; vertical-align: 1px;
+}
+
+/* ---------- cue legend ----------
+   The ▲ → ▼ column is the plan's whole vocabulary and nothing on screen used to
+   define it. Only the cues actually in today's plan are listed. */
+.cue-key {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  border-top: 1px solid var(--grid); margin-top: 10px; padding-top: 9px;
+  font-size: 11px; color: var(--muted);
+}
+.cue-key b { font-size: 12px; margin-right: 3px; }
+
+/* ---------- plate indicator ---------- */
+.plates { display: block; text-align: left; width: 100%; }
+.pl-stack { display: flex; align-items: flex-end; gap: 3px; min-height: 42px; }
+.pl-base {
+  font-size: 10px; font-weight: 700; color: var(--ink-2);
+  background: var(--surface-2); border: 1px solid var(--baseline);
+  border-radius: 4px; padding: 3px 6px; margin-right: 3px; white-space: nowrap;
+}
+.pl-plate {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; padding: 0 4px; border-radius: 3px;
+  font-size: 11px; font-weight: 800; letter-spacing: -0.02em;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+}
+.pl-text { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.pl-none { font-size: 12px; color: var(--muted); }
+/* the indicator is also the control that corrects it */
+.plate-btn { display: block; width: 100%; text-align: left; padding: 8px 0 2px; }
+.plate-btn:active { opacity: 0.6; }
+.plate-hint {
+  font-size: 11px; color: var(--muted); text-align: left;
+  min-height: 32px; display: flex; align-items: center;
+}
+
+/* plate preview inside the compact plan list — the name keeps its own ellipsis
+   so the second line can exist without the row clipping it */
+.pl-plates { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.pl-nm { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* muscle volume rows */
 .mv-row { margin-bottom: 11px; }
@@ -467,8 +521,14 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 
 /* settings key input */
-.key-row { display: flex; gap: 8px; }
+.key-row { display: flex; gap: 8px; align-items: center; }
 .key-row input { flex: 1; }
+.key-set {
+  flex: 1; min-width: 0; font-size: 13px; font-family: ui-monospace, monospace;
+  color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 details.adv { margin-top: 10px; }
 details.adv summary { color: var(--muted); font-size: 13px; cursor: pointer; min-height: 32px; display: flex; align-items: center; }
