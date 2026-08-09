@@ -19,7 +19,7 @@ See [SHIPPING.md](SHIPPING.md).
 ---
 
 ## v30 — the gym-floor release
-`pending` · 2026-08-08 · **pending push**
+`efbfc5f` · 2026-08-08 · **live**
 
 Five things reported from actually using Peak in a gym. Four are fixes; one is the feature
 that should have shipped with set logging.
@@ -88,7 +88,7 @@ collapsed inside a `<details>` behind a `<select>` and a second Start.
 ---
 
 ## v29 — the plateau engine gets it right
-`216b66c` · 2026-07-29 · **pending push**
+`216b66c` · 2026-07-29 · **live**
 
 The headline feature was wrong about three quarters of the time. This release is entirely
 about making the one thing Peak is named for trustworthy.
