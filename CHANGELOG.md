@@ -18,6 +18,85 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v31 — the routine is yours, and Peak starts noticing
+`pending` · 2026-08-09 · **pending push**
+
+Peak shipped four fixed splits and no way to change them. If your gym had no hack squat, or
+you always did an extra fly, or you never once touched the calf raise sitting in the plan,
+that was your problem forever. This release makes the routine editable, gives it a real
+exercise library to draw on, and — the part that matters — has Peak watch what you actually
+log and offer to fix the plan itself.
+
+**Added — editable routines.** Every built-in is now a starting point. Add or remove
+exercises, reorder them, change sets and reps, rename days, add or delete whole days, or
+start from a different split. The first edit forks the built-in into your own copy, so the
+standard version stays available to reset back to and nothing you log is ever touched.
+(`routines.js`, Train → Edit your routine)
+
+**Added — 123-exercise library and a picker that can find things.** Adding a lift used to be
+a text box with a hidden `datalist` behind it: a keyboard, a guess at spelling, and no way to
+browse. It's now searchable and filterable by muscle, listing lifts you've already logged
+first, with anything unrecognised still accepted as free text. The library also carries its
+own muscle mapping, so `musclesFor` consults it before falling back to pattern matching — a
+regex written to catch a family occasionally catches a lift it shouldn't.
+
+**Added — 7 more built-in splits** (11 total): Full Body ×2, Upper/Lower/Full ×3, PPL ×3,
+Arnold ×6, body-part split ×5, dumbbells-only ×3, and big-lifts-only ×3. The originals
+covered 3–6 days in a commercial gym and nothing else — not two sessions a week, not a rack
+and a pair of dumbbells at home.
+
+**Added — "Peak noticed": suggestions derived from your own sessions.** No new tracking, no
+settings, nothing to opt into — all four rules read the logs that already exist:
+
+- **A lift you keep adding yourself** in 3+ of the last 5 sessions of a day → offer to put it
+  in the routine so it's pre-filled.
+- **A planned lift you never do** → offer to drop it. One at a time: a day you consistently
+  cut short would otherwise produce five cards saying the same thing.
+- **Sets that disagree with the plan** — every recent session logging exactly 5 working sets
+  where the plan says 4 → offer to change the target, so the pre-fill and the "sets left"
+  count stop lying.
+- **A muscle the routine cannot reach MEV for** → offer a specific lift on the day that
+  already trains it. This measures the *plan*, not the log: judging it on logged sets flags
+  every muscle whose day fell outside the trailing week, which on a 3-day split is most of
+  them, every week. Threshold is 80% of MEV, because flagging 7 sets against a "minimum" of 8
+  is pedantry.
+
+Each is one tap to accept, one to dismiss for good, capped at two on screen.
+
+**Fixed — "next day" broke under editable routines.** It counted sessions modulo the day
+count, so adding a day silently reshuffled the rotation and deleting one could point at a day
+that no longer existed. Now anchored to the last day actually trained.
+
+**Sleep — the tab finally shows the connection it keeps asserting.**
+
+- **Sleep vs training.** Peak's whole pitch is that sleep feeds the lift, and the Sleep tab
+  had never once shown that in the user's own numbers. It now splits your session scores by
+  how you slept the night before. Careful about what it claims: it needs 4 sessions on each
+  side before it says anything, and it says "a pattern in your log", not "caused".
+- **Fixed the score's two cliffs.** 479 minutes scored 59.75, 480 scored a flat 60 all the way
+  to 599, and 600 dropped straight back to 50 — sleeping ten minutes longer could cost you ten
+  points. It now ramps 4h→8h, holds through 8–9h, and tapers gently past 9h.
+- **Consistency counts wake time, not just bedtime.** A lifter waking at 6 on weekdays and 11
+  at weekends scored as perfectly consistent. Split 8 points bed / 7 wake, and the tab now
+  names which of the two is drifting and by how much — it was 15% of the score with nothing
+  on screen explaining it.
+- Quality is labelled (`3 · OK`, not `3/5`), and the log modal shows the resulting duration
+  before you save.
+
+**Grocery — it now knows what you buy.** Peak has recorded every logged food with a running
+count since v1, and the grocery tab ignored all of it, offering the same fifteen generic
+staples to someone who has logged the same six things for three months.
+
+- **"Your usuals"** — a quick-add section built from your own food log.
+- **Restock nudge** — something you log regularly that hasn't appeared in 5–21 days is
+  probably out.
+- **Aisle grouping** once the list passes six items, so you walk the shop once.
+- **Quantities** — type "eggs ×2", "3 bananas" or "Milk x4"; adding a duplicate bumps the
+  count instead of refusing with "already on the list", which was true and useless.
+- Check-off is its own target now, so the steppers and ✕ can't be hit mid-aisle.
+
+---
+
 ## v30 — the gym-floor release
 `efbfc5f` · 2026-08-08 · **live**
 

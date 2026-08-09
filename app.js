@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v30';
+const APP_VERSION = 'v31';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -117,7 +117,9 @@ const App = {
   scanResult: null,
   grocSection: 'staples',
   trainView: 'home',
-  trainDay: null,        // null = whichever day the template has queued next
+  trainDay: null,        // null = whichever day the routine has queued next
+  routineDay: null,      // which day is expanded in the routine editor
+  picker: null,          // in-flight exercise picker {action, ctx, q, group}
   todayView: 'home',
   foodView: 'home',
   rest: null,
@@ -207,7 +209,7 @@ function todayFocus(p, t, totals, slScore, trainedToday) {
   if (proteinLeft > 50 && hour >= 15)
     return { ico: '🥩', text: `${Math.round(proteinLeft)}g protein to go — this is the number that decides whether the training sticks.`, action: 'quick-food' };
   if (!trainedToday && wk < p.gymDays)
-    return { ico: '🏋', text: `${wk} of ${p.gymDays} lifting sessions this week — ${TEMPLATES[p.template].days[nextDayIndex()].name} is up next.`, action: 'quick-train' };
+    return { ico: '🏋', text: `${wk} of ${p.gymDays} lifting sessions this week — ${activeRoutine().days[nextDayIndex()].name} is up next.`, action: 'quick-train' };
   if (kcalLeft < -250)
     return { ico: '⚠', text: `${Math.abs(Math.round(kcalLeft))} kcal over target. Not a problem on its own — just keep tomorrow tight.` };
   if (proteinLeft > 25)
@@ -857,6 +859,24 @@ function buildProfileFromOb() {
   };
 }
 
+/* Sets and reps as two number fields rather than a free-text "4×8" — the string
+   format is an implementation detail nobody should have to guess at. */
+function openTargetModal(day, ex) {
+  const row = activeRoutine().days[day]?.ex[ex];
+  if (!row) return;
+  const t = parseTarget(row[1]) || { sets: 3, reps: 10 };
+  openModal(`
+    <h3>${esc(row[0])}</h3>
+    <div class="modal-sub">How many sets and reps should Peak pre-fill?</div>
+    <div class="grid-2">
+      <div><label>Sets</label><input id="tg-sets" type="number" inputmode="numeric" min="1" max="12" value="${t.sets}"></div>
+      <div><label>Reps</label><input id="tg-reps" type="number" inputmode="numeric" min="1" max="100" value="${t.reps}"></div>
+    </div>
+    <div class="chart-note">Hit every set at these reps and Peak adds weight next session. Timed holds (planks, carries) use seconds here.</div>
+    <button class="btn primary mt" data-action="save-target" data-day="${day}" data-ex="${ex}">Save</button>
+  `);
+}
+
 /* ---------- settings ---------- */
 
 /* enough to recognise which key is loaded, not enough to use */
@@ -907,7 +927,7 @@ function openSettingsModal() {
   const bk = backupState();
   openModal(`
     <h3>Settings</h3>
-    <div class="modal-sub">${p ? `${GOAL_LABEL[p.goal]} · ${t.kcal.toLocaleString()} kcal · ${t.protein}g protein · ${TEMPLATES[p.template].name}` : ''}</div>
+    <div class="modal-sub">${p ? `${GOAL_LABEL[p.goal]} · ${t.kcal.toLocaleString()} kcal · ${t.protein}g protein · ${esc(activeRoutine().name)}` : ''}</div>
 
     <label>Units</label>
     <div class="seg" id="set-units">
@@ -986,8 +1006,11 @@ function openSettingsModal() {
       </div>
       <label>Training split</label>
       <select id="set-template">
-        ${Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}" ${p?.template === k ? 'selected' : ''}>${v.name}</option>`).join('')}
+        ${Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}" ${p?.template === k ? 'selected' : ''}>${esc(v.name)} · ${v.days.length} days</option>`).join('')}
       </select>
+      <div class="chart-note">${isCustomRoutine()
+        ? 'You are running your own routine, so this only takes effect if you change it — and it will ask before replacing your edits. Edit days and exercises under Train → Edit your routine.'
+        : 'Every split is a starting point. Add, remove and reorder exercises under Train → Edit your routine.'}</div>
     </details>
 
     <details class="adv" ${bk.due ? 'open' : ''}>
@@ -1078,7 +1101,17 @@ function saveSettings() {
     }
     p.activity = document.getElementById('set-activity').value || p.activity;
     p.goal = document.getElementById('set-goal').value;
-    p.template = document.getElementById('set-template').value;
+    /* A customised routine outranks the split dropdown, so changing the dropdown
+       would otherwise appear to do nothing at all. Ask, and mean it either way. */
+    const pickedTpl = document.getElementById('set-template').value;
+    if (pickedTpl !== p.template) {
+      if (!isCustomRoutine()
+        || confirm(`Switch to "${TEMPLATES[pickedTpl].name}"?\n\nThis replaces the routine you customised. Your logged sessions are kept.`)) {
+        p.template = pickedTpl;
+        resetRoutine();
+        App.trainDay = null;
+      }
+    }
     const gw = Number(document.getElementById('set-goalw').value);
     p.goalWeightKg = gw > 0 ? (metric ? gw : lbToKg(gw)) : null;
     const d = Number(document.getElementById('set-days').value);
@@ -1224,17 +1257,72 @@ document.addEventListener('click', e => {
     case 'del-set': deleteSet(Number(el.dataset.xi), Number(el.dataset.si)); break;
     case 'del-exercise': deleteExercise(Number(el.dataset.xi)); break;
     case 'add-exercise': readSetInputs(); openAddExercise(); break;
-    case 'confirm-add-exercise': {
-      const name = document.getElementById('ax-name').value.trim();
-      if (!name) { toast('Type a name'); return; }
-      const target = findTargetFor(name);
-      App.activeSession.exercises.push({
-        name, target,
-        sets: target ? plannedSetsFor(name, target) : []
-      });
-      persistSession();
+
+    /* routine editor */
+    case 'routine-open-day':
+      App.routineDay = App.routineDay === Number(el.dataset.idx) ? null : Number(el.dataset.idx);
+      App.render(); break;
+    case 'routine-add-ex': openExercisePicker('routine', { day: Number(el.dataset.day) }); break;
+    case 'routine-del-ex': {
+      const day = Number(el.dataset.day), ex = Number(el.dataset.ex);
+      const removed = routineRemoveExercise(day, ex);
+      App.render();
+      if (removed) toast(`${removed[0]} removed from the routine`);
+      break;
+    }
+    case 'routine-move':
+      routineMoveExercise(Number(el.dataset.day), Number(el.dataset.ex), Number(el.dataset.dir));
+      App.render(); break;
+    case 'routine-target': openTargetModal(Number(el.dataset.day), Number(el.dataset.ex)); break;
+    case 'save-target': {
+      const sets = Number(document.getElementById('tg-sets').value);
+      const reps = Number(document.getElementById('tg-reps').value);
+      if (!(sets >= 1 && sets <= 12) || !(reps >= 1 && reps <= 100)) { toast('1–12 sets, 1–100 reps'); return; }
+      routineSetTarget(Number(el.dataset.day), Number(el.dataset.ex), `${sets}×${reps}`);
       closeModal(); App.render(); break;
     }
+    case 'routine-rename': {
+      const d = Number(el.dataset.day);
+      const name = prompt('Name this day', activeRoutine().days[d].name);
+      if (name && name.trim()) { routineRenameDay(d, name); App.render(); }
+      break;
+    }
+    case 'routine-add-day': {
+      const name = prompt('Name the new day', `Day ${activeRoutine().days.length + 1}`);
+      if (name && name.trim()) { routineAddDay(name.trim()); App.routineDay = activeRoutine().days.length - 1; App.render(); }
+      break;
+    }
+    case 'routine-del-day': {
+      const d = Number(el.dataset.day);
+      const day = activeRoutine().days[d];
+      if (!confirm(`Delete "${day.name}" from your routine? Sessions you already logged are kept.`)) break;
+      if (routineRemoveDay(d)) { App.routineDay = null; App.render(); }
+      break;
+    }
+    case 'routine-use-template': {
+      const key = el.dataset.key;
+      if (!confirm(`Replace your routine with "${TEMPLATES[key].name}"? Logged sessions are kept.`)) break;
+      const base = TEMPLATES[key];
+      saveRoutine({ name: base.name, base: key,
+        days: base.days.map(d => ({ name: d.name, ex: d.ex.map(e => [e[0], e[1]]) })) });
+      const prof = getProfile(); if (prof) { prof.template = key; setProfile(prof); }
+      App.routineDay = null; App.trainDay = null;
+      toast(`Now running ${base.name}`); App.render(); break;
+    }
+    case 'routine-reset':
+      if (!confirm('Discard your customised routine and go back to the standard split?')) break;
+      resetRoutine(); App.routineDay = null; App.trainDay = null;
+      toast('Back to the standard split'); App.render(); break;
+
+    /* exercise picker */
+    case 'pk-group': App.picker.group = el.dataset.g; renderPickerModal(); break;
+    case 'pk-choose': pickerChoose(el.dataset.name); break;
+
+    /* coach */
+    case 'coach-add-ex':
+    case 'coach-drop-ex':
+    case 'coach-set-target': applyCoach(a, el.dataset.key, el.dataset.d); break;
+    case 'coach-dismiss': dismissCoach(el.dataset.key); App.render(); break;
     case 'finish-workout': finishWorkout(); break;
     case 'discard-workout':
       if (confirm('Discard this workout? Every set you logged in it will be lost.')) {
@@ -1261,20 +1349,28 @@ document.addEventListener('click', e => {
       break;
 
     /* grocery */
-    case 'g-add': groceryAdd(document.getElementById('g-new').value); break;
+    case 'g-add': {
+      const f = document.getElementById('g-new');
+      groceryAdd(f.value); f.value = '';
+      break;
+    }
+    case 'g-add-name': groceryAdd(el.dataset.name); break;
     case 'g-section': App.grocSection = el.dataset.v; App.render(); break;
     case 'g-staple': groceryAddFromSection(el.dataset.sec || 'staples', Number(el.dataset.idx)); break;
+    case 'g-qty': groceryQty(el.dataset.id, Number(el.dataset.d)); break;
     case 'g-toggle': {
-      if (e.target.closest('[data-action=g-del]')) break;
       const list = getGrocery();
       const it = list.find(i => i.id === el.dataset.id);
       if (it) { it.done = !it.done; setGrocery(list); App.render(); }
       break;
     }
     case 'g-del': {
-      e.stopPropagation();
-      setGrocery(getGrocery().filter(i => i.id !== el.dataset.id));
-      App.render(); break;
+      const list = getGrocery();
+      const it = list.find(i => i.id === el.dataset.id);
+      setGrocery(list.filter(i => i.id !== el.dataset.id));
+      App.render();
+      if (it) toast(`${it.name} removed`);
+      break;
     }
     case 'g-clear-done': setGrocery(getGrocery().filter(i => !i.done)); App.render(); break;
 
@@ -1342,9 +1438,13 @@ document.getElementById('tabbar').addEventListener('click', e => {
   App.render();
 });
 
-/* enter key on grocery input */
+/* enter key on grocery input — clear it so you can keep typing the whole shop */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.id === 'g-new') { groceryAdd(e.target.value); }
+  if (e.key === 'Enter' && e.target.id === 'g-new') {
+    groceryAdd(e.target.value);
+    const again = document.getElementById('g-new');
+    if (again) { again.value = ''; again.focus(); }
+  }
 });
 
 function shiftDay(key, dir) {

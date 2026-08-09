@@ -42,10 +42,13 @@ Stalling is rarely only a training problem, so Peak tracks the inputs that feed 
 - **AI meal scanning** — snap a photo or just describe a meal; Gemini estimates calories,
   macros, fiber, and a nutrient-density score per item. Every number is editable before you
   log it. Runs on Gemini's free tier — $0.
-- **Sleep scores** — duration + quality + bedtime consistency → a 0–100 nightly score, with
-  14-day trends and backfill for missed nights.
-- **Smart grocery list** — one-tap quick-adds for budget protein staples and easy meals, plus
-  a nudge when your week ran under target.
+- **Sleep scores** — duration + quality + bed *and* wake consistency → a 0–100 nightly score,
+  with 14-day trends and backfill for missed nights. And once there's enough of both logged,
+  Peak splits your session scores by how you slept the night before, so the claim that sleep
+  feeds the lift shows up in your own numbers instead of being asserted at you.
+- **Smart grocery list** — quick-adds for budget protein staples and easy meals, plus a list
+  built from what you actually log: your usuals, a nudge when a regular buy hasn't appeared in
+  a couple of weeks, aisle grouping once it gets long, and quantities ("eggs ×2").
 - **Streaks, weight trend, weekly review.** Metric or imperial throughout.
 
 ## Logging is built to be fast
@@ -62,11 +65,33 @@ It draws the actual plates, follows the next set you haven't ticked (so a warmup
 right on every set), updates as you type, and tells you when a number can't be loaded
 exactly. Guessed wrong for your gym? Tap it and correct it once.
 
-## Built-in splits
+## Routines that become yours
 
-Full Body, Upper/Lower, and Push/Pull/Legs, with the next day queued automatically. Log a
-freestyle session any time. Any lift Peak doesn't recognise can be tagged to a muscle so it
-counts toward your weekly volume.
+Eleven built-in splits — Full Body ×2 and ×3, Upper/Lower, three flavours of Push/Pull/Legs,
+Arnold, a body-part split, big-lifts-only, and a dumbbells-only routine for training at home —
+with the next day queued automatically.
+
+All of them are starting points. Add or remove exercises, reorder them, change the sets and
+reps, rename days, add or delete whole days, or switch splits entirely. The first edit forks
+the built-in into your own copy, so the standard version is always there to reset back to and
+nothing you've logged is touched. Pick from a 123-exercise library, searchable and filtered by
+muscle, or type in whatever your gym calls it.
+
+## And it starts noticing things
+
+The longer you use Peak, the more of your plan it can fix for you — all of it read from
+sessions you already logged, with nothing to switch on:
+
+> **＋ Add Cable Fly to Push?**
+> You've added it yourself in 4 of your last 5 Push sessions.
+
+> **≠ Bench Press: plan says 4 sets, you do 5.**
+> Every one of your last 5 Push sessions logged exactly 5 working sets.
+
+It also offers to drop a lift that's been in the plan for five sessions without a single set
+logged, and to add a specific exercise when your routine *as written* can't reach a muscle's
+effective weekly volume. Each is one tap to accept, one to dismiss for good, and never more
+than two on screen at once.
 
 ## Privacy
 
@@ -125,9 +150,9 @@ support via a service worker. Charts are hand-rolled inline SVG.
 | [worker/README.md](worker/README.md) | The hosted meal-scan proxy (scaffolded, not deployed) |
 | [worker/API.md](worker/API.md) | The Worker's API contract — `/scan` as built, plus what's planned |
 
-Current release: **v30** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
-the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run, and v30's changes are
-mostly gym-floor ergonomics, which is exactly what a desktop browser cannot verify.
+Current release: **v31** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
+the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run, and v30's ergonomics
+changes are exactly what a desktop browser cannot verify.
 
 Releasing? Never hand-edit version strings — one version lives in 22 places:
 

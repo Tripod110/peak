@@ -3,7 +3,7 @@
 const TEMPLATES = {
   fb3: {
     name: 'Full Body ×3', days: [
-      { name: 'Full Body A', ex: [['Squat', '3×5'], ['Bench Press', '3×5'], ['Barbell Row', '3×8'], ['Overhead Press', '2×10'], ['Plank', '3×45s']] },
+      { name: 'Full Body A', ex: [['Squat', '3×5'], ['Bench Press', '3×5'], ['Barbell Row', '3×8'], ['Overhead Press', '2×10'], ['Plank (seconds)', '3×45']] },
       { name: 'Full Body B', ex: [['Deadlift', '3×5'], ['Overhead Press', '3×5'], ['Lat Pulldown', '3×10'], ['Walking Lunge', '3×10'], ['Hanging Leg Raise', '3×10']] },
       { name: 'Full Body C', ex: [['Front Squat', '3×8'], ['Incline DB Press', '3×10'], ['Seated Cable Row', '3×10'], ['Romanian Deadlift', '3×8'], ['Dumbbell Curl', '3×12']] }
     ]
@@ -36,7 +36,68 @@ const TEMPLATES = {
     ]
   }
 };
-const TEMPLATE_FOR_DAYS = { 2: 'fb3', 3: 'fb3', 4: 'ul4', 5: 'ppl5', 6: 'ppl6', 7: 'ppl6' };
+/* Built-ins are starting points, not the product — every one of them can be
+   edited, and the moment a user changes anything they get their own copy (see
+   `editableRoutine` in routines.js). What matters here is covering the shapes
+   people actually walk in with, including "I only have dumbbells" and "I have
+   45 minutes twice a week", which the original four did not. */
+Object.assign(TEMPLATES, {
+  fb2: {
+    name: 'Full Body ×2', days: [
+      { name: 'Full Body 1', ex: [['Squat', '3×5'], ['Bench Press', '3×5'], ['Barbell Row', '3×8'], ['Overhead Press', '3×8'], ['Plank (seconds)', '3×45']] },
+      { name: 'Full Body 2', ex: [['Deadlift', '3×5'], ['Incline DB Press', '3×10'], ['Lat Pulldown', '3×10'], ['Walking Lunge', '3×10'], ['Hanging Leg Raise', '3×12']] }
+    ]
+  },
+  ul3: {
+    name: 'Upper / Lower / Full ×3', days: [
+      { name: 'Upper', ex: [['Bench Press', '4×6'], ['Barbell Row', '4×6'], ['Overhead Press', '3×8'], ['Lat Pulldown', '3×10'], ['Dumbbell Curl', '3×12'], ['Triceps Pushdown', '3×12']] },
+      { name: 'Lower', ex: [['Squat', '4×6'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '4×12']] },
+      { name: 'Full Body', ex: [['Deadlift', '3×5'], ['Incline DB Press', '3×10'], ['Weighted Pull-up', '3×8'], ['Bulgarian Split Squat', '3×10'], ['Lateral Raise', '3×15'], ['Cable Crunch', '3×15']] }
+    ]
+  },
+  ppl3: {
+    name: 'Push / Pull / Legs ×3', days: [
+      { name: 'Push', ex: [['Bench Press', '4×6'], ['Overhead Press', '3×8'], ['Incline DB Press', '3×10'], ['Lateral Raise', '4×15'], ['Triceps Pushdown', '3×12']] },
+      { name: 'Pull', ex: [['Deadlift', '3×5'], ['Weighted Pull-up', '4×6'], ['Seated Cable Row', '3×10'], ['Face Pull', '3×15'], ['Dumbbell Curl', '3×12']] },
+      { name: 'Legs', ex: [['Squat', '4×6'], ['Romanian Deadlift', '3×8'], ['Leg Press', '3×10'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '4×12'], ['Hanging Leg Raise', '3×12']] }
+    ]
+  },
+  arnold6: {
+    name: 'Arnold split ×6', days: [
+      { name: 'Chest & Back', ex: [['Bench Press', '4×8'], ['Barbell Row', '4×8'], ['Incline DB Press', '3×10'], ['Weighted Pull-up', '3×8'], ['Dumbbell Fly', '3×12'], ['Dumbbell Pullover', '3×12']] },
+      { name: 'Shoulders & Arms', ex: [['Overhead Press', '4×8'], ['Lateral Raise', '4×15'], ['Rear Delt Fly', '3×15'], ['Barbell Curl', '3×10'], ['Skull Crusher', '3×10'], ['Hammer Curl', '3×12'], ['Triceps Pushdown', '3×12']] },
+      { name: 'Legs & Abs', ex: [['Squat', '4×8'], ['Romanian Deadlift', '3×10'], ['Leg Press', '3×12'], ['Leg Curl', '3×12'], ['Standing Calf Raise', '4×15'], ['Hanging Leg Raise', '3×15']] },
+      { name: 'Chest & Back II', ex: [['Incline Bench Press', '4×8'], ['Seated Cable Row', '4×10'], ['Dip', '3×10'], ['Lat Pulldown', '3×12'], ['Pec Deck', '3×15'], ['Straight-arm Pulldown', '3×15']] },
+      { name: 'Shoulders & Arms II', ex: [['Seated Dumbbell Shoulder Press', '4×10'], ['Cable Lateral Raise', '4×15'], ['Face Pull', '3×15'], ['Preacher Curl', '3×12'], ['Overhead Extension', '3×12'], ['Cable Curl', '3×15'], ['Rope Pushdown', '3×15']] },
+      { name: 'Legs & Abs II', ex: [['Front Squat', '4×8'], ['Hip Thrust', '3×10'], ['Bulgarian Split Squat', '3×10'], ['Leg Extension', '3×15'], ['Seated Calf Raise', '4×15'], ['Cable Crunch', '3×15']] }
+    ]
+  },
+  bro5: {
+    name: 'Body part split ×5', days: [
+      { name: 'Chest', ex: [['Bench Press', '4×8'], ['Incline DB Press', '4×10'], ['Dip', '3×10'], ['Cable Fly', '3×15'], ['Pec Deck', '3×15']] },
+      { name: 'Back', ex: [['Deadlift', '3×5'], ['Weighted Pull-up', '4×8'], ['Barbell Row', '4×8'], ['Seated Cable Row', '3×12'], ['Straight-arm Pulldown', '3×15'], ['Barbell Shrug', '3×12']] },
+      { name: 'Shoulders', ex: [['Overhead Press', '4×8'], ['Seated Dumbbell Shoulder Press', '3×10'], ['Lateral Raise', '4×15'], ['Rear Delt Fly', '3×15'], ['Face Pull', '3×15'], ['Upright Row', '3×12']] },
+      { name: 'Arms', ex: [['Barbell Curl', '4×10'], ['Skull Crusher', '4×10'], ['Hammer Curl', '3×12'], ['Rope Pushdown', '3×15'], ['Preacher Curl', '3×12'], ['Overhead Extension', '3×12']] },
+      { name: 'Legs', ex: [['Squat', '4×8'], ['Romanian Deadlift', '3×10'], ['Leg Press', '3×12'], ['Leg Curl', '3×12'], ['Leg Extension', '3×15'], ['Standing Calf Raise', '4×15']] }
+    ]
+  },
+  home3: {
+    name: 'Dumbbells only ×3', days: [
+      { name: 'Push', ex: [['Dumbbell Bench Press', '4×10'], ['Seated Dumbbell Shoulder Press', '3×10'], ['Incline DB Press', '3×12'], ['Lateral Raise', '4×15'], ['Dumbbell Kickback', '3×15'], ['Push-up', '3×15']] },
+      { name: 'Pull', ex: [['Single-arm Dumbbell Row', '4×10'], ['Dumbbell Pullover', '3×12'], ['Rear Delt Fly', '3×15'], ['Dumbbell Curl', '3×12'], ['Hammer Curl', '3×12'], ['Dumbbell Shrug', '3×15']] },
+      { name: 'Legs', ex: [['Goblet Squat', '4×12'], ['Romanian Deadlift', '3×10'], ['Bulgarian Split Squat', '3×10'], ['Walking Lunge', '3×12'], ['Single-leg Calf Raise', '4×15'], ['Plank (seconds)', '3×45']] }
+    ]
+  },
+  minimal3: {
+    name: 'Big lifts only ×3', days: [
+      { name: 'Squat day', ex: [['Squat', '5×5'], ['Bench Press', '5×5'], ['Barbell Row', '5×5']] },
+      { name: 'Press day', ex: [['Overhead Press', '5×5'], ['Deadlift', '1×5'], ['Weighted Pull-up', '3×8']] },
+      { name: 'Squat day II', ex: [['Squat', '5×5'], ['Incline Bench Press', '5×5'], ['Barbell Row', '5×5']] }
+    ]
+  }
+});
+
+const TEMPLATE_FOR_DAYS = { 2: 'fb2', 3: 'fb3', 4: 'ul4', 5: 'ppl5', 6: 'ppl6', 7: 'ppl6' };
 
 /* ---------- muscle mapping & weekly set volume ----------
    Sets per muscle per week is the standard hypertrophy dose metric. Primary
@@ -98,9 +159,15 @@ function setMuscleOverride(name, p, s) {
   m[String(name).toLowerCase()] = { p, s };
   Store.set('muscleMap', m);
 }
+/* Order matters: what the user taught us, then the library (which states its
+   movers explicitly), then the patterns. The library sits above the regexes
+   because a rule written to catch a family will occasionally catch a lift it
+   shouldn't — "Reverse Curl" is biceps, "Cable Pull-through" is not a pull. */
 function musclesFor(name) {
   const o = getMuscleMap()[String(name || '').toLowerCase()];
   if (o) return { p: o.p || [], s: o.s || [] };
+  const lib = typeof libEntry === 'function' ? libEntry(name) : null;
+  if (lib) return { p: lib.p || [lib.group], s: lib.s || [] };
   for (const r of MUSCLE_RULES) if (r.re.test(name)) return { p: r.p || [], s: r.s || [] };
   return { p: [], s: [] };
 }
@@ -354,12 +421,20 @@ function plateauWatchRow() {
   </div>`;
 }
 
-/* which template day is next */
+/* Which day is next. Counting sessions modulo the day count broke as soon as
+   routines became editable — adding a day silently reshuffled the rotation, and
+   deleting one could point at a day that no longer exists. Anchor on the last
+   day actually trained instead, which is both stable under edits and what a
+   lifter means by "what's next". */
 function nextDayIndex() {
-  const p = getProfile();
-  const tpl = TEMPLATES[p.template];
-  const count = getWorkouts().filter(s => s.template === p.template && !s.freestyle).length;
-  return count % tpl.days.length;
+  const days = activeRoutine().days;
+  const last = getWorkouts()
+    .filter(s => !s.cardio && !s.freestyle && s.dayName)
+    .sort((a, b) => a.date < b.date ? 1 : -1)[0];
+  if (!last) return 0;
+  const i = days.findIndex(d => d.name === last.dayName);
+  if (i < 0) return 0;                       // that day is gone from the routine
+  return (i + 1) % days.length;
 }
 
 /* ---------- auto-progression (double progression) ----------
@@ -403,11 +478,10 @@ function roundW(v, name) {
   return Math.max(s, Math.round(v / s) * s);
 }
 
-/* the prescribed sets×reps for an exercise, looked up from the user's template */
+/* the prescribed sets×reps for an exercise — the user's own routine wins */
 function findTargetFor(name) {
   const key = name.toLowerCase();
-  const p = getProfile();
-  const order = [TEMPLATES[p?.template], ...Object.values(TEMPLATES)].filter(Boolean);
+  const order = [activeRoutine(), ...Object.values(TEMPLATES)].filter(Boolean);
   for (const tpl of order) {
     for (const d of tpl.days) {
       const hit = d.ex.find(e => e[0].toLowerCase() === key);
@@ -620,6 +694,7 @@ function clearPersistedSession() { Store.remove(ACTIVE_KEY); Store.remove(REST_K
 function renderTrain() {
   if (App.activeSession) return renderActiveSession();
   const view = App.trainView || 'home';
+  if (view === 'routine') return renderRoutineEditor();
   return view === 'home' ? renderTrainHome() : renderTrainSub(view);
 }
 
@@ -660,7 +735,7 @@ function emptyNote(t) { return `<div class="card"><div class="muted small">${esc
 
 function renderTrainHome() {
   const p = getProfile();
-  const tpl = TEMPLATES[p.template];
+  const tpl = activeRoutine();
   const nextIdx = nextDayIndex();
   const plateaus = detectPlateaus();
   const stalledNames = new Set(plateaus.map(pl => pl.name.toLowerCase()));
@@ -714,6 +789,8 @@ function renderTrainHome() {
   }).join('')}
   ${plateaus.length ? '' : plateauWatchRow()}
 
+  ${renderCoachCard()}
+
   <div class="grid-2">
     <button class="btn" data-action="start-freestyle">✎ Freestyle lift</button>
     <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
@@ -730,6 +807,8 @@ function renderTrainHome() {
     ${navRow('consistency', '📅', 'Consistency',
       `${wkLifts}/${p.gymDays} this week${streak ? ` · ${streak}-week streak` : ''}`)}
     ${navRow('history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
+    ${navRow('routine', '✎', 'Edit your routine',
+      `${tpl.days.length} days${isCustomRoutine() ? ' · yours' : ' · standard'}`)}
     ${wkCardio ? `<div class="chart-note">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week.</div>` : ''}
     ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
   </div>`;
@@ -1018,8 +1097,8 @@ function renderRecentCard(all, limit) {
 /* ---------- active session ---------- */
 function startWorkout(dayIdx, freestyle = false) {
   const p = getProfile();
-  const tpl = TEMPLATES[p.template];
-  const day = freestyle ? null : tpl.days[dayIdx];
+  const tpl = activeRoutine();
+  const day = freestyle ? null : (tpl.days[dayIdx] || tpl.days[0]);
   const stalled = new Set(detectPlateaus().map(x => x.name.toLowerCase()));
   App.activeSession = {
     id: 'w' + Date.now(),
@@ -1547,26 +1626,12 @@ function finishWorkout() {
   App.render();
 }
 
-const EXTRA_EXERCISES = [
-  'Crunch', 'Cable Crunch', 'Ab Wheel Rollout', 'Russian Twist', 'Sit-up', 'Decline Sit-up',
-  'Leg Raise', 'Hanging Leg Raise', 'Plank (seconds)', 'Side Plank (seconds)', 'Dead Bug',
-  'Back Extension', 'Farmer Carry', 'Glute Ham Raise', 'Kettlebell Swing', 'Landmine Press', 'Sled Push'
-];
-
+/* The old add-exercise modal was a text box with a datalist behind it: on a
+   phone that is a keyboard and a guess at spelling, over a list of ~50 names
+   nobody could browse. Replaced by the searchable, muscle-filtered picker in
+   routines.js, which draws on the full library plus everything you've logged. */
 function openAddExercise() {
-  const names = new Set();
-  Object.values(TEMPLATES).forEach(t => t.days.forEach(d => d.ex.forEach(e => names.add(e[0]))));
-  EXTRA_EXERCISES.forEach(n => names.add(n));
-  getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
-  openModal(`
-    <h3>Add exercise</h3>
-    <label>Exercise name</label>
-    <input id="ax-name" list="ax-list" placeholder="e.g. Cable Crunch">
-    <datalist id="ax-list">${[...names].sort().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
-    <div class="chart-note">Bodyweight ab work: leave the weight blank and just log reps (or seconds). Dumbbell lifts are logged per hand.</div>
-    <button class="btn primary mt" data-action="confirm-add-exercise">Add</button>
-  `);
-  setTimeout(() => document.getElementById('ax-name')?.focus(), 50);
+  openExercisePicker('session');
 }
 
 function viewWorkoutModal(id) {

@@ -22,6 +22,8 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-12](#d-12) | A plateau requires four gates, not one | 🟢 Decided · v29 |
 | [D-13](#d-13) | The API key stays in plaintext; the blast radius shrinks instead | 🟢 Decided · v30 |
 | [D-14](#d-14) | Model ids are discovered from the user's key, not pinned in source | 🟢 Decided · v30 |
+| [D-15](#d-15) | Routines fork on write; built-ins are never mutated | 🟢 Decided · v31 |
+| [D-16](#d-16) | The coach reads the plan for volume, the log for habits | 🟢 Decided · v31 |
 
 ---
 
@@ -284,3 +286,46 @@ bug. New installs default to `gemini-3.5-flash`, Settings warns when the selecte
 scheduled for shutdown, and the automatic repoint catches everyone else the moment it matters.
 
 **Kept from v27:** never a `*-latest` alias, and `thinkingBudget: 0` — both still hold.
+
+## <a name="d-15"></a>D-15 · Routines fork on write; built-ins are never mutated
+**🟢 Decided.** v31 · `routines.js` · `activeRoutine`, `editableRoutine`
+
+Making routines editable had two plausible shapes: mutate the template in place, or copy it
+the first time the user changes something.
+
+**Decided:** fork on write. `TEMPLATES` is read-only seed data. The first edit copies the
+active split into `Store('routine')`, and from then on the whole Train tab reads that.
+
+**Why:** "reset to the standard split" has to keep working, and it can only work if the
+standard split still exists somewhere. It also means shipping an improved built-in in a later
+release never silently rewrites a routine someone has tuned — their copy is theirs, and the
+upgrade is an offer rather than an edit.
+
+**Consequence:** the split dropdown in Settings no longer decides anything on its own once a
+custom routine exists, so it asks before replacing one. A dropdown that appears to do nothing
+is worse than a confirm.
+
+**Rejected:** versioning routines, or diffing user edits against the built-in to merge
+upstream changes. Enormously more machinery for a solo-user local app where the "upstream
+change" is me editing a literal a few times a year.
+
+## <a name="d-16"></a>D-16 · The coach reads the plan for volume, the log for habits
+**🟢 Decided.** v31 · `routines.js` · `coachSuggestions`, `routineWeeklyMuscleSets`
+
+The "Peak noticed" suggestions all derive from logged sessions, with one deliberate exception:
+the muscle-volume rule measures what the *routine programs*, not what was *logged*.
+
+**Why:** the first implementation used logged sets over the trailing 7 days, and on a 3-day
+split it flagged four muscles at once — every muscle whose day happened to fall outside the
+window. Back was "under its minimum" because Pull was eight days ago, and it helpfully offered
+to add a fifth back exercise to a routine that already had plenty. Volume you didn't do
+because you skipped a session is an adherence problem, and the plateau and consistency
+surfaces already own that. Volume the routine *cannot* deliver even if you attend perfectly is
+a programming problem, and that is the only one worth offering to fix here.
+
+**Also decided:** the threshold is 80% of MEV, not MEV. These landmarks are ranges, and
+flagging 7 sets against a "minimum" of 8 trains people to ignore the card.
+
+**Consistent with [D-12](#d-12):** on anything advisory, bias toward silence. A suggestion has
+to be specific about what it observed and fixable in one tap, or it does not earn the space —
+"consider more volume" is a horoscope, not a suggestion.
