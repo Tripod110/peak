@@ -573,8 +573,32 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   background: var(--surface-2); border-radius: 99px; padding: 1px 7px;
 }
 
-/* range slider end labels */
-.range-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
+/* ---------- sleep logging ---------- */
+/* nudge buttons flanking the time input: the correction most mornings need is
+   ±15 minutes, and spinning an OS wheel for that is the whole complaint */
+.time-row { display: grid; grid-template-columns: 44px 44px 1fr 44px 44px; gap: 5px; align-items: center; }
+.time-row input { text-align: center; padding: 11px 2px; }
+.t-nudge {
+  min-height: 44px; border-radius: 9px; font-size: 12px; font-weight: 700;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-2);
+}
+.t-nudge:active { border-color: var(--blue); transform: scale(0.96); }
+.sl-dur-line {
+  text-align: center; font-size: 13px; color: var(--muted);
+  margin-top: 12px; padding: 9px; border-radius: 10px; background: var(--surface-2);
+}
+.sl-dur-line b { color: var(--ink); font-size: 16px; }
+
+/* quality as five targets, not a slider to drag to a number nobody can feel */
+.q-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.q-grid button {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 9px 2px; min-height: 62px; border-radius: 11px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+}
+.q-grid button.on { border-color: var(--violet); background: rgba(144,133,233,0.15); color: var(--ink); }
+.q-face { font-size: 20px; line-height: 1; }
+.q-lab { font-size: 9.5px; font-weight: 600; letter-spacing: 0.01em; }
 
 .staple-chip {
   display: inline-flex; flex-direction: column; gap: 1px;

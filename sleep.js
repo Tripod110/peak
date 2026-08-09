@@ -65,6 +65,46 @@ function fmtDur(min) {
   return Math.floor(min / 60) + 'h ' + String(min % 60).padStart(2, '0') + 'm';
 }
 
+/* ---------- your usual night ----------
+   The log form opened on a hardcoded 23:30 → 07:00 on night one and on night
+   three hundred, so every entry started by correcting two numbers that Peak
+   could already have worked out. It has a fortnight of your actual times.
+
+   Median, not mean: one 3am night should not drag the default that every
+   subsequent night starts from. */
+const USUAL_MIN_NIGHTS = 3;
+const USUAL_WINDOW = 14;
+
+function minutesOf(hhmm, wrapBefore) {
+  const [h, m] = String(hhmm || '00:00').split(':').map(Number);
+  let v = h * 60 + m;
+  if (wrapBefore && v < wrapBefore) v += 1440;   // after midnight is "late", not "early"
+  return v;
+}
+function timeOf(min) {
+  const t = ((Math.round(min) % 1440) + 1440) % 1440;
+  return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+}
+function median(nums) {
+  const a = nums.slice().sort((x, y) => x - y);
+  const i = Math.floor(a.length / 2);
+  return a.length % 2 ? a[i] : (a[i - 1] + a[i]) / 2;
+}
+
+function usualNight() {
+  const s = getSleep();
+  const keys = Object.keys(s).sort().slice(-USUAL_WINDOW);
+  if (keys.length < USUAL_MIN_NIGHTS) {
+    return { bed: '23:30', wake: '07:00', quality: 3, learned: false, nights: keys.length };
+  }
+  return {
+    bed: timeOf(median(keys.map(k => minutesOf(s[k].bed, 720)))),
+    wake: timeOf(median(keys.map(k => minutesOf(s[k].wake, 0)))),
+    quality: Math.round(median(keys.map(k => s[k].quality || 3))),
+    learned: true, nights: keys.length
+  };
+}
+
 /* Average over the last N CALENDAR days, with the coverage that produced it.
    Averaging "the last 7 entries" reported 8h 26m for a week that actually
    averaged 5h, because it silently reached back three weeks for nights to use. */
@@ -201,10 +241,7 @@ function renderSleep() {
         <button class="btn" data-action="open-sleep-log">Edit</button>
         <button class="btn ghost danger" data-action="del-sleep" data-key="${key}">Delete</button>
       </div>`
-    : `
-      <div class="muted mt">Not logged${isToday ? ' yet' : ` for ${prettyDate(key)}`}.</div>
-      <button class="btn primary mt" data-action="open-sleep-log">☾ Log this night</button>
-      ${isToday ? '' : '<div class="chart-note center">Missed a night? Log it here — the averages need it.</div>'}`}
+    : renderQuickLog(key, isToday)}
   </div>
 
   <div class="card">
@@ -217,6 +254,34 @@ function renderSleep() {
   ${renderSleepInsight(wk)}
   ${renderSleepTrainingLink()}
   ${renderRecentNights()}`;
+}
+
+/* ---------- logging an unlogged night ----------
+   Three routes, cheapest first. "I'm up" is the one that should get used: you
+   are holding the phone anyway, the clock knows the time, and Peak knows your
+   usual bedtime — so the only thing left to say is how you feel. */
+/* "I just woke up" only means anything if the clock agrees. Tapped at 6pm it
+   would offer a 19-hour night from this morning's usual bedtime — so the button
+   is shown only when now-minus-your-usual-bedtime is a duration a person could
+   actually have slept. Outside that window it is the ordinary log form. */
+const IMUP_MIN = 180, IMUP_MAX = 840;   // 3h – 14h
+
+function renderQuickLog(key, isToday) {
+  const u = usualNight();
+  const mins = sleepDurationMin(u.bed, nowTime());
+  const plausible = mins >= IMUP_MIN && mins <= IMUP_MAX;
+  return `
+    <div class="muted mt">Not logged${isToday ? ' yet' : ` for ${prettyDate(key)}`}.</div>
+    ${isToday && u.learned && plausible ? `
+      <button class="btn accent mt" data-action="sleep-imup">☀ I'm up — ${esc(fmtDur(mins))} since ${esc(fmtTime(u.bed))}</button>
+      <div class="chart-note center">Wake time from the clock, bedtime from your usual ${esc(fmtTime(u.bed))}. One more tap for how you slept.</div>
+      <button class="btn mt" data-action="open-sleep-log">Enter times myself</button>`
+    : `
+      <button class="btn primary mt" data-action="open-sleep-log">☾ Log this night</button>
+      ${u.learned
+        ? '<div class="chart-note center">Pre-filled with your usual times — nudge whatever was different.</div>'
+        : `<div class="chart-note center">After ${USUAL_MIN_NIGHTS} nights Peak learns your usual times and pre-fills them, so this becomes two taps.</div>`}
+      ${isToday ? '' : '<div class="chart-note center">Missed a night? Log it here — the averages need it.</div>'}`}`;
 }
 
 /* Coverage-aware: a verdict off two logged nights is not a verdict. */
@@ -295,48 +360,101 @@ function renderRecentNights() {
   </div>`;
 }
 
-function openSleepLog() {
+/* `prefill` lets the "I'm up" button hand in a wake time from the clock */
+function openSleepLog(prefill) {
   const key = App.sleepDay || todayKey();
   const s = getSleep();
-  const e = s[key] || { bed: '23:30', wake: '07:00', quality: 3 };
+  const u = usualNight();
+  const e = s[key] || { bed: u.bed, wake: u.wake, quality: u.quality };
+  if (prefill) Object.assign(e, prefill);
+  const editing = !!s[key];
+
   openModal(`
-    <h3>${s[key] ? 'Edit' : 'Log'} ${key === todayKey() ? 'last night' : prettyDate(key)}</h3>
-    <div class="grid-2">
-      <div><label>Bed time</label><input id="sl-bed" type="time" value="${e.bed}"></div>
-      <div><label>Wake time</label><input id="sl-wake" type="time" value="${e.wake}"></div>
+    <h3>${editing ? 'Edit' : 'Log'} ${key === todayKey() ? 'last night' : prettyDate(key)}</h3>
+    ${!editing && u.learned ? `<div class="modal-sub">Pre-filled from your usual night across ${u.nights} logged nights. Nudge anything that's off.</div>` : ''}
+
+    ${timeField('bed', 'Went to bed', e.bed)}
+    ${timeField('wake', 'Woke up', e.wake)}
+
+    <div class="sl-dur-line">That's <b id="sl-dur">${fmtDur(sleepDurationMin(e.bed, e.wake))}</b> in bed</div>
+
+    <label>How rested do you feel?</label>
+    <div class="q-grid" id="sl-quality">
+      ${[1, 2, 3, 4, 5].map(q => `
+        <button type="button" data-q="${q}" class="${q === e.quality ? 'on' : ''}">
+          <span class="q-face">${SLEEP_FACE[q]}</span>
+          <span class="q-lab">${esc(SLEEP_QUALITY[q])}</span>
+        </button>`).join('')}
     </div>
-    <div class="chart-note center">That's <b id="sl-dur">${fmtDur(sleepDurationMin(e.bed, e.wake))}</b> in bed — check it before saving, it's the biggest part of the score.</div>
-    <label>Night of</label>
-    <input id="sl-date" type="date" value="${key}" max="${todayKey()}">
-    <label>How rested do you feel? <span id="sl-qval">${esc(SLEEP_QUALITY[e.quality] || '')}</span></label>
-    <input id="sl-quality" type="range" min="1" max="5" value="${e.quality}" style="padding:0">
-    <div class="range-ends"><span>Wrecked</span><span>Fully rested</span></div>
-    <div class="chart-note">This is a quarter of the score. "Slept 8 hours and still feel awful" is information — log it honestly rather than rounding up.</div>
+    <div class="chart-note">A quarter of the score. "Slept 8 hours and still feel awful" is information — log it honestly rather than rounding up.</div>
+
     <button class="btn primary mt" data-action="save-sleep">Save</button>
+    <details class="adv">
+      <summary>Logging a different night</summary>
+      <input id="sl-date" type="date" value="${key}" max="${todayKey()}">
+    </details>
   `);
-  document.getElementById('sl-quality')?.addEventListener('input', ev => {
-    document.getElementById('sl-qval').textContent = SLEEP_QUALITY[ev.target.value] || '';
-  });
+  wireSleepModal();
+}
+
+/* A time you nudge rather than a wheel you spin. The OS time picker is fine for
+   setting an alarm once and miserable for the "actually it was more like
+   quarter past" correction that is the only edit most mornings need. */
+function timeField(id, label, value) {
+  return `
+    <label>${label}</label>
+    <div class="time-row">
+      <button type="button" class="t-nudge" data-nudge="${id}" data-min="-30">−30</button>
+      <button type="button" class="t-nudge" data-nudge="${id}" data-min="-15">−15</button>
+      <input id="sl-${id}" type="time" value="${value}" aria-label="${label}">
+      <button type="button" class="t-nudge" data-nudge="${id}" data-min="15">+15</button>
+      <button type="button" class="t-nudge" data-nudge="${id}" data-min="30">+30</button>
+    </div>`;
+}
+
+function wireSleepModal() {
   const bed = document.getElementById('sl-bed'), wake = document.getElementById('sl-wake');
   const showDur = () => {
     const el = document.getElementById('sl-dur');
     if (el && bed.value && wake.value) el.textContent = fmtDur(sleepDurationMin(bed.value, wake.value));
   };
-  bed?.addEventListener('input', showDur);
-  wake?.addEventListener('input', showDur);
+  [bed, wake].forEach(i => i?.addEventListener('input', showDur));
+
+  document.querySelectorAll('[data-nudge]').forEach(btn => btn.addEventListener('click', () => {
+    const field = document.getElementById('sl-' + btn.dataset.nudge);
+    if (!field) return;
+    field.value = timeOf(minutesOf(field.value || '00:00') + Number(btn.dataset.min));
+    showDur();
+  }));
+
+  document.querySelectorAll('#sl-quality button').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('#sl-quality button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+  }));
 }
 
 /* A bare 3/5 means nothing a month later; the words are the scale. */
-const SLEEP_QUALITY = { 1: '1 · Wrecked', 2: '2 · Groggy', 3: '3 · OK', 4: '4 · Good', 5: '5 · Fully rested' };
+const SLEEP_QUALITY = { 1: 'Wrecked', 2: 'Groggy', 3: 'OK', 4: 'Good', 5: 'Rested' };
+const SLEEP_FACE = { 1: '😵', 2: '😪', 3: '😐', 4: '🙂', 5: '😃' };
+
+/* One tap from the Sleep tab: the clock supplies the wake time, your history
+   supplies the bedtime, and the only thing left to answer is how you feel. */
+function logImUp() {
+  App.sleepDay = todayKey();
+  openSleepLog({ wake: nowTime() });
+}
 
 function saveSleepEntry() {
   const bed = document.getElementById('sl-bed').value;
   const wake = document.getElementById('sl-wake').value;
   if (!bed || !wake) { toast('Set both times'); return; }
-  const date = document.getElementById('sl-date').value || todayKey();
+  const date = document.getElementById('sl-date').value || App.sleepDay || todayKey();
   if (date > todayKey()) { toast("Can't log a night in the future"); return; }
-  const quality = Number(document.getElementById('sl-quality').value);
-  setSleepEntry(date, { bed, wake, quality, durationMin: sleepDurationMin(bed, wake) });
+  const quality = Number(document.querySelector('#sl-quality button.on')?.dataset.q) || 3;
+  const durationMin = sleepDurationMin(bed, wake);
+  setSleepEntry(date, { bed, wake, quality, durationMin });
   App.sleepDay = date;
-  closeModal(); toast('Sleep logged'); App.render();
+  closeModal();
+  toast(`${fmtDur(durationMin)} logged · score ${sleepScore(date)}`);
+  App.render();
 }

@@ -18,6 +18,47 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v32 — logging a night stops feeling like data entry
+`pending` · 2026-08-09 · **pending push**
+
+Reported directly: *"the manually logging and dragging numbers or punching them in just doesn't
+feel good."* Fair. Logging a night meant a hardcoded `23:30 → 07:00` to correct via the OS time
+wheel, a date field you almost never needed, and a slider to drag to a number nobody can feel —
+four inputs, every morning, half awake.
+
+**Peak now knows your usual night.** The form opens on the median of your last 14 logged
+nights instead of the same two hardcoded times it used on night one. Median rather than mean on
+purpose: one 3am night shouldn't drag the default that every subsequent night starts from.
+Verified against a fortnight containing two deliberate outliers (02:40 and 03:10 bedtimes) —
+the learned default stayed at 23:18.
+
+**"☀ I'm up" — the one-tap path.** On the Sleep tab, wake time comes from the clock and bedtime
+from your usual, so the only thing left to answer is how you feel. It only appears when the
+resulting duration is one a person could plausibly have slept (3–14h); tapped at 6pm it would
+otherwise have offered a 19-hour night, which is exactly what the first build did.
+
+**Nudge chips instead of the time wheel.** `−30 −15 +15 +30` either side of each time, wrapping
+correctly across midnight, with the resulting duration updating live above the Save button. The
+±15-minute correction is the only edit most mornings need and the wheel was the worst way to
+make it.
+
+**Quality is five buttons, not a slider** — faces and words (`😐 OK`, `🙂 Good`), each a full
+tap target, pre-selected to your usual.
+
+**The date field moved** behind "Logging a different night". Backfilling still works, and the ‹
+arrow on the tab still does it too; it just no longer sits in the path of the common case.
+
+Net effect on a typical morning: open Sleep → **I'm up** → tap a face → Save. Two taps of
+actual decision instead of four fields of data entry.
+
+> Not built, and worth saying plainly: reading Apple Health or Health Connect is impossible
+> from a PWA — there is no web API for it, so this is not a permissions problem that can be
+> worked around. The only true "never log again" route a website can take is a bring-your-own
+> token for a tracker with a REST API (Oura, Fitbit, Whoop), the same shape as the Gemini key.
+> Deferred, not rejected.
+
+---
+
 ## v31 — the routine is yours, and Peak starts noticing
 `pending` · 2026-08-09 · **pending push**
 

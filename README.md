@@ -43,7 +43,10 @@ Stalling is rarely only a training problem, so Peak tracks the inputs that feed 
   macros, fiber, and a nutrient-density score per item. Every number is editable before you
   log it. Runs on Gemini's free tier — $0.
 - **Sleep scores** — duration + quality + bed *and* wake consistency → a 0–100 nightly score,
-  with 14-day trends and backfill for missed nights. And once there's enough of both logged,
+  with 14-day trends and backfill for missed nights. Logging one is two taps: Peak learns your
+  usual bed and wake times and pre-fills them, **☀ I'm up** takes the wake time off the clock,
+  and small corrections are nudge buttons rather than a spinning time wheel. And once there's
+  enough of both logged,
   Peak splits your session scores by how you slept the night before, so the claim that sleep
   feeds the lift shows up in your own numbers instead of being asserted at you.
 - **Smart grocery list** — quick-adds for budget protein staples and easy meals, plus a list
@@ -150,7 +153,7 @@ support via a service worker. Charts are hand-rolled inline SVG.
 | [worker/README.md](worker/README.md) | The hosted meal-scan proxy (scaffolded, not deployed) |
 | [worker/API.md](worker/API.md) | The Worker's API contract — `/scan` as built, plus what's planned |
 
-Current release: **v31** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
+Current release: **v32** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
 the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run, and v30's ergonomics
 changes are exactly what a desktop browser cannot verify.
 

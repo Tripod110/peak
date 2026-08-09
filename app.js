@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v32';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -1341,6 +1341,7 @@ document.addEventListener('click', e => {
 
     /* sleep */
     case 'open-sleep-log': openSleepLog(); break;
+    case 'sleep-imup': logImUp(); break;
     case 'save-sleep': saveSleepEntry(); break;
     case 'sleep-day': App.sleepDay = shiftDay(App.sleepDay, Number(el.dataset.dir)); App.render(); break;
     case 'open-night': App.sleepDay = el.dataset.key; App.render(); openSleepLog(); break;
