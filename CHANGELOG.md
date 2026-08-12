@@ -19,7 +19,7 @@ See [SHIPPING.md](SHIPPING.md).
 ---
 
 ## v32 — logging a night stops feeling like data entry
-`pending` · 2026-08-09 · **pending push**
+`35dc6bb` · 2026-08-09 · **live**
 
 Reported directly: *"the manually logging and dragging numbers or punching them in just doesn't
 feel good."* Fair. Logging a night meant a hardcoded `23:30 → 07:00` to correct via the OS time
@@ -60,7 +60,7 @@ actual decision instead of four fields of data entry.
 ---
 
 ## v31 — the routine is yours, and Peak starts noticing
-`pending` · 2026-08-09 · **pending push**
+`6d231c1` · 2026-08-09 · **live**
 
 Peak shipped four fixed splits and no way to change them. If your gym had no hack squat, or
 you always did an extra fly, or you never once touched the calf raise sitting in the plan,
