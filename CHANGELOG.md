@@ -16,6 +16,79 @@ See [SHIPPING.md](SHIPPING.md).
 > sequence jumps. Every one of those fixes is itemised in [AUDIT.md](AUDIT.md) and attributed
 > to `5f0a417`.
 
+> **There is no v33 release.** v33 was committed locally on 2026-08-12 and never pushed; v34–v37
+> shipped from a different machine, branched from v32. Its security fixes reached users in v38.
+
+---
+
+## v38 — restored backups are no longer trusted
+`pending` · 2026-09-15 · **pending push**
+
+**This is v33's work, landing three releases late.** v33 was committed on 2026-08-12 but never
+pushed, and v34–v37 were built from v32, so every fix below was absent from the live app the
+whole time. Cherry-picked onto this line (`git show 2652381` is the original), with the parts
+v37 rewrote re-applied by hand rather than merged blindly — see the escaping sweep note at the
+end. There is no v33 release on this line and there never will be.
+
+A security triage of the whole app found two issues, both reachable through Settings → Import
+backup. Both are fixed, and both fixes were verified by re-running the working exploit. Full
+reasoning in [D-17](DECISIONS.md#d-17).
+
+**Fixed — stored HTML injection from a restored backup.** Peak escaped everything it thought of
+as *text* (exercise names, food names, grocery items, AI scan output) and treated everything it
+thought of as *structural* — times, reps, quality ratings, scores — as trustworthy, writing it
+into HTML raw. Storage is not trustworthy: a backup is a file someone can hand you, and the app
+nags you to make one, so being sent one looks routine.
+
+The clean path was `fmtTime`, which returned its input verbatim in 24-hour mode — and the same
+backup that carried the payload also set `timeFmt: "24"`. Opening the Sleep tab rendered
+attacker markup as live DOM. Reproduced end to end, including a full-viewport fake "re-enter
+your API key" overlay with an off-site link that survived reload.
+
+Two layers now, because each covers the other's failure mode:
+
+- **Every interpolation is escaped**, with no exceptions for values believed to be numbers.
+  "Everything is escaped" is greppable; "escaped unless we're sure it's a number" rots silently.
+- **Every value is coerced on import** — times through a strict `HH:MM` parser, numbers clamped
+  to ranges, enums checked against their allowed sets, anything unrecognised dropped rather
+  than repaired.
+
+`script-src 'self'` from v30 held the whole time: the injected `onerror` never fired, which is
+the difference between this being a Medium and being "steal the API key and everything else on
+the origin." Good reason never to add `'unsafe-inline'` for convenience.
+
+**Fixed — imports could write storage keys Peak never owns.** `importAll` wrote every key in the
+file. GitHub Pages puts every project on one origin, so an unnamespaced key landed in storage
+shared with any other site published from the same account — and `wipeAll` is `forge:`-scoped,
+so **Reset everything** left it behind while reporting the device clean. Non-`forge:` keys are
+now dropped, and the restore toast says how many were ignored, since a real Peak export has none.
+
+**Also fixed — a backup could permanently brick the Train tab.** `restoreSession` checked only
+`Array.isArray(exercises)`, so a session whose `sets` was a string threw inside
+`renderExerciseBlock` on every render — and reloaded from storage on every boot, so it never
+recovered. The same import validator repairs it.
+
+**Verified clean:** no secrets anywhere in git history, `worker/wrangler.toml` carries no key,
+`toast()` uses text nodes (not a sink despite many unescaped call sites), AI scan fields were
+already escaped, chart labels are all generated, and the service worker has no cache-poisoning
+path. A legitimate export → import round-trip is lossless: lifetime volume, set weights, warmup
+tags, custom routines and taught muscle/loading maps all survive byte-identical.
+
+Added a `.gitignore` — the repo *is* the deploy target, so a stray `git add .` would publish
+local scratch directories.
+
+**Now covered by tests.** v37 brought the first test suite; the import boundary now has its
+own — `tests/untrusted-backup.test.mjs`, 8 cases over foreign keys, hostile times, crafted
+`uid`s, unknown themes and restrictions, bounded progression preferences, and the
+sets-is-a-string session that used to brick the Train tab. The VM harness the two suites share
+moved to `tests/harness.mjs`. `node --test tests/*.test.mjs` — 22 tests.
+
+**Re-applied to code that did not exist in v33.** v37 rebuilt the active-session renderer, and
+v34–v36 added themes, dietary badges, Gym Mode and push subscriptions — none of which the
+original commit could have touched. Their sinks were swept for the same class of bug and their
+stored keys added to the import validator, so "everything is escaped, every value is coerced"
+is true of the whole app again, not just the parts that existed in August.
+
 ---
 
 ## v37 — bold, focused training

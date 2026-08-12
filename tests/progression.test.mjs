@@ -1,65 +1,11 @@
 /* Regression tests for progression preferences and the focused workout flow.
  *
  *   node --test tests/*.test.mjs
- *
- * Peak has no build step and no module system, so these load the real
- * store.js / train.js / routines.js into one VM context with just enough of a
- * browser stubbed in to run them — the same globals the page sees. Rendering
- * is stubbed out; what's under test is the data the UI reads and writes. */
+ */
 
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-import vm from 'node:vm';
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-function makeContext() {
-  const mem = new Map();
-  const localStorage = {
-    getItem: k => (mem.has(k) ? mem.get(k) : null),
-    setItem: (k, v) => mem.set(k, String(v)),
-    removeItem: k => mem.delete(k),
-    key: i => [...mem.keys()][i] ?? null,
-    get length() { return mem.size; }
-  };
-  Object.defineProperty(localStorage, 'keys', { value: () => [...mem.keys()] });
-  const noopEl = { addEventListener() {}, classList: { toggle() {}, add() {}, remove() {} }, style: { setProperty() {} } };
-  const document = {
-    addEventListener() {}, querySelectorAll: () => [], querySelector: () => null,
-    getElementById: () => null, body: noopEl, documentElement: noopEl, activeElement: null
-  };
-  const ctx = {
-    console, localStorage, document, navigator: {}, window: { matchMedia: () => ({ matches: false }) },
-    setTimeout, clearTimeout, crypto: globalThis.crypto,
-    toasts: []
-  };
-  vm.createContext(ctx);
-  // Object.keys(localStorage) is how wipeAll enumerates — mirror the browser
-  const src = ['store.js', 'train.js', 'routines.js'].map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n;\n');
-  vm.runInContext(`
-    var App = { activeSession: null, rest: null, undo: null, setSel: null, tab: 'train', render() {} };
-    function esc(s) { return String(s ?? ''); }
-    function toast(m) { toasts.push(m); }
-    function announce() {}
-    function openModal() {}
-    function closeModal() {}
-    function icon() { return ''; }
-    function paintRest() {}
-    const CHART = { good: 'g', warning: 'w', critical: 'c', orange: 'o', blue: 'b', aqua: 'a', muted: 'm' };
-    ${src}
-    ;globalThis.__api = { Store, App, getSettings, setSettings, setProfile, saveWorkout, getWorkouts,
-      nextTarget, progressionPref, setProgressionPref, getProgressionPrefs, exerciseHasLoad,
-      plannedSetsFor, startWorkout, restoreSession, persistSession, ensureSessionIds, focusedExercise,
-      completeSet, deleteExercise, undoLast, moveExercise, finishWorkout, applyHoldToSession,
-      prevSetsText, lastSessionSets, todayKey, lbToKg, kgToLb, fromW, toW };
-  `, ctx);
-  // wipeAll uses Object.keys(localStorage); give it the real key list
-  vm.runInContext(`Store.wipeAll = function () { localStorage.keys().filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k)); _cache.clear(); };`, ctx);
-  return ctx;
-}
+import { makeContext } from './harness.mjs';
 
 let ctx, P;
 const localDay = n => { const d = new Date(); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };

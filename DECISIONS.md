@@ -24,6 +24,7 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-14](#d-14) | Model ids are discovered from the user's key, not pinned in source | 🟢 Decided · v30 |
 | [D-15](#d-15) | Routines fork on write; built-ins are never mutated | 🟢 Decided · v31 |
 | [D-16](#d-16) | The coach reads the plan for volume, the log for habits | 🟢 Decided · v31 |
+| [D-17](#d-17) | Restored backups are untrusted; escape at the sink and coerce at the boundary | 🟢 Decided · v33 |
 
 ---
 
@@ -329,3 +330,48 @@ flagging 7 sets against a "minimum" of 8 trains people to ignore the card.
 **Consistent with [D-12](#d-12):** on anything advisory, bias toward silence. A suggestion has
 to be specific about what it observed and fixable in one tap, or it does not earn the space —
 "consider more volume" is a horoscope, not a suggestion.
+
+## <a name="d-17"></a>D-17 · Restored backups are untrusted input; escape at the sink AND coerce at the boundary
+**🟢 Decided.** v33 · `store.js` · `sanitizeStored`, `normTime`, `importAll`
+
+A security triage found stored HTML injection reachable through Settings → Import backup. The
+app escaped everything it thought of as *text* — exercise names, food names, grocery items, AI
+scan output — and treated everything it thought of as *structural* (times, reps, quality
+ratings, scores) as trustworthy, interpolating it raw. Storage is not trustworthy: a backup is
+a file a user can be handed, and the app actively nags them to make one, so receiving one looks
+routine.
+
+The clearest path: `fmtTime` returned its argument verbatim in 24-hour mode, and the same
+backup that supplied the payload also supplied `timeFmt: "24"`. Opening the Sleep tab rendered
+attacker markup as live DOM. Reproduced, including a full-viewport phishing overlay with an
+off-site link that survived reload.
+
+**Decided: both layers, because each covers the other's failure mode.**
+
+- **Escape at the sink.** Every interpolation is `esc()`d, with no exceptions for values
+  believed to be numeric. "Everything is escaped" is a rule you can grep for and enforce;
+  "escaped unless we're confident it's a number" is a rule that silently rots.
+- **Coerce at the boundary.** `sanitizeStored()` re-shapes every key after an import — times
+  through `normTime`, numbers clamped to ranges, enums checked against their allowed sets,
+  anything unrecognised dropped rather than repaired.
+
+**Why not just one.** There are ~40 interpolation sites and the set grows every release; one
+missed `esc()` is an injection, so sink-escaping alone is one careless line from failing. But
+boundary-coercion alone fails the moment a new field is added and not covered. Together, a bug
+needs both a missed sink and a missed field.
+
+**Bonus, and the reason this was worth doing properly:** the same validator fixed a way to
+brick the app. `restoreSession` only checked `Array.isArray(exercises)`, so a backup whose
+`sets` was a string threw inside `renderExerciseBlock` on every render of the Train tab —
+permanently, since the bad session reloads from storage on each boot.
+
+**Also decided:** imports drop any key outside the `forge:` namespace, and report how many were
+dropped. GitHub Pages puts every project on one origin, so an unnamespaced key lands in storage
+shared with the user's other sites — and `wipeAll` is prefix-scoped, so "Reset everything"
+would have left it behind while claiming the device was clean.
+
+**What the CSP bought.** [D-13](#d-13)'s `script-src 'self'` blocked script execution
+throughout — `onerror` never fired. Without it this was straightforwardly "steal the API key
+and everything else on the origin." It downgraded a High to a Medium, which is exactly what
+defence in depth is supposed to do, and is a good argument for never adding `'unsafe-inline'`
+to `script-src` for convenience.

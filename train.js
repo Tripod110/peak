@@ -1369,9 +1369,9 @@ function renderRecentCard(all, limit) {
   <div class="card">
     <h2>Recent sessions</h2>
     ${recent.map(s => {
-      const scoreChip = s.score != null ? `<span class="pill ${s.score >= 75 ? 'good' : s.score >= 50 ? 'warn' : ''}">${s.score}</span>` : '';
+      const scoreChip = s.score != null ? `<span class="pill ${s.score >= 75 ? 'good' : s.score >= 50 ? 'warn' : ''}">${esc(s.score)}</span>` : '';
       const sub = s.cardio
-        ? `${prettyDate(s.date)} · ${s.durationMin} min ${esc(s.intensity)} · ~${s.kcalEst} kcal`
+        ? `${prettyDate(s.date)} · ${esc(s.durationMin)} min ${esc(s.intensity)} · ~${esc(s.kcalEst)} kcal`
         : `${prettyDate(s.date)} · ${(s.exercises || []).reduce((n, e) => n + workingSets(e.sets).length, 0)} sets · ${fmtWt(sessionVolumeKg(s))} ${u}`;
       return `
       <div class="list-item">
@@ -1744,7 +1744,10 @@ function ensureSessionIds(s) {
   if (!s || !Array.isArray(s.exercises)) return s;
   const seen = new Set();
   s.exercises.forEach(ex => {
-    if (typeof ex.uid !== 'string' || !ex.uid || seen.has(ex.uid)) ex.uid = newExerciseUid();
+    /* Regenerate anything that isn't shaped like newExerciseUid()'s output, not
+       just anything missing: uid goes straight into data-uid="..." at ~20 sites,
+       and a session can arrive from a restored backup. See szUid in store.js. */
+    if (!/^x[a-z0-9]{6,32}$/.test(ex.uid || '') || seen.has(ex.uid)) ex.uid = newExerciseUid();
     seen.add(ex.uid);
     if (!Array.isArray(ex.sets)) ex.sets = [];
   });
@@ -1950,7 +1953,7 @@ function renderSetLine(ex, st, si, isNext) {
       <span class="ss-val" aria-hidden="true">${esc(val)}</span>
       <span class="ss-state" aria-hidden="true">${st.done ? icon('check') : esc(state)}</span>
     </button>
-    <button class="set-more" data-action="set-menu" data-uid="${ex.uid}" data-si="${si}" aria-label="Options for ${label.toLowerCase()}">${icon('more')}</button>
+    <button class="set-more" data-action="set-menu" data-uid="${ex.uid}" data-si="${si}" aria-label="Options for ${esc(label.toLowerCase())}">${icon('more')}</button>
   </div>`;
 }
 
@@ -2434,13 +2437,15 @@ function viewWorkoutModal(id) {
     <h3>${esc(s.dayName)}</h3>
     <div class="modal-sub">${prettyDate(s.date)}${s.score != null ? ` · score ${s.score}/100` : ''}</div>
     ${s.cardio
-      ? `<div class="muted small">${s.durationMin} min · ${esc(s.intensity)} intensity · ~${s.kcalEst} kcal burned</div>`
+      ? `<div class="muted small">${esc(s.durationMin)} min · ${esc(s.intensity)} intensity · ~${esc(s.kcalEst)} kcal burned</div>`
       : (s.exercises || []).map(ex => `
       <div class="exercise-block">
         <div class="ex-head"><span class="ex-name">${esc(ex.name)}${perHandLift(ex.name) ? ' <span class="muted small">per hand</span>' : ''}</span></div>
         ${(ex.sets || []).map((st, i) => {
-          const tag = st.type && st.type !== 'normal' ? ` <span style="color:${SET_BADGE_COLOR[st.type] || 'var(--muted)'}">${st.type}</span>` : '';
-          return `<div class="muted small">Set ${i + 1}: ${st.weight ? Math.round(toW(st.weight)) + ' ' + u + ' × ' + st.reps : st.reps + ' reps'}${tag}</div>`;
+          /* SET_BADGE_COLOR is keyed by a known set kind, so an unrecognised
+             type must never reach the style attribute — look it up, don't echo it. */
+          const tag = SET_BADGE_COLOR[st.type] ? ` <span style="color:${SET_BADGE_COLOR[st.type]}">${esc(st.type)}</span>` : '';
+          return `<div class="muted small">Set ${i + 1}: ${esc(st.weight ? Math.round(toW(st.weight)) + ' ' + u + ' × ' + st.reps : st.reps + ' reps')}${tag}</div>`;
         }).join('')}
       </div>`).join('')}
     ${s.score != null && !s.cardio ? `<div class="chart-note mt">Score = intensity vs your bests (50) + sets vs plan (35) + PR bonus (15).</div>` : ''}

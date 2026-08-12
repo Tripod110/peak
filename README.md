@@ -98,10 +98,17 @@ than two on screen at once.
 
 ## Privacy
 
-All data lives in your browser's local storage — nothing is uploaded anywhere. The only
-network call is the optional AI meal scan, sent directly from your device to the Google
-Gemini API using **your own free API key**. A Content-Security-Policy restricts the app to
-that one host, so there is nowhere else for anything to go.
+All data lives in your browser's local storage — nothing is uploaded anywhere. There are two
+optional network calls, both off until you turn them on:
+
+- **AI meal scanning** — a photo or description sent directly from your device to the Google
+  Gemini API using **your own free API key**.
+- **Reminders** — if you enable them in Settings, the times you pick and a browser push
+  subscription are sent to Peak's Worker, which is what lets a nudge arrive with the app
+  closed. No training, food or sleep data goes with them.
+
+A Content-Security-Policy names those hosts and nothing else, so there is nowhere else for
+anything to go.
 
 Your API key is stored on this device in plain `localStorage`, and Peak says so in Settings
 rather than implying otherwise — it can't be meaningfully encrypted in a client-side app,
@@ -113,6 +120,11 @@ without one.
 
 Because everything is local, **clearing your browser data will erase your training
 history.** Export a backup from Settings periodically.
+
+**Only restore backups you made yourself.** A backup is the one file that writes directly into
+Peak's storage, so it is treated as untrusted input: every value is re-validated on import,
+anything Peak didn't write is dropped, and the restore tells you how many entries it ignored.
+See [D-17](DECISIONS.md#d-17).
 
 ## Install on your phone
 
@@ -150,12 +162,13 @@ support via a service worker. Charts are hand-rolled inline SVG.
 | [AUDIT.md](AUDIT.md) | The 2026-07 UX audit: 30 findings, each traced to its fix and its proof |
 | [SHIPPING.md](SHIPPING.md) | Release runbook — pre-flight checks, the push, rollback |
 | [PAYMENTS.md](PAYMENTS.md) | Getting Peak Pro sellable: Stripe setup and what blocks it |
-| [worker/README.md](worker/README.md) | The hosted meal-scan proxy (scaffolded, not deployed) |
+| [worker/README.md](worker/README.md) | The Worker behind meal-scan proxying and push reminders |
 | [worker/API.md](worker/API.md) | The Worker's API contract — `/scan` as built, plus what's planned |
 
-Current release: **v32** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
+Current release: **v38** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
 the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run, and v30's ergonomics
-changes are exactly what a desktop browser cannot verify.
+changes, and v37's whole one-exercise-at-a-time session view, are exactly what a desktop
+browser cannot verify.
 
 Releasing? Never hand-edit version strings — one version lives in 22 places:
 

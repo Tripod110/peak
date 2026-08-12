@@ -116,20 +116,276 @@ const Store = {
   /* A restore is a replacement, not a merge — otherwise keys absent from an older
      backup survive and you end up with a hybrid of two states. The one exception
      is the API key: backups no longer carry it, so replacing settings wholesale
-     would silently switch scanning off on a device that was working. */
+     would silently switch scanning off on a device that was working.
+
+     This is also the ONLY place untrusted data enters Peak. A backup is a file
+     someone can be handed — the app nags them to make one, so receiving one
+     looks routine — and everything in it ends up in the render path. So it is
+     the right and only place to validate:
+
+       · keys outside the `forge:` namespace are dropped. GitHub Pages puts every
+         project on one origin, so an unnamespaced key lands in storage shared
+         with the user's other sites, and `wipeAll` (prefix-scoped) would leave
+         it behind even after "Reset everything" claimed the device was clean.
+       · every value is re-shaped by `sanitizeStored` before anything renders it.
+
+     Returns {skipped} so the UI can say when a file was not what it claimed. */
   importAll(json) {
     const parsed = JSON.parse(json);
     if (!parsed || (parsed.app !== 'peak' && parsed.app !== 'forge') || !parsed.data) throw new Error('Not a Peak backup file');
+    if (typeof parsed.data !== 'object' || Array.isArray(parsed.data)) throw new Error('Not a Peak backup file');
     const keepKey = getSettings().apiKey;
+
+    const all = Object.entries(parsed.data).filter(([, v]) => typeof v === 'string');
+    const mine = all.filter(([k]) => k.startsWith('forge:'));
+    const skipped = Object.keys(parsed.data).length - mine.length;
+
     Store.wipeAll();
-    Object.entries(parsed.data).forEach(([k, v]) => localStorage.setItem(k, v));
+    mine.forEach(([k, v]) => localStorage.setItem(k, v));
     _cache.clear();
+    sanitizeStored();
+
     if (keepKey) {
       const s = Store.get('settings', {});
       if (!s.apiKey) { s.apiKey = keepKey; Store.set('settings', s); }
     }
+    return { skipped };
   }
 };
+
+/* ---------- restored-data normalisation ----------
+   Run once, immediately after an import, before anything renders. Two jobs, and
+   the second is the one that matters more than it looks:
+
+   1. Security. Escaping at the render sink is the primary defence, but there are
+      ~40 interpolation sites and one missed `esc()` is an injection. Coercing at
+      the boundary means a hostile field never reaches a template as a string in
+      the first place.
+   2. Not bricking. `restoreSession` only ever checked `Array.isArray(exercises)`,
+      so a backup whose `sets` was a string threw inside `renderExerciseBlock` on
+      every render of the Train tab — permanently, since the bad session is
+      reloaded from storage on each boot. Unrecoverable without devtools.
+
+   Anything unrecognised is dropped rather than repaired. A restore that quietly
+   invents data is worse than one that comes back short. */
+
+/* Prefixed because there are no modules here: nine scripts share one global
+   scope, and a bare `const str` would be a SyntaxError the day anyone else
+   wants that name — which would break the entire app, not just this file. */
+const SET_KINDS = ['normal', 'warmup', 'failure', 'drop'];
+
+const szNum = (v, min, max, fallback = 0) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, min), max);
+};
+const szInt = (v, min, max, fallback = 0) => Math.round(szNum(v, min, max, fallback));
+const szStr = (v, max = 120) => String(v ?? '').slice(0, max);
+const szDate = k => /^\d{4}-\d{2}-\d{2}$/.test(k);
+const szObj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+const szArr = v => Array.isArray(v) ? v : [];
+
+function cleanSets(sets) {
+  return szArr(sets).map(st => {
+    const s = szObj(st);
+    return {
+      weight: szNum(s.weight, 0, 2000, 0),
+      reps: szInt(s.reps, 0, 1000, 0),
+      type: SET_KINDS.includes(s.type) ? s.type : 'normal',
+      ...(s.done ? { done: true } : {}),
+      ...(s.touched ? { touched: true } : {}),
+      ...(s.planned ? { planned: true } : {})
+    };
+  });
+}
+/* uid is the handle v37's one-exercise-at-a-time view focuses by, and it is
+   written into ~20 attributes as `data-uid="..."`. Keep one only if it looks
+   exactly like something newExerciseUid() produced; ensureSessionIds() mints a
+   fresh one for anything else, so a crafted uid never reaches an attribute. */
+const szUid = v => /^x[a-z0-9]{6,32}$/.test(String(v ?? '')) ? String(v) : null;
+
+function cleanExercises(list) {
+  return szArr(list)
+    .map(ex => ({
+      name: szStr(szObj(ex).name, 80), target: szStr(szObj(ex).target, 12),
+      ...(szUid(szObj(ex).uid) ? { uid: szObj(ex).uid } : {}),
+      sets: cleanSets(szObj(ex).sets)
+    }))
+    .filter(ex => ex.name);
+}
+function cleanSession(s) {
+  const o = szObj(s);
+  if (!szDate(o.date)) return null;
+  return {
+    id: szStr(o.id, 40) || 'w' + Date.now(),
+    date: o.date,
+    dayName: szStr(o.dayName, 60),
+    template: szStr(o.template, 20),
+    freestyle: !!o.freestyle,
+    cardio: !!o.cardio,
+    ...(o.startedAt ? { startedAt: szInt(o.startedAt, 0, 1e15) } : {}),
+    ...(o.score != null ? { score: szInt(o.score, 0, 100) } : {}),
+    ...(o.durationMin != null ? { durationMin: szInt(o.durationMin, 0, 1440) } : {}),
+    ...(o.kcalEst != null ? { kcalEst: szInt(o.kcalEst, 0, 20000) } : {}),
+    ...(o.intensity ? { intensity: szStr(o.intensity, 20) } : {}),
+    ...(o.type ? { type: szStr(o.type, 40) } : {}),
+    ...(szUid(o.focusUid) ? { focusUid: o.focusUid } : {}),
+    exercises: cleanExercises(o.exercises)
+  };
+}
+
+function sanitizeStored() {
+  // settings — enumerations must be enumerations; timeFmt in particular gated a bug
+  const s = szObj(Store.get('settings', {}));
+  Store.set('settings', {
+    apiKey: szStr(s.apiKey, 200),
+    model: /^[\w.\-]{1,60}$/.test(s.model || '') ? s.model : DEFAULT_MODEL,
+    timeFmt: s.timeFmt === '24' ? '24' : '12',
+    units: s.units === 'metric' ? 'metric' : 'imperial',
+    restSec: szInt(s.restSec, 15, 600, 120),
+    barKg: szNum(s.barKg, 1, 50, lbToKg(45)),
+    /* Added after v33. A whitelist that doesn't know a field drops it, so every
+       new setting has to be listed here or a restore quietly resets it — that is
+       the maintenance cost of coercing at the boundary, and it is the right
+       trade against a hostile value reaching the render path. */
+    theme: THEME_IDS.includes(s.theme) ? s.theme : 'dark',
+    dietary: { restrictions: szArr(szObj(s.dietary).restrictions)
+      .filter(id => DIETARY_RESTRICTIONS.some(d => d.id === id)) },
+    /* reminder times land in a value="" attribute in Settings — normTime is
+       what stops that being an attribute injection */
+    reminders: (() => {
+      const r = szObj(s.reminders);
+      return { enabled: !!r.enabled, sleep: normTime(r.sleep) || null, food: normTime(r.food) || null };
+    })()
+  });
+
+  // profile
+  const p = Store.get('profile', null);
+  if (p) {
+    const o = szObj(p);
+    Store.set('profile', {
+      sex: o.sex === 'female' ? 'female' : 'male',
+      age: szInt(o.age, 13, 100, 30),
+      weightKg: szNum(o.weightKg, 27, 318, 80),
+      heightCm: szInt(o.heightCm, 120, 230, 175),
+      activity: ACTIVITY_MULT[o.activity] ? o.activity : 'moderate',
+      goal: GOAL_ADJ[o.goal] != null ? o.goal : 'recomp',
+      gymDays: szInt(o.gymDays, 1, 7, 4),
+      template: szStr(o.template, 20) || 'ppl6',
+      goalWeightKg: o.goalWeightKg ? szNum(o.goalWeightKg, 27, 318, 0) || null : null
+    });
+  }
+
+  // sleep — the field that carried the injection
+  const sleep = szObj(Store.get('sleep', {}));
+  const cleanSleep = {};
+  Object.entries(sleep).forEach(([k, v]) => {
+    if (!szDate(k)) return;
+    const e = szObj(v);
+    const bed = normTime(e.bed), wake = normTime(e.wake);
+    if (!bed || !wake) return;
+    cleanSleep[k] = { bed, wake, quality: szInt(e.quality, 1, 5, 3), durationMin: szInt(e.durationMin, 1, 1440, 480) };
+  });
+  Store.set('sleep', cleanSleep);
+
+  // workouts + any in-flight session
+  Store.set('workouts', szArr(Store.get('workouts', [])).map(cleanSession).filter(Boolean));
+  const active = Store.get('activeSession', null);
+  if (active) {
+    const c = cleanSession(active);
+    if (c) Store.set('activeSession', c); else Store.remove('activeSession');
+  }
+  Store.remove('restState');   // a timer from another device is meaningless here
+
+  // food log
+  const food = szObj(Store.get('food', {}));
+  const cleanFood = {};
+  Object.entries(food).forEach(([k, v]) => {
+    if (!szDate(k)) return;
+    cleanFood[k] = szArr(v).map(e => {
+      const o = szObj(e);
+      return {
+        id: szStr(o.id, 40) || 'f' + Math.random().toString(36).slice(2, 9),
+        name: szStr(o.name, 120), portion: szStr(o.portion, 60),
+        time: normTime(o.time) || '12:00',
+        kcal: szInt(o.kcal, 0, 20000), protein: szInt(o.protein, 0, 2000),
+        carbs: szInt(o.carbs, 0, 2000), fat: szInt(o.fat, 0, 2000), fiber: szInt(o.fiber, 0, 500),
+        ...(typeof o.quality === 'number' ? { quality: szInt(o.quality, 0, 10) } : {}),
+        ...(o.source ? { source: szStr(o.source, 12) } : {})
+      };
+    }).filter(e => e.name);
+  });
+  Store.set('food', cleanFood);
+
+  Store.set('recentFoods', szArr(Store.get('recentFoods', [])).slice(0, 60).map(f => {
+    const o = szObj(f);
+    return {
+      name: szStr(o.name, 120), kcal: szInt(o.kcal, 0, 20000), protein: szInt(o.protein, 0, 2000),
+      carbs: szInt(o.carbs, 0, 2000), fat: szInt(o.fat, 0, 2000), fiber: szInt(o.fiber, 0, 500),
+      quality: typeof o.quality === 'number' ? szInt(o.quality, 0, 10) : null,
+      count: szInt(o.count, 1, 1e6, 1), lastAt: szDate(o.lastAt) ? o.lastAt : null
+    };
+  }).filter(f => f.name));
+
+  Store.set('weights', szArr(Store.get('weights', []))
+    .map(w => ({ date: szObj(w).date, kg: szNum(szObj(w).kg, 20, 400, 0) }))
+    .filter(w => szDate(w.date) && w.kg > 0));
+
+  Store.set('grocery', szArr(Store.get('grocery', [])).slice(0, 500).map(i => {
+    const o = szObj(i);
+    return {
+      id: szStr(o.id, 40) || 'g' + Math.random().toString(36).slice(2, 9),
+      name: szStr(o.name, 120), qty: szInt(o.qty, 1, 99, 1), done: !!o.done,
+      ...(o.aisle ? { aisle: szStr(o.aisle, 20) } : {})
+    };
+  }).filter(i => i.name));
+
+  // routine — days of [name, "NxM"] pairs, nothing else
+  const r = Store.get('routine', null);
+  if (r) {
+    const o = szObj(r);
+    const days = szArr(o.days).map(d => ({
+      name: szStr(szObj(d).name, 60) || 'Day',
+      ex: szArr(szObj(d).ex).map(e => szArr(e)).filter(e => e.length >= 2)
+        .map(([n, t]) => [szStr(n, 80), /^\d{1,2}[×x]\d{1,3}$/.test(String(t)) ? String(t) : '3×10'])
+        .filter(([n]) => n)
+    })).filter(d => d.name);
+    if (days.length) Store.set('routine', { name: szStr(o.name, 60) || 'My routine', base: szStr(o.base, 20), days });
+    else Store.remove('routine');
+  }
+
+  /* progression preferences (v37) — keyed by lift name, holding a custom
+     increment and a "keep my weight" pause. progressionPref() re-checks the
+     numbers on every read, but the keys themselves reach nothing until they do,
+     so bound them here too. */
+  const prog = szObj(Store.get('progressionPrefs', {}));
+  const cleanProg = Object.create(null);
+  Object.keys(prog).forEach(k => {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+    const o = szObj(prog[k]);
+    const out = {};
+    if (Number.isFinite(Number(o.incKg)) && Number(o.incKg) > 0) out.incKg = szNum(o.incKg, 0.1, 100, 1);
+    const hold = szObj(o.hold);
+    if (Number.isFinite(Number(hold.kg)) && Number(hold.kg) > 0) {
+      out.hold = { kg: szNum(hold.kg, 0.1, 2000, 0), since: szDate(hold.since) ? hold.since : null };
+    }
+    if (Object.keys(out).length) cleanProg[szStr(k, 80)] = out;
+  });
+  Store.set('progressionPrefs', JSON.parse(JSON.stringify(cleanProg)));
+
+  // taught mappings: plain string→value maps only
+  ['muscleMap', 'loadMap'].forEach(key => {
+    const src = szObj(Store.get(key, {}));
+    const out = Object.create(null);
+    Object.keys(src).forEach(k => {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+      out[szStr(k, 80)] = key === 'loadMap'
+        ? (['bar', 'sled', 'post', 'none'].includes(src[k]) ? src[k] : undefined)
+        : { p: szArr(szObj(src[k]).p).map(x => szStr(x, 20)), s: szArr(szObj(src[k]).s).map(x => szStr(x, 20)) };
+    });
+    Store.set(key, JSON.parse(JSON.stringify(out)));
+  });
+}
 
 /* ---------- dates ---------- */
 function todayKey(offsetDays = 0) {
@@ -153,11 +409,25 @@ function shiftKey(key, dir) {
   dt.setDate(dt.getDate() + dir);
   return dateKey(dt);
 }
+/* The single gate every time-shaped value passes through → "HH:MM" or ''.
+   Times live on disk, and a restored backup can put arbitrary text on disk, so
+   nothing may assume a stored time is a time. `fmtTime` used to return its
+   argument verbatim in 24-hour mode, which put attacker-supplied markup
+   straight into the Sleep tab — see the render-path escaping below. */
+function normTime(v) {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(v ?? ''));
+  if (!m) return '';
+  const h = Number(m[1]), min = Number(m[2]);
+  if (h > 23 || min > 59) return '';
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+}
+
 /* display a stored "HH:MM" (24h) per the user's time-format setting */
 function fmtTime(hhmm) {
-  if (!hhmm) return '';
-  if (getSettings().timeFmt === '24') return hhmm;
-  const [h, m] = hhmm.split(':').map(Number);
+  const t = normTime(hhmm);
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  if (getSettings().timeFmt === '24') return t;
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
@@ -186,6 +456,12 @@ const DIETARY_RESTRICTIONS = [
   { id: 'halal', label: 'Halal', tier: 3, re: /\b(pork|bacon|ham|lard|gelatin|alcohol|wine|beer)\b/i }
 ];
 const TIER_PILL = { 1: 'crit', 2: 'warn', 3: 'good' };
+
+/* The allowed theme ids live here, not with the picker in app.js, because the
+   import validator (sanitizeStored) needs them and store.js loads first — it
+   cannot reach a constant defined in the last script on the page. app.js's
+   THEMES adds the label and swatch for each of these. */
+const THEME_IDS = ['dark', 'pink', 'ocean', 'forest', 'light'];
 function activeDietaryIds() { return getSettings().dietary?.restrictions || []; }
 /* returns the matching restriction defs (with .tier/.label) for a bit of free text */
 function dietaryWarnings(text) {

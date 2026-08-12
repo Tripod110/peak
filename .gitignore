@@ -1,0 +1,14 @@
+# The repo IS the deploy target — GitHub Pages serves whatever is on main, so
+# anything committed here is published at tripod110.github.io/peak. Keep local
+# scratch out of it.
+
+# knowledge-graph cache (regenerated on demand)
+graphify-out/
+
+# per-machine Claude Code config; launch.json is a local dev-server definition
+.claude/
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp

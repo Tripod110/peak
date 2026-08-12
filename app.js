@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v37';
+const APP_VERSION = 'v38';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -1248,8 +1248,8 @@ function openSettingsModal() {
         <span>Enable reminders</span>
       </label>
       <div class="grid-2">
-        <div><label>Sleep log reminder</label><input id="rem-sleep" type="time" value="${s.reminders.sleep || ''}" ${s.reminders.enabled ? '' : 'disabled'}></div>
-        <div><label>Food log reminder</label><input id="rem-food" type="time" value="${s.reminders.food || ''}" ${s.reminders.enabled ? '' : 'disabled'}></div>
+        <div><label>Sleep log reminder</label><input id="rem-sleep" type="time" value="${esc(normTime(s.reminders.sleep))}" ${s.reminders.enabled ? '' : 'disabled'}></div>
+        <div><label>Food log reminder</label><input id="rem-food" type="time" value="${esc(normTime(s.reminders.food))}" ${s.reminders.enabled ? '' : 'disabled'}></div>
       </div>
       <button class="btn small mt" data-action="apply-reminders">Save reminder settings</button>
       <div class="small muted mt" id="rem-status"></div>
@@ -1290,9 +1290,15 @@ function openSettingsModal() {
     const r = new FileReader();
     r.onload = () => {
       try {
-        Store.importAll(r.result);
+        const { skipped } = Store.importAll(r.result);
         App.activeSession = null; App.rest = null; paintRest();
-        toast('Backup restored'); closeModal(); App.render();
+        closeModal(); App.render();
+        /* A genuine Peak export contains only `forge:` keys, so anything dropped
+           means the file was carrying something Peak did not write. Say so rather
+           than restoring silently — that is the one signal a tampered backup gives. */
+        toast(skipped
+          ? `Backup restored — ignored ${skipped} entr${skipped === 1 ? 'y' : 'ies'} Peak didn't write`
+          : 'Backup restored');
       } catch (e) { toast(e.message); }
     };
     r.readAsText(f);
@@ -1815,6 +1821,8 @@ function maybeNudgeBackup() {
 }
 
 /* ---------- theme ---------- */
+/* Label and swatch per theme; the ids themselves are THEME_IDS in store.js,
+   where the import validator can see them. */
 const THEMES = [
   { id: 'dark', label: 'Dark', swatch: '#3987e5' },
   { id: 'pink', label: 'Pink', swatch: '#ff7ab3' },

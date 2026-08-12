@@ -229,8 +229,8 @@ function renderSleep() {
     ${entry ? `
       <div class="spread mt">
         <div>
-          <div class="hero-num">${fmtDur(entry.durationMin)}</div>
-          <div class="muted small">${fmtTime(entry.bed)} → ${fmtTime(entry.wake)} · quality ${entry.quality}/5</div>
+          <div class="hero-num">${esc(fmtDur(entry.durationMin))}</div>
+          <div class="muted small">${esc(fmtTime(entry.bed))} → ${esc(fmtTime(entry.wake))} · quality ${esc(entry.quality)}/5</div>
         </div>
         <div class="center">
           <div class="hero-num" style="color:${scoreColor}">${score}</div>
@@ -344,10 +344,10 @@ function renderRecentNights() {
       <div class="list-item" data-action="open-night" data-key="${k}" style="cursor:pointer">
         <div class="li-main">
           <div class="li-title">${i === 0 ? 'Last night' : prettyDate(k)}</div>
-          <div class="li-sub">${e ? `${fmtTime(e.bed)} → ${fmtTime(e.wake)} · quality ${e.quality}/5` : 'not logged'}</div>
+          <div class="li-sub">${e ? `${esc(fmtTime(e.bed))} → ${esc(fmtTime(e.wake))} · quality ${esc(e.quality)}/5` : 'not logged'}</div>
         </div>
-        ${e ? `<div class="li-val">${fmtDur(e.durationMin)}</div>
-               <span class="pill ${sc >= 75 ? 'good' : sc >= 50 ? 'warn' : 'crit'}">${sc}</span>`
+        ${e ? `<div class="li-val">${esc(fmtDur(e.durationMin))}</div>
+               <span class="pill ${sc >= 75 ? 'good' : sc >= 50 ? 'warn' : 'crit'}">${esc(sc)}</span>`
             : '<span class="pill">＋</span>'}
         <span class="nr-chev">›</span>
       </div>`);
@@ -406,7 +406,7 @@ function timeField(id, label, value) {
     <div class="time-row">
       <button type="button" class="t-nudge" data-nudge="${id}" data-min="-30">−30</button>
       <button type="button" class="t-nudge" data-nudge="${id}" data-min="-15">−15</button>
-      <input id="sl-${id}" type="time" value="${value}" aria-label="${label}">
+      <input id="sl-${id}" type="time" value="${esc(normTime(value))}" aria-label="${esc(label)}">
       <button type="button" class="t-nudge" data-nudge="${id}" data-min="15">+15</button>
       <button type="button" class="t-nudge" data-nudge="${id}" data-min="30">+30</button>
     </div>`;

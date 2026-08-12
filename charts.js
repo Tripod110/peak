@@ -106,15 +106,15 @@ function lineChart(points, { w = 320, h = 130, color = CHART.violet, goal = null
   }
   const dots = points.map((p, i) =>
     `<circle cx="${X(i)}" cy="${Y(p.value)}" r="3.5" fill="${color}" stroke="#1a1a19" stroke-width="1.5">
-       <title>${p.label}: ${fmtY(p.value)}${unit}</title>
+       <title>${esc(p.label)}: ${fmtY(p.value)}${unit}</title>
      </circle>`).join('');
   const first = points[0], last = points[points.length - 1];
   const gapCount = points.filter((p, i) => i > 0 && xs[i] - xs[i - 1] > 1.5).length;
   return `
   <svg width="100%" viewBox="0 0 ${w} ${h}" role="img" aria-label="trend from ${fmtY(first.value)} to ${fmtY(last.value)}${unit}">
     ${grid}${goalLine}${segs}${dots}
-    <text x="${padL}" y="${h - 6}" fill="${CHART.muted}" font-size="10">${first.label}</text>
-    <text x="${w - padR}" y="${h - 6}" text-anchor="end" fill="${CHART.muted}" font-size="10">${last.label}</text>
+    <text x="${padL}" y="${h - 6}" fill="${CHART.muted}" font-size="10">${esc(first.label)}</text>
+    <text x="${w - padR}" y="${h - 6}" text-anchor="end" fill="${CHART.muted}" font-size="10">${esc(last.label)}</text>
   </svg>
   ${gapCount ? `<div class="chart-note">Dashed stretches are days with nothing logged.</div>` : ''}`;
 }
@@ -125,7 +125,7 @@ function macroBar(name, value, target, color, unit = 'g') {
   return `
   <div class="macro-row">
     <div class="macro-head">
-      <span class="name"><span class="swatch" style="background:${color}"></span>${name}</span>
+      <span class="name"><span class="swatch" style="background:${color}"></span>${esc(name)}</span>
       <span class="val">${Math.round(value)} / ${target}${unit}</span>
     </div>
     <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>

@@ -77,7 +77,7 @@ function renderFoodHome() {
       <div class="list-item">
         <button class="li-main li-tap" data-action="edit-food" data-id="${e.id}" aria-label="Edit ${esc(e.name)}">
           <div class="li-title">${esc(e.name)}${e.source === 'ai' ? ' <span class="tag-ai">AI</span>' : ''} ${dietaryBadgesHtml(e.name)}</div>
-          <div class="li-sub">${e.time ? fmtTime(e.time) : ''}${e.portion ? ' · ' + esc(e.portion) : ''} · P${Math.round(e.protein)} C${Math.round(e.carbs)} F${Math.round(e.fat)}</div>
+          <div class="li-sub">${e.time ? esc(fmtTime(e.time)) : ''}${e.portion ? ' · ' + esc(e.portion) : ''} · P${Math.round(e.protein)} C${Math.round(e.carbs)} F${Math.round(e.fat)}</div>
         </button>
         <div class="li-val">${Math.round(e.kcal)}<span class="unit"> kcal</span></div>
         <button class="x-btn" data-action="del-food" data-id="${e.id}" aria-label="Delete ${esc(e.name)}">✕</button>
@@ -135,7 +135,7 @@ function frequentChips() {
     ${top.map((r, i) => `
       <button class="chip" data-action="readd-food" data-idx="${i}">
         <span class="chip-name">${esc(r.name)}</span>
-        <span class="chip-sub">${Math.round(r.kcal)} kcal · ${Math.round(r.protein)}g P${(r.count || 1) > 1 ? ` · ×${r.count}` : ''}</span>
+        <span class="chip-sub">${Math.round(r.kcal)} kcal · ${Math.round(r.protein)}g P${(r.count || 1) > 1 ? ` · ×${esc(r.count)}` : ''}</span>
       </button>`).join('')}
     ${rec.length > 4 ? `<button class="chip chip-more" data-action="food-nav" data-view="frequents">+${rec.length - 4} more</button>` : ''}
   </div>`;
@@ -169,8 +169,8 @@ function renderFrequentsFull() {
       <div class="list-item">
         <div class="li-main">
           <div class="li-title">${esc(r.name)}</div>
-          <div class="li-sub">P${Math.round(r.protein)} C${Math.round(r.carbs)} F${Math.round(r.fat)} · logged ${r.count || 1}×${
-            typeof r.quality === 'number' ? ` · quality ${r.quality}/10` : ''}</div>
+          <div class="li-sub">P${Math.round(r.protein)} C${Math.round(r.carbs)} F${Math.round(r.fat)} · logged ${esc(r.count || 1)}×${
+            typeof r.quality === 'number' ? ` · quality ${esc(r.quality)}/10` : ''}</div>
         </div>
         <div class="li-val">${Math.round(r.kcal)}<span class="unit"> kcal</span></div>
         <button class="btn small primary" data-action="readd-food" data-idx="${i}">＋</button>
@@ -295,11 +295,11 @@ function renderScanReview(result) {
         ${dietaryBadgesHtml(it.name + ' ' + (result.notes || '')) ? `<div class="mt">${dietaryBadgesHtml(it.name + ' ' + (result.notes || ''))}</div>` : ''}
         <input class="si-portion" value="${esc(it.portion)}" data-scan-portion="${i}" aria-label="Portion">
         <div class="si-macros">
-          <label>kcal<input type="number" inputmode="numeric" value="${it.calories}" data-scan-kcal="${i}"></label>
-          <label>P<input type="number" inputmode="numeric" value="${it.protein_g}" data-scan-p="${i}"></label>
-          <label>C<input type="number" inputmode="numeric" value="${it.carbs_g}" data-scan-c="${i}"></label>
-          <label>F<input type="number" inputmode="numeric" value="${it.fat_g}" data-scan-f="${i}"></label>
-          <label>Fib<input type="number" inputmode="numeric" value="${it.fiber_g}" data-scan-fib="${i}"></label>
+          <label>kcal<input type="number" inputmode="numeric" value="${esc(it.calories)}" data-scan-kcal="${i}"></label>
+          <label>P<input type="number" inputmode="numeric" value="${esc(it.protein_g)}" data-scan-p="${i}"></label>
+          <label>C<input type="number" inputmode="numeric" value="${esc(it.carbs_g)}" data-scan-c="${i}"></label>
+          <label>F<input type="number" inputmode="numeric" value="${esc(it.fat_g)}" data-scan-f="${i}"></label>
+          <label>Fib<input type="number" inputmode="numeric" value="${esc(it.fiber_g)}" data-scan-fib="${i}"></label>
         </div>
       </div>`).join('')}
     </div>
@@ -352,7 +352,7 @@ function openManualFood(prefill) {
     <input id="mf-name" value="${esc(f.name || '')}" placeholder="e.g. Chicken & rice">
     <div class="grid-2">
       <div><label>Portion (optional)</label><input id="mf-portion" value="${esc(f.portion || '')}" placeholder="e.g. 6 oz"></div>
-      <div><label>Time eaten</label><input id="mf-time" type="time" value="${f.time || nowTime()}"></div>
+      <div><label>Time eaten</label><input id="mf-time" type="time" value="${esc(normTime(f.time) || nowTime())}"></div>
     </div>
     <div class="grid-2">
       <div><label>Calories</label><input id="mf-kcal" type="number" inputmode="numeric" value="${f.kcal ?? ''}"></div>
