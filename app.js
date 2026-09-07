@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v34';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -134,6 +134,9 @@ const App = {
     document.getElementById('header-date').textContent =
       new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === App.tab));
+    // a live workout dims the tabs it isn't — Food/Sleep/Grocery still work if tapped,
+    // but the bar stops competing for attention while a session is running
+    document.getElementById('tabbar')?.classList.toggle('gym-mode', !!App.activeSession);
     const p = getProfile();
     if (!p) { view.innerHTML = ''; openOnboarding(); return; }
     let html = '';
@@ -228,8 +231,13 @@ function renderTodayHome() {
   const tk = todayKey();
   const totals = dayTotals(tk);
   const slScore = sleepScore(tk);
-  const trainedToday = getWorkouts().some(s => s.date === tk && !s.cardio);
-  const todayScores = getWorkouts().filter(s => s.date === tk).map(s => s.score || 0);
+  const todaysWorkouts = getWorkouts().filter(s => s.date === tk);
+  const trainedToday = todaysWorkouts.some(s => !s.cardio);
+  const todayScores = todaysWorkouts.map(s => s.score || 0);
+  // today's sessions already estimate their own burn (train.js finishWorkout/saveCardio) —
+  // surfacing it here is display-only, computeTargets stays a pure function of the profile
+  const trainKcalToday = todaysWorkouts.reduce((sum, s) => sum + (s.kcalEst || 0), 0);
+  const kcalTarget = t.kcal + trainKcalToday;
   const focus = todayFocus(p, t, totals, slScore, trainedToday);
 
   const weekVals = [];
@@ -249,7 +257,7 @@ function renderTodayHome() {
   return `
   <div class="card">
     <div class="row">
-      <div>${ringChart(totals.kcal, t.kcal, { size: 116, color: CHART.blue, unit: 'kcal' })}</div>
+      <div>${ringChart(totals.kcal, kcalTarget, { size: 116, color: CHART.blue, unit: 'kcal' })}</div>
       <div class="grow">
         ${macroBar('Protein', totals.protein, t.protein, CHART.blue)}
         ${macroBar('Carbs', totals.carbs, t.carbs, CHART.orange)}
@@ -290,7 +298,7 @@ function renderTodayHome() {
         <span class="gl-l">body weight</span></button>
     </div>
     <div class="spread mt">
-      <span class="muted small">Target ${t.kcal.toLocaleString()} kcal · ${GOAL_LABEL[p.goal]}</span>
+      <span class="muted small">Target ${kcalTarget.toLocaleString()} kcal${trainKcalToday ? ` (+${trainKcalToday} from today's training)` : ''} · ${GOAL_LABEL[p.goal]}</span>
       <span>${weekBars(weekVals, t.kcal, { w: 104, h: 24 })}</span>
     </div>
   </div>
@@ -1031,6 +1039,21 @@ function openSettingsModal() {
         </label>`).join('')}
     </details>
 
+    <details class="adv">
+      <summary>Reminders${s.reminders.enabled ? ' <span class="pill good">on</span>' : ''}</summary>
+      <div class="chart-note">Push notifications nudging you to log sleep or food, sent by the server so they still arrive with the app closed. Needs the Worker deployed (see worker/README.md) — asks for notification permission only when you turn this on, never before.</div>
+      <label class="check-row">
+        <input type="checkbox" id="rem-enabled" ${s.reminders.enabled ? 'checked' : ''}>
+        <span>Enable reminders</span>
+      </label>
+      <div class="grid-2">
+        <div><label>Sleep log reminder</label><input id="rem-sleep" type="time" value="${s.reminders.sleep || ''}" ${s.reminders.enabled ? '' : 'disabled'}></div>
+        <div><label>Food log reminder</label><input id="rem-food" type="time" value="${s.reminders.food || ''}" ${s.reminders.enabled ? '' : 'disabled'}></div>
+      </div>
+      <button class="btn small mt" data-action="apply-reminders">Save reminder settings</button>
+      <div class="small muted mt" id="rem-status"></div>
+    </details>
+
     <details class="adv" ${bk.due ? 'open' : ''}>
       <summary>Backup & data${bk.due ? ' <span class="pill warn">due</span>' : ''}</summary>
       <div class="spread" style="margin-top:8px">
@@ -1073,6 +1096,36 @@ function openSettingsModal() {
     };
     r.readAsText(f);
   });
+  document.getElementById('rem-enabled')?.addEventListener('change', ev => {
+    document.getElementById('rem-sleep').disabled = !ev.target.checked;
+    document.getElementById('rem-food').disabled = !ev.target.checked;
+  });
+}
+
+async function applyReminders() {
+  const status = document.getElementById('rem-status');
+  const enabled = document.getElementById('rem-enabled').checked;
+  const reminders = {
+    enabled,
+    sleep: enabled ? (document.getElementById('rem-sleep').value || null) : null,
+    food: enabled ? (document.getElementById('rem-food').value || null) : null
+  };
+  const s = getSettings();
+  status.textContent = 'Saving…';
+  try {
+    if (enabled && (reminders.sleep || reminders.food)) {
+      await subscribeToReminders(reminders);
+    } else {
+      await unsubscribeFromReminders();
+      reminders.enabled = false;
+    }
+    s.reminders = reminders;
+    setSettings(s);
+    status.textContent = enabled ? 'Reminders on.' : 'Reminders off.';
+    toast('Reminder settings saved');
+  } catch (e) {
+    status.textContent = e.message || 'Could not save reminders.';
+  }
 }
 
 function saveSettings() {
@@ -1143,10 +1196,15 @@ function saveSettings() {
 /* ---------- global event handling ---------- */
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-action]');
-  if (!el) return;
+  if (!el) {
+    if (!e.target.closest('#fab-root')) closeFabMenu();
+    return;
+  }
   const a = el.dataset.action;
+  if (el.dataset.closeFab !== undefined) closeFabMenu();
 
   switch (a) {
+    case 'fab-toggle': toggleFabMenu(); break;
     /* nav */
     case 'go-tab': readSetInputs(); App.tab = el.dataset.tab;
       if (App.tab === 'train') { App.trainView = 'home'; App.trainDay = null; }
@@ -1178,6 +1236,7 @@ document.addEventListener('click', e => {
     }
     case 'dismiss-install': Store.set('installDismissed', true); App.render(); break;
     case 'save-settings': saveSettings(); break;
+    case 'apply-reminders': applyReminders(); break;
     case 'modal-backdrop': if (e.target === el) closeModal(); break;
     case 'undo-last': undoLast(); break;
 
@@ -1237,6 +1296,11 @@ document.addEventListener('click', e => {
         });
         toast('Logged'); App.render();
       }
+      break;
+    }
+    case 'add-from-grocery': {
+      const name = getGroceryFoodCache()[Number(el.dataset.idx)];
+      if (name) openManualFood({ name });
       break;
     }
     case 'del-recent': {
@@ -1392,7 +1456,12 @@ document.addEventListener('click', e => {
     case 'g-toggle': {
       const list = getGrocery();
       const it = list.find(i => i.id === el.dataset.id);
-      if (it) { it.done = !it.done; setGrocery(list); App.render(); }
+      if (it) {
+        it.done = !it.done;
+        setGrocery(list);
+        if (it.done) rememberGroceryFood(it.name);
+        App.render();
+      }
       break;
     }
     case 'g-del': {
@@ -1534,6 +1603,25 @@ function applyTheme(id) {
   document.documentElement.dataset.theme = id;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--page').trim());
+}
+
+/* ---------- quick-add FAB ----------
+   Lives outside #view (see index.html) so it survives App.render() re-drawing
+   the current tab — one persistent entry point instead of five copies. */
+function toggleFabMenu() {
+  const menu = document.getElementById('fab-menu');
+  const btn = document.getElementById('fab-toggle');
+  const open = menu.hidden;
+  menu.hidden = !open;
+  btn.classList.toggle('open', open);
+  btn.setAttribute('aria-expanded', String(open));
+}
+function closeFabMenu() {
+  const menu = document.getElementById('fab-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  document.getElementById('fab-toggle')?.classList.remove('open');
+  document.getElementById('fab-toggle')?.setAttribute('aria-expanded', 'false');
 }
 
 /* Registered here rather than inline in index.html so the page can run under

@@ -8,7 +8,12 @@
      from going anywhere: connect-src names the only host this app is ever
      allowed to talk to. script-src 'self' is why the service-worker registration
      moved into app.js — there are no inline scripts left, so an injected one
-     cannot execute. 'unsafe-inline' remains only for style, which cannot run code. -->
+     cannot execute. 'unsafe-inline' remains only for style, which cannot run code.
+
+     Once worker/ is deployed, add its https://peak-scan.<subdomain>.workers.dev
+     origin to connect-src below (matching WORKER_URL in store.js) — without it,
+     the /subscribe, /unsubscribe and (once wired) /scan fetches are blocked
+     before they leave the browser, with no visible error but a network failure. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
   script-src 'self';
@@ -32,7 +37,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Peak">
-<link rel="stylesheet" href="style.css?v=33">
+<link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
 
@@ -63,15 +68,26 @@
 <div id="modal-root"></div>
 <div id="toast-root"></div>
 
-<script src="store.js?v=33"></script>
-<script src="charts.js?v=33"></script>
-<script src="quips.js?v=33"></script>
-<script src="api.js?v=33"></script>
-<script src="food.js?v=33"></script>
-<script src="train.js?v=33"></script>
-<script src="routines.js?v=33"></script>
-<script src="sleep.js?v=33"></script>
-<script src="grocery.js?v=33"></script>
-<script src="app.js?v=33"></script>
+<div id="fab-root">
+  <div class="fab-menu" id="fab-menu" hidden>
+    <button class="fab-item" data-action="quick-scan" data-close-fab>📷 Scan</button>
+    <button class="fab-item" data-action="quick-food" data-close-fab>＋ Food</button>
+    <button class="fab-item" data-action="quick-train" data-close-fab>🏋 Train</button>
+    <button class="fab-item" data-action="quick-sleep" data-close-fab>☾ Sleep</button>
+    <button class="fab-item" data-action="quick-weight" data-close-fab>⚖ Weight</button>
+  </div>
+  <button class="fab" id="fab-toggle" data-action="fab-toggle" aria-label="Quick add" aria-expanded="false">＋</button>
+</div>
+
+<script src="store.js?v=34"></script>
+<script src="charts.js?v=34"></script>
+<script src="quips.js?v=34"></script>
+<script src="api.js?v=34"></script>
+<script src="food.js?v=34"></script>
+<script src="train.js?v=34"></script>
+<script src="routines.js?v=34"></script>
+<script src="sleep.js?v=34"></script>
+<script src="grocery.js?v=34"></script>
+<script src="app.js?v=34"></script>
 </body>
 </html>

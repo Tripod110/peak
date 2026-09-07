@@ -3,8 +3,9 @@
 The interface between the PWA and the Cloudflare Worker. Written so the client and server
 can't drift once [`../api.js`](../api.js) is rewired in v29.
 
-**Status:** `POST /scan` is **implemented but not deployed** — `wrangler.toml` still has
-`id = "REPLACE_ME"` for the KV namespace. Everything under [Planned](#planned) is **NOT BUILT**.
+**Status:** `POST /scan`, `POST /subscribe`, `POST /unsubscribe`, and the reminder cron are
+**implemented but not deployed** — `wrangler.toml` still has `id = "REPLACE_ME"` for the KV
+namespace and the VAPID keys. Everything under [Planned](#planned) is **NOT BUILT**.
 
 **Source of truth:** [`src/index.js`](src/index.js). This document describes what that code
 does today; if they disagree, the code is right and this file is a bug.
@@ -130,6 +131,65 @@ One JSON line per successful scan via `console.log`, readable with `wrangler tai
 
 `thoughts` should always be `0` — if it isn't, `thinkingConfig.thinkingBudget: 0` isn't taking
 effect and you're paying for reasoning tokens on a perception task.
+
+---
+
+## `POST /subscribe`
+
+Registers (or replaces) a device's push subscription and reminder times. Called from the
+client whenever the user turns a reminder on/off or changes its time — always with the full
+current state, never a partial update.
+
+### Request
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `deviceId` | string | yes | Same `deviceId` used by `/scan`. Opaque, ≤64 chars. |
+| `subscription` | object | yes | The `PushSubscription.toJSON()` result from `pushManager.subscribe()` — must carry `endpoint` and `keys.p256dh`/`keys.auth`. |
+| `tzOffsetMin` | number | yes | `new Date().getTimezoneOffset()` from the client — minutes to subtract from UTC to get local time. Range `-720`..`840`. |
+| `reminders` | object | yes | `{ sleep: "HH:MM"\|null, food: "HH:MM"\|null }`. `null` disables that reminder. Anything not matching `HH:MM` is treated as `null`. |
+
+```json
+{
+  "deviceId": "<uuid>",
+  "subscription": { "endpoint": "https://...", "keys": { "p256dh": "...", "auth": "..." } },
+  "tzOffsetMin": 420,
+  "reminders": { "sleep": "22:00", "food": null }
+}
+```
+
+### `200` success: `{ "ok": true }`
+
+Stored at KV key `sub:<deviceId>` with **no TTL** — unlike the `dev:`/`global:` rate-limit
+counters (48h TTL), a subscription lives until `/unsubscribe` deletes it or the push service
+reports the endpoint gone (see the cron job below).
+
+### Errors
+
+`400` malformed JSON, missing/oversized `deviceId`, missing subscription keys, or `tzOffsetMin`
+out of range. Same `403`/`405` as `/scan` (origin check, non-POST).
+
+## `POST /unsubscribe`
+
+`{ "deviceId": "<uuid>" }` → deletes `sub:<deviceId>`. Idempotent — deleting a key that's
+already gone still returns `{ "ok": true }`.
+
+## Reminder delivery (Cloudflare Cron Trigger)
+
+`scheduled()` in `src/index.js` runs every 15 minutes (`[triggers]` in `wrangler.toml`). Each
+run lists every `sub:*` key, converts `tzOffsetMin` to that subscriber's current local HH:MM,
+and sends a push (via `webpush.js` — a from-scratch VAPID/RFC 8291 implementation, since the
+Node-only `web-push` npm package can't run in the Workers runtime) for any reminder whose
+configured time falls within ±7 minutes of now and hasn't already fired **today** (tracked per
+subscription in `lastSent`). A `404`/`410` response from the push service means the browser
+unsubscribed or the endpoint expired — that subscription is deleted rather than retried.
+
+### Configuration
+
+`VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` in `wrangler.toml`, `VAPID_PRIVATE_KEY` as a secret —
+generate all three with `node worker/scripts/generate-vapid-keys.mjs`, which prints a matched
+public/private pair in exactly the format `webpush.js` expects to consume (raw base64url point
+for the public key, full JWK for the private one — no manual format conversion required).
 
 ---
 

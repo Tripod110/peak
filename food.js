@@ -65,6 +65,7 @@ function renderFoodHome() {
       <button class="btn" data-action="repeat-last" ${lastLoggedDay() ? '' : 'disabled'}>🔁 Repeat a day</button>
     </div>
     ${frequentChips()}
+    ${groceryFoodChips()}
   </div>
 
   <div class="card">
@@ -137,6 +138,24 @@ function frequentChips() {
         <span class="chip-sub">${Math.round(r.kcal)} kcal · ${Math.round(r.protein)}g P${(r.count || 1) > 1 ? ` · ×${r.count}` : ''}</span>
       </button>`).join('')}
     ${rec.length > 4 ? `<button class="chip chip-more" data-action="food-nav" data-view="frequents">+${rec.length - 4} more</button>` : ''}
+  </div>`;
+}
+
+/* Checked-off grocery items land here — name only, no macros to guess at, so
+   tapping one opens the manual-entry form pre-filled rather than re-logging
+   stale numbers the way a frequent-food chip does. */
+function groceryFoodChips() {
+  const names = getGroceryFoodCache();
+  if (!names.length) return '';
+  return `
+  <div class="mt">
+    <div class="chart-note" style="margin-bottom:6px">From your grocery list — tap to log</div>
+    <div class="chips">
+      ${names.slice(0, 6).map((n, i) => `
+        <button class="chip" data-action="add-from-grocery" data-idx="${i}">
+          <span class="chip-name">${esc(n)}</span>
+        </button>`).join('')}
+    </div>
   </div>`;
 }
 

@@ -9,11 +9,22 @@ GLOBAL_DAILY_CAP   = "5000"   # ~$6/day worst case on 2.5 Flash. Set it to what 
 MODEL              = "gemini-2.5-flash"
 ALLOWED_ORIGIN     = "https://tripod110.github.io"
 
+# Public half of the VAPID keypair for Web Push — not secret, it's shipped to
+# every subscribing browser as the applicationServerKey. Generate both halves
+# with: node worker/scripts/generate-vapid-keys.mjs
+VAPID_PUBLIC_KEY = "REPLACE_ME"
+VAPID_SUBJECT    = "mailto:REPLACE_ME@example.com"   # a contact a push service can reach if you're abusing it
+
+# Cron trigger for reminder notifications — runs runReminders() in src/index.js.
+[triggers]
+crons = ["*/15 * * * *"]
+
 # Create with: wrangler kv namespace create PEAK_KV
 # then paste the id below.
 [[kv_namespaces]]
 binding = "PEAK_KV"
 id = "REPLACE_ME"
 
-# Secret, never in this file:
+# Secrets, never in this file:
 #   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put VAPID_PRIVATE_KEY   (the JWK line from generate-vapid-keys.mjs)

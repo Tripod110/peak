@@ -733,6 +733,18 @@ function renderTrainSub(view) {
 }
 function emptyNote(t) { return `<div class="card"><div class="muted small">${esc(t)}</div></div>`; }
 
+/* Same-day, forward-looking — "you slept badly, ease off today" — distinct
+   from sleep.js's renderSleepTrainingLink(), which is a retrospective stat
+   over many sessions. This only needs last night. */
+function renderLowSleepNudge() {
+  const last = sleepAvgDays(1);
+  if (last.nights === 0 || last.avgMin >= 360) return '';
+  const hrs = (last.avgMin / 60).toFixed(1);
+  return `<div class="alert" style="border-left-color:var(--warning)"><span class="a-ico">☾</span><div class="a-body">
+    <b>${hrs}h of sleep last night.</b>
+    Consider trimming today's volume ~10% or treating it as a lighter day — recovery drives the numbers as much as the sets do.</div></div>`;
+}
+
 function renderTrainHome() {
   const p = getProfile();
   const tpl = activeRoutine();
@@ -762,6 +774,7 @@ function renderTrainHome() {
   if (quip && quip.fresh) { setTimeout(() => { toast(quip.text); settleQuip(); }, 400); }
 
   return `
+  ${renderLowSleepNudge()}
   ${renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames)}
 
   ${/* Directly under the plan, because these alerts are what explain the ▼ and ▲
@@ -1650,6 +1663,10 @@ function finishWorkout() {
   });
   s.score = scoreWorkout(s);
   if (s.startedAt) s.durationMin = Math.max(1, Math.round((Date.now() - s.startedAt) / 60000));
+  // same MET formula cardio uses (train.js saveCardio); 6 MET is a reasonable
+  // flat estimate for straight-set resistance training (ACSM puts it 3-6)
+  const kg = getProfile()?.weightKg;
+  if (kg && s.durationMin) s.kcalEst = Math.round(6 * 3.5 * kg / 200 * s.durationMin);
   saveWorkout(s);
   App.activeSession = null;
   App.rest = null;

@@ -12,12 +12,12 @@
    The previous build was network-first for everything, which fixed stale updates
    at the cost of a network timeout on every single launch offline or on 1 bar.
 */
-const CACHE = 'peak-v33';
+const CACHE = 'peak-v34';
 const SHELL = [
   './', 'index.html',
-  'style.css?v=33',
-  'store.js?v=33', 'charts.js?v=33', 'quips.js?v=33', 'api.js?v=33',
-  'food.js?v=33', 'train.js?v=33', 'routines.js?v=33', 'sleep.js?v=33', 'grocery.js?v=33', 'app.js?v=33',
+  'style.css?v=34',
+  'store.js?v=34', 'charts.js?v=34', 'quips.js?v=34', 'api.js?v=34',
+  'food.js?v=34', 'train.js?v=34', 'routines.js?v=34', 'sleep.js?v=34', 'grocery.js?v=34', 'app.js?v=34',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 
@@ -87,5 +87,28 @@ self.addEventListener('fetch', e => {
      so re-fetching on every hit is pure waste. */
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => putIfOk(req, res)))
+  );
+});
+
+/* Reminder notifications from worker/src/index.js's scheduled() cron job —
+   payload shape is { title, body } (see REMINDER_COPY in that file). */
+self.addEventListener('push', e => {
+  let data = { title: 'Peak', body: 'You have a reminder.' };
+  try { if (e.data) data = { ...data, ...e.data.json() }; } catch {}
+  e.waitUntil(self.registration.showNotification(data.title, {
+    body: data.body,
+    icon: 'icons/icon-192.png',
+    badge: 'icons/icon-192.png',
+    tag: 'peak-reminder'
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      const existing = clients.find(c => 'focus' in c);
+      return existing ? existing.focus() : self.clients.openWindow('./');
+    })
   );
 });

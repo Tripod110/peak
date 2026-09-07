@@ -227,3 +227,59 @@ function prepareImage(file) {
     img.src = url;
   });
 }
+
+/* ---------- push reminders ----------
+   Talks to the same Worker as meal scanning (worker/src/index.js), just two
+   different routes. Permission is requested here, and only here — never on
+   cold start — the caller (app.js Settings) only invokes this from an
+   explicit toggle the user just tapped. */
+async function subscribeToReminders(reminders) {
+  if (!WORKER_URL) throw new Error('Reminders need the Worker deployed first — see worker/README.md.');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    throw new Error('Push notifications are not supported in this browser.');
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Notification permission was not granted.');
+
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    if (!VAPID_PUBLIC_KEY) throw new Error('Reminders need the Worker deployed first — see worker/README.md.');
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+  const res = await fetch(`${WORKER_URL}/subscribe`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      deviceId: getDeviceId(),
+      subscription: sub.toJSON(),
+      tzOffsetMin: new Date().getTimezoneOffset(),
+      reminders
+    })
+  });
+  if (!res.ok) throw new Error('Could not save reminder settings — try again.');
+}
+
+async function unsubscribeFromReminders() {
+  if (!('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) await sub.unsubscribe();
+  if (WORKER_URL) {
+    try {
+      await fetch(`${WORKER_URL}/unsubscribe`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ deviceId: getDeviceId() })
+      });
+    } catch {}
+  }
+}
+
+function urlBase64ToUint8Array(base64url) {
+  const pad = base64url.length % 4 === 0 ? '' : '='.repeat(4 - (base64url.length % 4));
+  const bin = atob(base64url.replace(/-/g, '+').replace(/_/g, '/') + pad);
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}

@@ -23,8 +23,20 @@ npm install -g wrangler
 wrangler login
 wrangler kv namespace create PEAK_KV     # paste the id into wrangler.toml
 wrangler secret put GEMINI_API_KEY       # paste your key when prompted
+
+# Push notifications (POST /subscribe, /unsubscribe, and the reminder cron) —
+# skip this if you're only deploying meal scanning for now:
+node worker/scripts/generate-vapid-keys.mjs
+#   -> paste VAPID_PUBLIC_KEY and VAPID_SUBJECT into wrangler.toml [vars]
+wrangler secret put VAPID_PRIVATE_KEY    # paste the JWK line the script printed
+
 wrangler deploy
 ```
+
+After deploying, paste the resulting `https://peak-scan.<subdomain>.workers.dev` URL into
+`WORKER_URL` in [`../store.js`](../store.js), and add that same origin to the `connect-src`
+line of the CSP `<meta>` tag in [`../index.html`](../index.html) — without both, the client's
+`fetch` calls to this Worker are blocked before they leave the browser.
 
 ## Wiring the app up
 

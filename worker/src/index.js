@@ -10,7 +10,13 @@
  *
  * NOTE: SCAN_PROMPT and SCAN_SCHEMA are duplicated from ../../api.js. When the
  * app switches to hosted scanning, delete them there and keep this the only copy.
+ *
+ * Also handles push-notification subscriptions (/subscribe, /unsubscribe) and a
+ * cron trigger (`scheduled` below) that fires reminders at each subscriber's
+ * configured local time. See webpush.js for the actual Web Push/VAPID mechanics.
  */
+
+import { sendWebPush } from './webpush.js';
 
 const SCAN_SCHEMA = {
   type: 'OBJECT',
@@ -74,16 +80,19 @@ async function bump(kv, key, ttlSeconds) {
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env) });
-    if (request.method !== 'POST') return json({ error: 'POST only' }, 405, env);
 
-    const url = new URL(request.url);
-    if (url.pathname !== '/scan') return json({ error: 'Not found' }, 404, env);
-
-    // Weak, but it filters casual abuse. Real protection is the caps below.
+    // Weak, but it filters casual abuse. Real protection is the caps below /
+    // the fact that a subscription is useless without a valid endpoint.
     const origin = request.headers.get('origin');
     if (env.ALLOWED_ORIGIN && origin && origin !== env.ALLOWED_ORIGIN) {
       return json({ error: 'Forbidden' }, 403, env);
     }
+    if (request.method !== 'POST') return json({ error: 'POST only' }, 405, env);
+
+    const url = new URL(request.url);
+    if (url.pathname === '/subscribe') return handleSubscribe(request, env);
+    if (url.pathname === '/unsubscribe') return handleUnsubscribe(request, env);
+    if (url.pathname !== '/scan') return json({ error: 'Not found' }, 404, env);
 
     let body;
     try { body = await request.json(); }
@@ -180,5 +189,106 @@ export default {
       ...parsed,
       remaining: Math.max(0, perDay - (used + 1))
     }, 200, env);
+  },
+
+  /* Cloudflare Cron Trigger — see [triggers] in wrangler.toml. Runs every 15
+     minutes; each subscriber only actually gets pushed to once their local
+     reminder time falls inside the window that just ran. */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runReminders(env));
   }
 };
+
+/* ---------- push subscriptions ---------- */
+
+function subKey(deviceId) { return `sub:${deviceId}`; }
+
+async function handleSubscribe(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Bad request' }, 400, env); }
+  const { deviceId, subscription, tzOffsetMin, reminders } = body || {};
+  if (!deviceId || typeof deviceId !== 'string' || deviceId.length > 64) {
+    return json({ error: 'Bad request' }, 400, env);
+  }
+  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+    return json({ error: 'Invalid subscription' }, 400, env);
+  }
+  if (typeof tzOffsetMin !== 'number' || tzOffsetMin < -720 || tzOffsetMin > 840) {
+    return json({ error: 'Invalid timezone offset' }, 400, env);
+  }
+  const clean = {
+    sleep: /^\d{2}:\d{2}$/.test(reminders?.sleep) ? reminders.sleep : null,
+    food: /^\d{2}:\d{2}$/.test(reminders?.food) ? reminders.food : null
+  };
+  // no TTL: a subscription lives until the user turns reminders off, unlike
+  // the 48h rate-limit counters (`dev:`/`global:`) elsewhere in this file
+  const existing = await env.PEAK_KV.get(subKey(deviceId), 'json');
+  await env.PEAK_KV.put(subKey(deviceId), JSON.stringify({
+    subscription, tzOffsetMin, reminders: clean,
+    lastSent: existing?.lastSent || {}
+  }));
+  return json({ ok: true }, 200, env);
+}
+
+async function handleUnsubscribe(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Bad request' }, 400, env); }
+  const { deviceId } = body || {};
+  if (!deviceId) return json({ error: 'Bad request' }, 400, env);
+  await env.PEAK_KV.delete(subKey(deviceId));
+  return json({ ok: true }, 200, env);
+}
+
+/* HH:MM in the subscriber's own local time, from a UTC-minutes offset (the
+   sign JS's Date.getTimezoneOffset() convention — the same value the client
+   already computes, so it just gets forwarded, no timezone name/DB needed). */
+function localHHMM(tzOffsetMin) {
+  const local = new Date(Date.now() - tzOffsetMin * 60000);
+  return `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+}
+function minutesSinceMidnight(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+const REMINDER_COPY = {
+  sleep: { title: 'Log last night’s sleep', body: 'Takes ten seconds — open Peak to log it.' },
+  food: { title: 'Log today’s food', body: 'A quick scan or manual entry keeps the streak going.' }
+};
+
+async function runReminders(env) {
+  const nowMin = minutesSinceMidnight(new Date().toISOString().slice(11, 16));
+  const today = utcDay();
+  let cursor;
+  do {
+    const page = await env.PEAK_KV.list({ prefix: 'sub:', cursor });
+    for (const k of page.keys) {
+      const rec = await env.PEAK_KV.get(k.name, 'json');
+      if (!rec) continue;
+      let changed = false;
+      for (const kind of ['sleep', 'food']) {
+        const time = rec.reminders?.[kind];
+        if (!time) continue;
+        if (rec.lastSent?.[kind] === today) continue;
+        const localNow = minutesSinceMidnight(localHHMM(rec.tzOffsetMin));
+        // fires once inside the 15-minute window the cron trigger runs in
+        if (Math.abs(localNow - minutesSinceMidnight(time)) > 7) continue;
+        try {
+          const res = await sendWebPush(rec.subscription, REMINDER_COPY[kind], env);
+          if (res.status === 404 || res.status === 410) {
+            // push service says this endpoint is gone — stop tracking it
+            await env.PEAK_KV.delete(k.name);
+            changed = false;
+            break;
+          }
+        } catch (err) {
+          console.log('push failed', k.name, String(err));
+          continue;
+        }
+        rec.lastSent = { ...rec.lastSent, [kind]: today };
+        changed = true;
+      }
+      if (changed) await env.PEAK_KV.put(k.name, JSON.stringify(rec));
+    }
+    cursor = page.cursor;
+  } while (cursor);
+}

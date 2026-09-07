@@ -6,6 +6,30 @@
    always follow with Store.set, which refreshes the entry. */
 const _cache = new Map();
 
+/* Cloudflare Worker (worker/) base URL — empty until it's deployed. Same
+   worker also handles /subscribe and /unsubscribe for push reminders (see
+   api.js). Fill in after `wrangler deploy`; also add this origin to the
+   connect-src line of the CSP <meta> tag in index.html, or every fetch to it
+   is blocked before it leaves the browser. */
+const WORKER_URL = '';
+/* The public half of the Worker's VAPID keypair (worker/wrangler.toml's
+   VAPID_PUBLIC_KEY var) — needed client-side for pushManager.subscribe().
+   Fill in with the same value after running
+   node worker/scripts/generate-vapid-keys.mjs and deploying. */
+const VAPID_PUBLIC_KEY = '';
+
+/* Opaque per-browser id, generated once. Not identity (clearing storage makes
+   a new one) — used only as a KV key, for /scan rate-limiting and now for
+   addressing a push subscription. */
+function getDeviceId() {
+  let id = Store.get('deviceId', null);
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    Store.set('deviceId', id);
+  }
+  return id;
+}
+
 /* Scan models. Pinned, never the *-latest aliases — see the migration in getSettings. */
 const DEFAULT_MODEL = 'gemini-3.5-flash';
 const MODEL_ALIASES = {
@@ -181,7 +205,8 @@ function getSettings() {
   const merged = {
     apiKey: '', model: DEFAULT_MODEL, timeFmt: '12',
     units: 'imperial', restSec: 120, theme: 'dark',
-    dietary: { restrictions: [] }, ...s
+    dietary: { restrictions: [] },
+    reminders: { enabled: false, sleep: null, food: null }, ...s
   };
   // migrate from the old Claude-based scanner: ignore leftover Anthropic keys/models
   if ((merged.apiKey || '').startsWith('sk-ant-')) merged.apiKey = '';
@@ -321,6 +346,18 @@ function rememberRecentFood(entry) {
   rest.sort((a, b) => (b.count || 1) - (a.count || 1) || ((a.lastAt || '') < (b.lastAt || '') ? 1 : -1));
   Store.set('recentFoods', rest.slice(0, 40));
 }
+
+/* Checking something off the grocery list means it's in the kitchen, so it's
+   worth a name-only shortcut into Food — but it carries no macros, so it must
+   never re-log itself the way a recent food chip does. Name text only. */
+function rememberGroceryFood(name) {
+  const key = foodKey(name);
+  if (!key) return;
+  const list = Store.get('groceryFoodCache', []).filter(n => foodKey(n) !== key);
+  list.unshift(name);
+  Store.set('groceryFoodCache', list.slice(0, 20));
+}
+function getGroceryFoodCache() { return Store.get('groceryFoodCache', []); }
 
 /* Nutrition quality for a day, 0-100:
      protein adherence 45 · calorie accuracy 25 · food quality 30.
