@@ -143,11 +143,45 @@ function nowTime() { return new Date().toTimeString().slice(0, 5); }
 /* ---------- profile & targets ---------- */
 function getProfile() { return Store.get('profile', null); }
 function setProfile(p) { Store.set('profile', p); }
+/* ---------- dietary restrictions ----------
+   Client-only, name-text matching (there's no structured ingredients field on a
+   food or grocery entry — see food.js/grocery.js). Tier controls badge color via
+   the existing .pill good/warn/crit classes: 1 = medical allergy (crit, red),
+   2 = intolerance (warn, yellow), 3 = lifestyle/religious preference (good, green). */
+const DIETARY_RESTRICTIONS = [
+  { id: 'gluten', label: 'Gluten-free (Celiac)', tier: 1, re: /\b(wheat|gluten|barley|rye|malt|bread|pasta|noodles?|flour|bun|buns|cracker|pretzel|beer|couscous|semolina|breaded|breading)\b/i },
+  { id: 'peanut', label: 'Peanut allergy', tier: 1, re: /\b(peanut|groundnut)s?\b/i },
+  { id: 'treenut', label: 'Tree nut allergy', tier: 1, re: /\b(almond|cashew|walnut|pecan|pistachio|hazelnut|macadamia)s?\b/i },
+  { id: 'shellfish', label: 'Shellfish allergy', tier: 1, re: /\b(shrimp|prawns?|crab|lobster|shellfish|clams?|oysters?|scallops?|mussels?)\b/i },
+  { id: 'dairy', label: 'Dairy-free', tier: 2, re: /\b(milk|cheese|yogurt|yoghurt|butter|cream|whey|casein|dairy|paneer|ghee)\b/i },
+  { id: 'soy', label: 'Soy-free', tier: 2, re: /\b(soy|soya|edamame|tofu|tempeh)\b/i },
+  { id: 'egg', label: 'Egg-free', tier: 2, re: /\b(eggs?|mayonnaise|mayo|meringue)\b/i },
+  { id: 'vegan', label: 'Vegan', tier: 3, re: /\b(meat|beef|chicken|pork|fish|bacon|turkey|lamb|eggs?|milk|cheese|butter|honey|gelatin|yogurt|cream|whey)\b/i },
+  { id: 'vegetarian', label: 'Vegetarian', tier: 3, re: /\b(meat|beef|chicken|pork|fish|bacon|turkey|lamb|gelatin|shrimp|anchov(?:y|ies))\b/i },
+  { id: 'keto', label: 'Keto / low-carb', tier: 3, re: /\b(bread|pasta|rice|sugar|potato|noodles?|tortilla|cereal|oats|bun)\b/i },
+  { id: 'halal', label: 'Halal', tier: 3, re: /\b(pork|bacon|ham|lard|gelatin|alcohol|wine|beer)\b/i }
+];
+const TIER_PILL = { 1: 'crit', 2: 'warn', 3: 'good' };
+function activeDietaryIds() { return getSettings().dietary?.restrictions || []; }
+/* returns the matching restriction defs (with .tier/.label) for a bit of free text */
+function dietaryWarnings(text) {
+  if (!text) return [];
+  const active = activeDietaryIds();
+  if (!active.length) return [];
+  return DIETARY_RESTRICTIONS.filter(d => active.includes(d.id) && d.re.test(text));
+}
+function dietaryBadgesHtml(text) {
+  return dietaryWarnings(text)
+    .map(w => `<span class="pill ${TIER_PILL[w.tier]}" title="${esc(w.label)}">⚠ ${esc(w.label)}</span>`)
+    .join('');
+}
+
 function getSettings() {
   const s = Store.get('settings', {});
   const merged = {
     apiKey: '', model: DEFAULT_MODEL, timeFmt: '12',
-    units: 'imperial', restSec: 120, ...s
+    units: 'imperial', restSec: 120, theme: 'dark',
+    dietary: { restrictions: [] }, ...s
   };
   // migrate from the old Claude-based scanner: ignore leftover Anthropic keys/models
   if ((merged.apiKey || '').startsWith('sk-ant-')) merged.apiKey = '';

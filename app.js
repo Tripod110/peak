@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v32';
+const APP_VERSION = 'v33';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -976,6 +976,14 @@ function openSettingsModal() {
       <button data-v="24" class="${s.timeFmt === '24' ? 'on' : ''}">24-hour</button>
     </div>
 
+    <label>Theme</label>
+    <div class="theme-picker" id="set-theme">
+      ${THEMES.map(th => `
+        <button data-v="${th.id}" data-action="pick-theme" class="theme-swatch ${s.theme === th.id ? 'on' : ''}">
+          <span class="theme-dot" style="background:${th.swatch}"></span>${th.label}
+        </button>`).join('')}
+    </div>
+
     <details class="adv" open>
       <summary>You & your goal</summary>
       <label>Sex (for the metabolism formula)</label>
@@ -1011,6 +1019,16 @@ function openSettingsModal() {
       <div class="chart-note">${isCustomRoutine()
         ? 'You are running your own routine, so this only takes effect if you change it — and it will ask before replacing your edits. Edit days and exercises under Train → Edit your routine.'
         : 'Every split is a starting point. Add, remove and reorder exercises under Train → Edit your routine.'}</div>
+    </details>
+
+    <details class="adv">
+      <summary>Dietary restrictions${s.dietary.restrictions.length ? ` <span class="pill">${s.dietary.restrictions.length}</span>` : ''}</summary>
+      <div class="chart-note">Flags matching items in Food and Grocery. Red = medical allergy, yellow = intolerance, green = lifestyle/religious preference — nothing here blocks logging, it only warns.</div>
+      ${DIETARY_RESTRICTIONS.map(d => `
+        <label class="check-row">
+          <input type="checkbox" data-dietary="${d.id}" ${s.dietary.restrictions.includes(d.id) ? 'checked' : ''}>
+          <span>${esc(d.label)} <span class="pill ${TIER_PILL[d.tier]}" style="margin-left:4px">${d.tier === 1 ? 'allergy' : d.tier === 2 ? 'intolerance' : 'preference'}</span></span>
+        </label>`).join('')}
     </details>
 
     <details class="adv" ${bk.due ? 'open' : ''}>
@@ -1079,6 +1097,7 @@ function saveSettings() {
     const barKg = prevUnits === 'metric' ? barIn : lbToKg(barIn);
     if (barKg > 0 && barKg <= 50) s.barKg = barKg;
   }
+  s.dietary = { restrictions: Array.from(document.querySelectorAll('[data-dietary]:checked')).map(el => el.dataset.dietary) };
   setSettings(s);
 
   const p = getProfile();
@@ -1148,6 +1167,15 @@ document.addEventListener('click', e => {
       break;
     }
     case 'test-key': testApiKey(); break;
+    case 'pick-theme': {
+      const id = el.dataset.v;
+      const s = getSettings();
+      s.theme = id;
+      setSettings(s);
+      applyTheme(id);
+      document.querySelectorAll('#set-theme .theme-swatch').forEach(b => b.classList.toggle('on', b.dataset.v === id));
+      break;
+    }
     case 'dismiss-install': Store.set('installDismissed', true); App.render(); break;
     case 'save-settings': saveSettings(); break;
     case 'modal-backdrop': if (e.target === el) closeModal(); break;
@@ -1251,6 +1279,8 @@ document.addEventListener('click', e => {
     case 'add-set': readSetInputs(); addSet(Number(el.dataset.xi)); break;
     case 'add-warmup': readSetInputs(); addWarmup(Number(el.dataset.xi)); break;
     case 'set-done': toggleSetDone(Number(el.dataset.xi), Number(el.dataset.si)); break;
+    case 'step-weight': stepSetWeight(Number(el.dataset.xi), Number(el.dataset.si), Number(el.dataset.dir)); break;
+    case 'step-reps': stepSetReps(Number(el.dataset.xi), Number(el.dataset.si), Number(el.dataset.dir)); break;
     case 'set-type': cycleSetType(Number(el.dataset.xi), Number(el.dataset.si)); break;
     case 'rest-add': if (App.rest) { App.rest.endsAt += 30000; App.rest.total += 30; App.rest.beeped = false; persistSession(); paintRest(); } break;
     case 'rest-skip': App.rest = null; persistSession(); paintRest(); break;
@@ -1492,6 +1522,20 @@ function maybeNudgeBackup() {
   }, 2500);
 }
 
+/* ---------- theme ---------- */
+const THEMES = [
+  { id: 'dark', label: 'Dark', swatch: '#3987e5' },
+  { id: 'pink', label: 'Pink', swatch: '#ff7ab3' },
+  { id: 'ocean', label: 'Ocean', swatch: '#2fb4e5' },
+  { id: 'forest', label: 'Forest', swatch: '#5fae5a' },
+  { id: 'light', label: 'Light', swatch: '#1f6fd0' },
+];
+function applyTheme(id) {
+  document.documentElement.dataset.theme = id;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--page').trim());
+}
+
 /* Registered here rather than inline in index.html so the page can run under
    script-src 'self' with no 'unsafe-inline' — see the CSP note in index.html. */
 function registerServiceWorker() {
@@ -1500,6 +1544,7 @@ function registerServiceWorker() {
 }
 
 (function boot() {
+  applyTheme(getSettings().theme);
   registerServiceWorker();
   requestPersistentStorage();
   if (getProfile()) {

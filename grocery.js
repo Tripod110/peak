@@ -203,7 +203,7 @@ function gItem(i) {
   <div class="g-item ${i.done ? 'done' : ''}">
     <button class="g-tap" data-action="g-toggle" data-id="${i.id}" aria-label="${i.done ? 'Uncheck' : 'Check off'} ${esc(i.name)}">
       <span class="g-check">✓</span>
-      <span class="g-name">${esc(i.name)}${q > 1 ? ` <span class="g-qty">×${q}</span>` : ''}</span>
+      <span class="g-name">${esc(i.name)}${q > 1 ? ` <span class="g-qty">×${q}</span>` : ''} ${dietaryBadgesHtml(i.name)}</span>
     </button>
     <button class="g-step" data-action="g-qty" data-id="${i.id}" data-d="-1" aria-label="One fewer ${esc(i.name)}">−</button>
     <button class="g-step" data-action="g-qty" data-id="${i.id}" data-d="1" aria-label="One more ${esc(i.name)}">＋</button>
@@ -261,13 +261,16 @@ function groceryAdd(raw) {
   if (!name) return;
   const list = getGrocery();
   const existing = list.find(i => i.name.toLowerCase() === name.toLowerCase() && !i.done);
+  const warns = dietaryWarnings(name);
+  const flag = warns.length ? ` — ${warns[0].tier === 1 ? '⚠ allergy flag' : 'flagged'}: ${warns.map(w => w.label).join(', ')}` : '';
   if (existing) {
     existing.qty = (existing.qty || 1) + qty;
     setGrocery(list);
-    toast(`${name} ×${existing.qty}`);
+    toast(`${name} ×${existing.qty}${flag}`);
   } else {
     list.unshift({ id: 'g' + Math.random().toString(36).slice(2, 9), name, qty, done: false, aisle: aisleFor(name) });
     setGrocery(list);
+    if (flag) toast(`${name}${flag}`);
   }
   App.render();
 }

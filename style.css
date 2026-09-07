@@ -25,6 +25,69 @@
   --tabbar-h: 62px;
 }
 
+/* ---------- themes (color-only overrides; layout/spacing vars stay fixed) ---------- */
+:root[data-theme="pink"] {
+  --page: #170c12;
+  --surface: #26141d;
+  --surface-2: #331b26;
+  --ink: #fff2f7;
+  --ink-2: #e7bdd1;
+  --muted: #a9829a;
+  --grid: #3a2130;
+  --baseline: #45283a;
+  --border: rgba(255,192,220,0.14);
+  --blue: #ff7ab3;
+  --orange: #ff9ecb;
+  --aqua: #f0559b;
+  --violet: #c96fd6;
+}
+:root[data-theme="ocean"] {
+  --page: #071216;
+  --surface: #0f1f26;
+  --surface-2: #142933;
+  --ink: #eef8fb;
+  --ink-2: #b7cdd4;
+  --muted: #7f979e;
+  --grid: #1a333d;
+  --baseline: #204049;
+  --border: rgba(180,230,245,0.12);
+  --blue: #2fb4e5;
+  --orange: #ff9d5c;
+  --aqua: #23c9a8;
+  --violet: #6fa8e9;
+}
+:root[data-theme="forest"] {
+  --page: #0c130d;
+  --surface: #182118;
+  --surface-2: #202c20;
+  --ink: #f3faf1;
+  --ink-2: #c4d3c0;
+  --muted: #8a9c86;
+  --grid: #2b382a;
+  --baseline: #37452f;
+  --border: rgba(200,230,180,0.12);
+  --blue: #5fae5a;
+  --orange: #d99a3a;
+  --aqua: #4fc08c;
+  --violet: #8fae57;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f5f4f0;
+  --surface: #ffffff;
+  --surface-2: #ecebe6;
+  --ink: #17160f;
+  --ink-2: #4a4840;
+  --muted: #7c7a71;
+  --grid: #ddd9d0;
+  --baseline: #cfcbc0;
+  --border: rgba(0,0,0,0.10);
+  --blue: #1f6fd0;
+  --orange: #c14e1a;
+  --aqua: #0f8a5f;
+  --violet: #6d5fd6;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 /* Natural document flow with min-height:100dvh — the same shell as the sibling
@@ -228,6 +291,16 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 .stepper button { padding: 10px 14px; font-size: 18px; font-weight: 700; color: var(--ink-2); }
 .stepper input { border: none; border-radius: 0; text-align: center; padding: 10px 2px; background: transparent; }
 
+/* theme picker */
+.theme-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.theme-swatch {
+  display: flex; align-items: center; gap: 7px; padding: 9px 12px; min-height: 40px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--ink-2); font-size: 13px; font-weight: 600;
+}
+.theme-swatch.on { border-color: var(--blue); color: var(--ink); }
+.theme-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2); }
+
 /* toast */
 #toast-root { position: fixed; bottom: calc(var(--tabbar-h) + 20px); left: 0; right: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast {
@@ -277,13 +350,26 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   color: var(--muted); font-size: 13px; font-weight: 600; text-align: center;
   min-height: 40px; border-radius: 7px; background: var(--surface-2);
 }
-.set-row input { text-align: center; padding: 9px 4px; }
+.set-row input { text-align: center; padding: 9px 4px; min-width: 0; }
 .set-row.done input { border-color: rgba(12,163,12,0.5); color: var(--ink-2); }
+/* weight/reps + their +/- steppers share the set-row's 1fr column */
+.stepper-group { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.stepper-group input { flex: 1; min-width: 0; }
+.stepper-btn {
+  flex-shrink: 0; width: 26px; height: 36px; border-radius: 7px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--ink-2); font-size: 15px; font-weight: 700; line-height: 1;
+}
+.stepper-btn:active { background: var(--baseline); }
 .done-btn {
   height: 44px; border-radius: 9px; background: var(--surface-2);
   border: 1px solid var(--border); color: var(--muted); font-size: 17px; font-weight: 800;
+  transition: background 0.2s, border-color 0.2s;
 }
-.done-btn.on { background: var(--good); border-color: transparent; color: #fff; }
+.done-btn.on { background: var(--good); border-color: transparent; color: #fff; animation: setConfirm 0.35s ease; }
+@keyframes setConfirm { 0% { transform: scale(0.85); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.set-row.done { animation: setRowFlash 0.5s ease; }
+@keyframes setRowFlash { from { background: rgba(12,163,12,0.18); } to { background: transparent; } }
 /* a finished exercise recedes so the scroll is about what's left */
 .card.ex-complete { opacity: 0.72; }
 .card.ex-complete .ex-name { color: var(--ink-2); }

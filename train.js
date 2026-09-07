@@ -1433,11 +1433,19 @@ function renderExerciseBlock(ex, xi) {
         <button class="set-no ${badge ? 'typed' : ''}" data-action="set-type" data-xi="${xi}" data-si="${si}"
           style="${badge ? `color:${SET_BADGE_COLOR[type]};font-weight:800` : ''}"
           title="Tap to change set type">${badge || workIdx}</button>
-        <input type="number" step="any" inputmode="decimal" aria-label="Weight in ${perHand ? u + ' per hand' : u}"
-          placeholder="${wPlace}" value="${st.weight != null && st.weight !== 0 ? Math.round(toW(st.weight) * 10) / 10 : ''}"
-          data-set-w data-xi="${xi}" data-si="${si}">
-        <input type="number" inputmode="numeric" aria-label="Reps" placeholder="${rPlace}" value="${st.reps ?? ''}"
-          data-set-r data-xi="${xi}" data-si="${si}">
+        <span class="stepper-group">
+          <button class="stepper-btn" data-action="step-weight" data-dir="-1" data-xi="${xi}" data-si="${si}" aria-label="Decrease weight">−</button>
+          <input type="number" step="any" inputmode="decimal" aria-label="Weight in ${perHand ? u + ' per hand' : u}"
+            placeholder="${wPlace}" value="${st.weight != null && st.weight !== 0 ? Math.round(toW(st.weight) * 10) / 10 : ''}"
+            data-set-w data-xi="${xi}" data-si="${si}">
+          <button class="stepper-btn" data-action="step-weight" data-dir="1" data-xi="${xi}" data-si="${si}" aria-label="Increase weight">+</button>
+        </span>
+        <span class="stepper-group">
+          <button class="stepper-btn" data-action="step-reps" data-dir="-1" data-xi="${xi}" data-si="${si}" aria-label="Decrease reps">−</button>
+          <input type="number" inputmode="numeric" aria-label="Reps" placeholder="${rPlace}" value="${st.reps ?? ''}"
+            data-set-r data-xi="${xi}" data-si="${si}">
+          <button class="stepper-btn" data-action="step-reps" data-dir="1" data-xi="${xi}" data-si="${si}" aria-label="Increase reps">+</button>
+        </span>
         <button class="done-btn ${st.done ? 'on' : ''}" data-action="set-done" data-xi="${xi}" data-si="${si}"
           aria-label="Mark set ${workIdx} complete">✓</button>
         <button class="x-btn" data-action="del-set" data-xi="${xi}" data-si="${si}" aria-label="Delete set ${workIdx}">✕</button>
@@ -1509,6 +1517,33 @@ function addWarmup(xi) {
   App.render();
 }
 
+/* +/- steppers so weight/reps can be adjusted without the on-screen keyboard */
+function stepSetWeight(xi, si, dir) {
+  readSetInputs();
+  const ex = App.activeSession.exercises[xi];
+  const st = ex.sets[si];
+  const step = isMetric() ? 1 : 2.5;
+  const cur = st.weight != null ? toW(st.weight) : 0;
+  st.weight = fromW(Math.max(0, Math.round((cur + dir * step) * 10) / 10));
+  st.touched = true;
+  st.planned = false;
+  repaintPlates(xi);
+  persistSession();
+  App.render();
+}
+
+function stepSetReps(xi, si, dir) {
+  readSetInputs();
+  const ex = App.activeSession.exercises[xi];
+  const st = ex.sets[si];
+  const cur = st.reps != null ? st.reps : 0;
+  st.reps = Math.max(0, cur + dir);
+  st.touched = true;
+  st.planned = false;
+  persistSession();
+  App.render();
+}
+
 function cycleSetType(xi, si) {
   readSetInputs();
   const st = App.activeSession.exercises[xi].sets[si];
@@ -1528,6 +1563,7 @@ function toggleSetDone(xi, si) {
   if (st.done) {
     if (!st.reps) { st.done = false; toast('Enter reps first'); App.render(); return; }
     st.planned = false;
+    if (navigator.vibrate) navigator.vibrate(30);
     const pr = checkSetPR(ex.name, st);
     if (pr) toast(pr);
     if (!isWarmup(st)) startRest(suggestedRestSec(ex.name), ex.name);

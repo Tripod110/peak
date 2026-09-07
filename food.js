@@ -75,7 +75,7 @@ function renderFoodHome() {
       : items.map(e => `
       <div class="list-item">
         <button class="li-main li-tap" data-action="edit-food" data-id="${e.id}" aria-label="Edit ${esc(e.name)}">
-          <div class="li-title">${esc(e.name)}${e.source === 'ai' ? ' <span class="tag-ai">AI</span>' : ''}</div>
+          <div class="li-title">${esc(e.name)}${e.source === 'ai' ? ' <span class="tag-ai">AI</span>' : ''} ${dietaryBadgesHtml(e.name)}</div>
           <div class="li-sub">${e.time ? fmtTime(e.time) : ''}${e.portion ? ' · ' + esc(e.portion) : ''} · P${Math.round(e.protein)} C${Math.round(e.carbs)} F${Math.round(e.fat)}</div>
         </button>
         <div class="li-val">${Math.round(e.kcal)}<span class="unit"> kcal</span></div>
@@ -273,6 +273,7 @@ function renderScanReview(result) {
           <input type="checkbox" checked data-scan-check="${i}">
           <input class="si-name" value="${esc(it.name)}" data-scan-name="${i}" aria-label="Item name">
         </label>
+        ${dietaryBadgesHtml(it.name + ' ' + (result.notes || '')) ? `<div class="mt">${dietaryBadgesHtml(it.name + ' ' + (result.notes || ''))}</div>` : ''}
         <input class="si-portion" value="${esc(it.portion)}" data-scan-portion="${i}" aria-label="Portion">
         <div class="si-macros">
           <label>kcal<input type="number" inputmode="numeric" value="${it.calories}" data-scan-kcal="${i}"></label>
@@ -316,7 +317,8 @@ function logScanItems() {
   if (!n) { toast('Nothing selected'); return; }
   App.scanImage = null; App.scanResult = null;
   closeModal();
-  toast(`Logged ${n} item${n !== 1 ? 's' : ''}`);
+  const crit = result.items.some(it => dietaryWarnings(it.name).some(w => w.tier === 1));
+  toast(crit ? `Logged ${n} item${n !== 1 ? 's' : ''} — check the allergy flags` : `Logged ${n} item${n !== 1 ? 's' : ''}`);
   App.render();
 }
 
@@ -379,12 +381,14 @@ function saveManualFood(id) {
     fiber: numOf('mf-fiber'),
     quality: rated ? Number(document.getElementById('mf-quality').value) : null
   };
+  const warns = dietaryWarnings(name);
+  const flag = warns.length ? ` — ${warns[0].tier === 1 ? '⚠ allergy flag' : 'flagged'}: ${warns.map(w => w.label).join(', ')}` : '';
   if (id) {
     updateFoodEntry(App.foodDay, id, entry);
-    closeModal(); toast('Entry updated');
+    closeModal(); toast('Entry updated' + flag);
   } else {
     addFoodEntry(App.foodDay, { ...entry, source: 'manual' });
-    closeModal(); toast('Logged');
+    closeModal(); toast('Logged' + flag);
   }
   App.render();
 }
