@@ -88,7 +88,10 @@
   --violet: #6d5fd6;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+/* touch-action: manipulation kills the double-tap-to-zoom delay/gesture on
+   buttons and taps everywhere, without disabling pinch-zoom (kept for WCAG
+   1.4.4 — see the viewport meta comment in index.html) */
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
 /* Natural document flow with min-height:100dvh — the same shell as the sibling
    "Our Thing" app, which renders edge-to-edge on the same phone. A rigid
