@@ -9,17 +9,14 @@
      allowed to talk to. script-src 'self' is why the service-worker registration
      moved into app.js — there are no inline scripts left, so an injected one
      cannot execute. 'unsafe-inline' remains only for style, which cannot run code.
-
-     Once worker/ is deployed, add its https://peak-scan.<subdomain>.workers.dev
-     origin to connect-src below (matching WORKER_URL in store.js) — without it,
-     the /subscribe, /unsubscribe and (once wired) /scan fetches are blocked
-     before they leave the browser, with no visible error but a network failure. -->
+     peak-scan.smasher8976.workers.dev is the deployed Worker (worker/) — reminders
+     and, once wired, meal scanning talk to it. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
   script-src 'self';
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob:;
-  connect-src 'self' https://generativelanguage.googleapis.com;
+  connect-src 'self' https://generativelanguage.googleapis.com https://peak-scan.smasher8976.workers.dev;
   form-action 'none';
   base-uri 'none';
   object-src 'none'">
@@ -37,7 +34,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Peak">
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 
@@ -79,15 +76,15 @@
   <button class="fab" id="fab-toggle" data-action="fab-toggle" aria-label="Quick add" aria-expanded="false">＋</button>
 </div>
 
-<script src="store.js?v=34"></script>
-<script src="charts.js?v=34"></script>
-<script src="quips.js?v=34"></script>
-<script src="api.js?v=34"></script>
-<script src="food.js?v=34"></script>
-<script src="train.js?v=34"></script>
-<script src="routines.js?v=34"></script>
-<script src="sleep.js?v=34"></script>
-<script src="grocery.js?v=34"></script>
-<script src="app.js?v=34"></script>
+<script src="store.js?v=35"></script>
+<script src="charts.js?v=35"></script>
+<script src="quips.js?v=35"></script>
+<script src="api.js?v=35"></script>
+<script src="food.js?v=35"></script>
+<script src="train.js?v=35"></script>
+<script src="routines.js?v=35"></script>
+<script src="sleep.js?v=35"></script>
+<script src="grocery.js?v=35"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>

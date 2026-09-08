@@ -11,12 +11,12 @@ const _cache = new Map();
    api.js). Fill in after `wrangler deploy`; also add this origin to the
    connect-src line of the CSP <meta> tag in index.html, or every fetch to it
    is blocked before it leaves the browser. */
-const WORKER_URL = '';
+const WORKER_URL = 'https://peak-scan.smasher8976.workers.dev';
 /* The public half of the Worker's VAPID keypair (worker/wrangler.toml's
    VAPID_PUBLIC_KEY var) — needed client-side for pushManager.subscribe().
    Fill in with the same value after running
    node worker/scripts/generate-vapid-keys.mjs and deploying. */
-const VAPID_PUBLIC_KEY = '';
+const VAPID_PUBLIC_KEY = 'BJ0-xGHMKxPhybg9kRn3AHo2dEYFxwkosBI-zdyob2qYQn5m2aSYsamYr3DoGG-UwEn9-FBAnTZPkyyTlFLMERo';
 
 /* Opaque per-browser id, generated once. Not identity (clearing storage makes
    a new one) — used only as a KV key, for /scan rate-limiting and now for

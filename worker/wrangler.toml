@@ -12,8 +12,8 @@ ALLOWED_ORIGIN     = "https://tripod110.github.io"
 # Public half of the VAPID keypair for Web Push — not secret, it's shipped to
 # every subscribing browser as the applicationServerKey. Generate both halves
 # with: node worker/scripts/generate-vapid-keys.mjs
-VAPID_PUBLIC_KEY = "REPLACE_ME"
-VAPID_SUBJECT    = "mailto:REPLACE_ME@example.com"   # a contact a push service can reach if you're abusing it
+VAPID_PUBLIC_KEY = "BJ0-xGHMKxPhybg9kRn3AHo2dEYFxwkosBI-zdyob2qYQn5m2aSYsamYr3DoGG-UwEn9-FBAnTZPkyyTlFLMERo"
+VAPID_SUBJECT    = "mailto:smasher8976@gmail.com"   # a contact a push service can reach if you're abusing it
 
 # Cron trigger for reminder notifications — runs runReminders() in src/index.js.
 [triggers]
@@ -23,7 +23,7 @@ crons = ["*/15 * * * *"]
 # then paste the id below.
 [[kv_namespaces]]
 binding = "PEAK_KV"
-id = "REPLACE_ME"
+id = "7890f84653da49278570d11f6ce4e169"
 
 # Secrets, never in this file:
 #   wrangler secret put GEMINI_API_KEY
