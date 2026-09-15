@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -124,6 +124,7 @@ const App = {
   foodView: 'home',
   rest: null,
   undo: null,
+  setSel: null,          // {uid, si} — the set open in the workout editor (view state, never saved)
   ob: {},
 
   render() {
@@ -131,9 +132,15 @@ const App = {
     // the document is the scroll container now; keep the reading position when
     // re-rendering the same tab, jump to top only when switching tabs
     const keepScroll = App._renderedTab === App.tab ? (window.scrollY || 0) : 0;
+    // a re-render replaces every button; remember which one had keyboard focus
+    const focusSel = view.contains(document.activeElement) ? focusSelector(document.activeElement) : null;
     document.getElementById('header-date').textContent =
       new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === App.tab));
+    document.querySelectorAll('.tab').forEach(b => {
+      const on = b.dataset.tab === App.tab;
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
     // a live workout dims the tabs it isn't — Food/Sleep/Grocery still work if tapped,
     // but the bar stops competing for attention while a session is running
     document.getElementById('tabbar')?.classList.toggle('gym-mode', !!App.activeSession);
@@ -147,12 +154,87 @@ const App = {
       case 'sleep': html = renderSleep(); break;
       case 'grocery': html = renderGrocery(); break;
     }
-    // the backup nudge only ever appears on Today, so it can't interrupt logging
-    view.innerHTML = installBanner() + (App.tab === 'today' && App.todayView === 'home' ? backupBanner() : '') + html;
+    /* Notices sit under the main content: the screen leads with what you came
+       to do. The backup nudge only ever appears on Today, so it can't interrupt
+       logging. */
+    const notices = installBanner() + (App.tab === 'today' && App.todayView === 'home' ? backupBanner() : '');
+    view.innerHTML = html + (notices ? `<div class="notices">${notices}</div>` : '');
     window.scrollTo(0, keepScroll);
     App._renderedTab = App.tab;
+    if (focusSel && (!document.activeElement || document.activeElement === document.body)) {
+      view.querySelector(focusSel)?.focus({ preventScroll: true });
+    }
+    paintRest();
+    afterWorkoutRender();
   }
 };
+
+/* Scroll or move focus to what a workout action just opened. Runs after the
+   dock has painted so --dock-h is current when the browser scrolls. */
+function afterWorkoutRender() {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (App._scrollFocus) {
+    const mode = App._scrollFocus;
+    App._scrollFocus = null;
+    const card = document.getElementById('ex-focus');
+    if (card) {
+      _preFocusScroll = null;   // this scroll is deliberate; the keyboard snap-back must not undo it
+      card.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+      if (mode === 'focus') document.getElementById('exf-title')?.focus({ preventScroll: true });
+    }
+  }
+  if (App._focusSetEditor) {
+    App._focusSetEditor = false;
+    const ed = document.getElementById('set-edit');
+    if (ed) {
+      _preFocusScroll = null;
+      ed.focus({ preventScroll: true });
+      ed.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    }
+  }
+}
+
+/* A selector that finds "the same control" in freshly rendered markup. */
+function focusSelector(el) {
+  if (!el || el === document.body) return null;
+  if (el.id) return '#' + CSS.escape(el.id);
+  const a = el.dataset?.action;
+  if (!a) return null;
+  return `[data-action="${CSS.escape(a)}"]` + ['uid', 'si', 'dir', 'idx', 'view', 'type', 'name', 'tab']
+    .filter(k => el.dataset[k] != null)
+    .map(k => `[data-${k}="${CSS.escape(el.dataset[k])}"]`).join('');
+}
+
+/* Screen-reader announcements for things that change without a page load —
+   a set completing, the next exercise opening. Never the timer ticks. */
+function announce(msg) {
+  const el = document.getElementById('sr-live');
+  if (!el) return;
+  el.textContent = '';
+  setTimeout(() => { el.textContent = msg; }, 50);
+}
+
+/* Local line icons: no icon font, no network, and they take the text colour so
+   every theme gets them for free. */
+const ICONS = {
+  play: '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  more: '<circle cx="5.5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.7" fill="currentColor" stroke="none"/>',
+  chevron: '<path d="M9.5 6l6 6-6 6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  trash: '<path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/>',
+  sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+  dumbbell: '<path d="M6.5 7.5v9M17.5 7.5v9M3.5 10v4M20.5 10v4M6.5 12h11"/>',
+  moon: '<path d="M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z"/>',
+  egg: '<path d="M12 3.5c3.3 0 6 4.4 6 8.6 0 3.9-2.7 6.4-6 6.4s-6-2.5-6-6.4c0-4.2 2.7-8.6 6-8.6z"/>',
+  calendar: '<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'
+};
+function icon(name) {
+  return `<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
+}
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -225,6 +307,79 @@ function todayFocus(p, t, totals, slScore, trainedToday) {
   return { ico: '✓', text: 'On track today — calories and protein both landing where they should.' };
 }
 
+/* The one card that answers "what now?" — resume what's running, start what's
+   next, or see what you already did. Everything else on Today supports it. */
+function renderTodayHero() {
+  const s = App.activeSession;
+  if (s) {
+    ensureSessionIds(s);
+    const live = sessionLiveStats();
+    const pct = live.total ? Math.round(live.doneAll / live.total * 100) : 0;
+    const mins = s.startedAt ? Math.max(0, Math.round((Date.now() - s.startedAt) / 60000)) : 0;
+    const open = focusedExercise();
+    return `
+    <section class="card hero-card live" aria-labelledby="today-hero-title">
+      <div class="eyebrow"><span class="live-dot" aria-hidden="true"></span> Workout in progress</div>
+      <h2 class="hero-title" id="today-hero-title">${esc(s.dayName)}</h2>
+      <div class="hero-meta">${live.doneAll} of ${live.total} sets done · started ${mins} min ago${open ? ` · ${esc(open.name)} open` : ''}</div>
+      <div class="wk-bar" role="progressbar" aria-label="Sets completed" aria-valuemin="0" aria-valuemax="${live.total}" aria-valuenow="${live.doneAll}"><span style="width:${pct}%"></span></div>
+      <button class="btn accent big mt" data-action="resume-workout">${icon('play')} Resume workout</button>
+    </section>`;
+  }
+
+  const tk = todayKey();
+  const done = getWorkouts().filter(w => w.date === tk && !w.cardio).pop();
+  if (done) {
+    const sets = (done.exercises || []).reduce((n, e) => n + workingSets(e.sets).length, 0);
+    const vol = sessionVolumeKg(done);
+    return `
+    <section class="card hero-card done" aria-labelledby="today-hero-title">
+      <div class="eyebrow good">${icon('check')} Trained today</div>
+      <h2 class="hero-title" id="today-hero-title">${esc(done.dayName)}</h2>
+      <div class="hero-stats">
+        <div><span class="hs-v">${done.score ?? '—'}</span><span class="hs-l">score</span></div>
+        <div><span class="hs-v">${sets}</span><span class="hs-l">sets</span></div>
+        ${vol > 0 ? `<div><span class="hs-v">${fmtWt(vol)}</span><span class="hs-l">${wUnit()} moved</span></div>` : ''}
+        ${done.durationMin ? `<div><span class="hs-v">${done.durationMin}</span><span class="hs-l">min</span></div>` : ''}
+      </div>
+      <button class="btn big mt" data-action="view-workout" data-id="${esc(done.id)}">View workout</button>
+      <button class="btn ghost mt" data-action="quick-train">Train again</button>
+    </section>`;
+  }
+
+  const tpl = activeRoutine();
+  const idx = nextDayIndex();
+  const day = tpl.days[idx];
+  if (!day || !day.ex.length) {
+    return `
+    <section class="card hero-card" aria-labelledby="today-hero-title">
+      <div class="eyebrow">Up next · ${esc(tpl.name)}</div>
+      <h2 class="hero-title" id="today-hero-title">${esc(day ? day.name : 'Nothing planned')}</h2>
+      <div class="empty-inline">
+        <b>No exercises planned for this day.</b>
+        <span class="muted">Add some to your routine, or log a freestyle session.</span>
+      </div>
+      <button class="btn accent big mt" data-action="routine-edit-day" data-idx="${idx}">${icon('plus')} Add exercises</button>
+      <button class="btn ghost mt" data-action="start-freestyle">Start a freestyle session</button>
+    </section>`;
+  }
+  const { sets, estMin } = dayPlanStats(day);
+  const stalled = new Set(detectPlateaus().map(p => p.name.toLowerCase()));
+  const shown = day.ex.slice(0, 4);
+  return `
+  <section class="card hero-card" aria-labelledby="today-hero-title">
+    <div class="eyebrow">Up next · ${esc(tpl.name)}</div>
+    <h2 class="hero-title" id="today-hero-title">${esc(day.name)}</h2>
+    <div class="hero-meta">${day.ex.length} exercise${day.ex.length !== 1 ? 's' : ''} · ${sets} sets · ~${estMin} min</div>
+    <ul class="hero-list">
+      ${shown.map(([n, t]) => `<li><span class="hl-n">${esc(n)}</span><span class="hl-v">${prescriptionValue(n, nextTarget(n, t, stalled))}</span></li>`).join('')}
+      ${day.ex.length > shown.length ? `<li class="hl-more">+ ${day.ex.length - shown.length} more</li>` : ''}
+    </ul>
+    <button class="btn accent big mt" data-action="start-workout" data-idx="${idx}">${icon('play')} Start workout</button>
+    <button class="btn ghost mt" data-action="quick-train">Choose another day</button>
+  </section>`;
+}
+
 function renderTodayHome() {
   const p = getProfile();
   const t = computeTargets(p);
@@ -233,15 +388,11 @@ function renderTodayHome() {
   const slScore = sleepScore(tk);
   const todaysWorkouts = getWorkouts().filter(s => s.date === tk);
   const trainedToday = todaysWorkouts.some(s => !s.cardio);
-  const todayScores = todaysWorkouts.map(s => s.score || 0);
   // today's sessions already estimate their own burn (train.js finishWorkout/saveCardio) —
   // surfacing it here is display-only, computeTargets stays a pure function of the profile
   const trainKcalToday = todaysWorkouts.reduce((sum, s) => sum + (s.kcalEst || 0), 0);
   const kcalTarget = t.kcal + trainKcalToday;
-  const focus = todayFocus(p, t, totals, slScore, trainedToday);
-
-  const weekVals = [];
-  for (let i = 6; i >= 0; i--) weekVals.push(dayTotals(todayKey(-i)).kcal);
+  const focus = todayFocus(p, t, totals, slScore, trainedToday || !!App.activeSession);
 
   const ws = getWeights();
   const latest = ws.length ? ws[ws.length - 1] : null;
@@ -250,67 +401,67 @@ function renderTodayHome() {
   const wChange = (latest && older.length)
     ? Math.round((toW(latest.kg) - toW(older[older.length - 1].kg)) * 10) / 10 : null;
 
-  const proteinPct = Math.round(totals.protein / t.protein * 100);
-  const slColor = slScore == null ? CHART.muted : slScore >= 75 ? CHART.good : slScore >= 50 ? CHART.warning : CHART.critical;
+  const protein = Math.round(totals.protein);
+  const proteinPct = Math.min(100, Math.round(totals.protein / t.protein * 100));
+  const night = getSleep()[tk];
+  const wk = sessionsInDays(7, true);
   const weak = weeklyWeakLink(p, t);
+  // the hero already says what to train; the focus line only earns space for something else
+  const showFocus = focus.action !== 'quick-train' && !/stalled/.test(focus.text);
 
   return `
-  <div class="card">
-    <div class="row">
-      <div>${ringChart(totals.kcal, kcalTarget, { size: 116, color: CHART.blue, unit: 'kcal' })}</div>
-      <div class="grow">
-        ${macroBar('Protein', totals.protein, t.protein, CHART.blue)}
-        ${macroBar('Carbs', totals.carbs, t.carbs, CHART.orange)}
-        ${macroBar('Fat', totals.fat, t.fat, CHART.aqua)}
-      </div>
-    </div>
-    <div class="focus mt">
-      <span class="fc-ico">${focus.ico}</span>
-      <span class="fc-text">${esc(focus.text)}</span>
-      ${focus.action ? `<button class="btn small primary" data-action="${focus.action}">Go</button>` : ''}
-    </div>
+  ${renderTodayHero()}
+
+  <div class="stat-tiles">
+    <button class="tile" data-action="today-nav" data-view="nutrition"
+      aria-label="Protein today: ${protein} of ${t.protein} grams. Open nutrition trends">
+      <span class="tile-l">${icon('egg')} Protein</span>
+      <span class="tile-v">${protein}<small> / ${t.protein} g</small></span>
+      <span class="tile-bar" aria-hidden="true"><span style="width:${proteinPct}%"></span></span>
+    </button>
+    <button class="tile" data-action="quick-sleep"
+      aria-label="${night ? `Sleep last night: ${fmtDur(night.durationMin)}. Edit sleep log` : 'Sleep not logged. Log last night'}">
+      <span class="tile-l">${icon('moon')} Sleep</span>
+      ${night ? `<span class="tile-v">${Math.floor(night.durationMin / 60)}<small>h </small>${String(night.durationMin % 60).padStart(2, '0')}<small>m</small></span>
+        <span class="tile-s">last night</span>`
+        : `<span class="tile-v tile-empty">Not logged</span><span class="tile-s">tap to log</span>`}
+    </button>
+    <button class="tile" data-action="today-nav" data-view="streaks"
+      aria-label="${wk} of ${p.gymDays} lifting sessions in the last 7 days. Open consistency">
+      <span class="tile-l">${icon('calendar')} Week</span>
+      <span class="tile-v">${wk}<small> / ${p.gymDays}</small></span>
+      <span class="tile-s">sessions, 7 days</span>
+    </button>
   </div>
+
+  ${showFocus ? `
+  <div class="focus-line">
+    <span class="fc-ico" aria-hidden="true">${focus.ico}</span>
+    <span class="fc-text">${esc(focus.text)}</span>
+    ${focus.action ? `<button class="btn small" data-action="${focus.action}">${esc(FOCUS_LABEL[focus.action] || 'Go')}</button>` : ''}
+  </div>` : ''}
 
   <div class="card">
     <h2>Quick log</h2>
     <div class="qa-grid">
-      <button class="qa" data-action="quick-scan"><span class="qa-i">📷</span>Scan</button>
-      <button class="qa" data-action="quick-food"><span class="qa-i">＋</span>Food</button>
-      <button class="qa" data-action="quick-train"><span class="qa-i">🏋</span>Train</button>
-      <button class="qa" data-action="quick-sleep"><span class="qa-i">☾</span>Sleep</button>
-      <button class="qa" data-action="quick-weight"><span class="qa-i">⚖</span>Weight</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="glance">
-      <button class="gl" data-action="quick-train">
-        <span class="gv" style="color:${trainedToday ? CHART.good : 'var(--ink)'}">${trainedToday ? (todayScores.length ? Math.max(...todayScores) : '✓') : '—'}</span>
-        <span class="gl-l">${trainedToday ? 'session score' : 'not trained'}</span></button>
-      <button class="gl" data-action="quick-sleep">
-        <span class="gv" style="color:${slColor}">${slScore != null ? slScore : '—'}</span>
-        <span class="gl-l">sleep score</span></button>
-      <button class="gl" data-action="today-nav" data-view="nutrition">
-        <span class="gv">${totals.kcal > 0 ? proteinPct + '%' : '—'}</span>
-        <span class="gl-l">protein today</span></button>
-      <button class="gl" data-action="today-nav" data-view="weight">
-        <span class="gv">${latestDisp != null ? latestDisp : '—'}</span>
-        <span class="gl-l">body weight</span></button>
-    </div>
-    <div class="spread mt">
-      <span class="muted small">Target ${kcalTarget.toLocaleString()} kcal${trainKcalToday ? ` (+${trainKcalToday} from today's training)` : ''} · ${GOAL_LABEL[p.goal]}</span>
-      <span>${weekBars(weekVals, t.kcal, { w: 104, h: 24 })}</span>
+      <button class="qa" data-action="quick-scan"><span class="qa-i" aria-hidden="true">📷</span>Scan</button>
+      <button class="qa" data-action="quick-food"><span class="qa-i" aria-hidden="true">＋</span>Food</button>
+      <button class="qa" data-action="quick-train"><span class="qa-i" aria-hidden="true">🏋</span>Train</button>
+      <button class="qa" data-action="quick-sleep"><span class="qa-i" aria-hidden="true">☾</span>Sleep</button>
+      <button class="qa" data-action="quick-weight"><span class="qa-i" aria-hidden="true">⚖</span>Weight</button>
     </div>
   </div>
 
   <div class="card">
     <h2>Explore</h2>
     ${todayNavRow('week', '📈', 'This week', weak.short, weak.tone)}
-    ${todayNavRow('nutrition', '🍽', 'Nutrition trends', '14-day averages')}
+    ${todayNavRow('nutrition', '🍽', 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
     ${todayNavRow('weight', '⚖', 'Body weight', weightNavValue(p, latestDisp, wChange))}
     ${todayNavRow('streaks', '🔥', 'Consistency', streakSummary())}
+    <div class="chart-note">Target ${kcalTarget.toLocaleString()} kcal${trainKcalToday ? ` (+${trainKcalToday} from today's training)` : ''} · ${GOAL_LABEL[p.goal]}${slScore != null ? ` · sleep score ${slScore}` : ''}</div>
   </div>`;
 }
+const FOCUS_LABEL = { 'quick-scan': 'Scan', 'quick-food': 'Log food', 'quick-sleep': 'Log sleep', 'quick-train': 'Train' };
 
 function weightNavValue(p, latestDisp, wChange) {
   if (latestDisp == null) return 'not logged yet';
@@ -732,14 +883,64 @@ function saveWeightModal() {
 }
 
 /* ---------- modal & toast ---------- */
+/* Sheets are real dialogs: named by their heading, focus moved in and held
+   there, Escape closes the dismissible ones, and focus goes back to whatever
+   opened them. Re-opening while one is open (the picker re-renders on every
+   keystroke) keeps the original opener. */
+let _modalOpener = null;
 function openModal(html, opts = {}) {
   const root = document.getElementById('modal-root');
+  if (!root.firstElementChild) {
+    const a = document.activeElement;
+    _modalOpener = a && a !== document.body ? { el: a, sel: focusSelector(a) } : null;
+  }
   // onboarding passes dismissible:false — tapping the backdrop there used to
   // leave a completely blank screen with no way back in
-  const attr = opts.dismissible === false ? '' : ' data-action="modal-backdrop"';
-  root.innerHTML = `<div class="modal-backdrop"${attr}><div class="modal">${html}</div></div>`;
+  const dismissible = opts.dismissible !== false;
+  const attr = dismissible ? ' data-action="modal-backdrop"' : '';
+  root.innerHTML = `<div class="modal-backdrop"${attr}><div class="modal" role="dialog" aria-modal="true" tabindex="-1"${dismissible ? '' : ' data-locked'}>${html}</div></div>`;
+  const dlg = root.querySelector('.modal');
+  const h = dlg.querySelector('h3');
+  if (h) { h.id = h.id || 'modal-title'; dlg.setAttribute('aria-labelledby', h.id); }
+  else if (opts.label) dlg.setAttribute('aria-label', opts.label);
+  if (!dlg.contains(document.activeElement)) dlg.focus({ preventScroll: true });
 }
-function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+function closeModal() {
+  const root = document.getElementById('modal-root');
+  const wasOpen = !!root.firstElementChild;
+  root.innerHTML = '';
+  if (!wasOpen) return;
+  const o = _modalOpener;
+  _modalOpener = null;
+  if (!o) return;
+  const target = o.el.isConnected ? o.el : (o.sel ? document.querySelector(o.sel) : null);
+  target?.focus({ preventScroll: true });
+}
+function modalFocusables(dlg) {
+  return [...dlg.querySelectorAll('button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+}
+document.addEventListener('keydown', e => {
+  const dlg = document.querySelector('#modal-root .modal');
+  if (dlg) {
+    if (e.key === 'Escape' && !dlg.hasAttribute('data-locked')) { e.preventDefault(); closeModal(); return; }
+    if (e.key === 'Tab') {
+      const f = modalFocusables(dlg);
+      if (!f.length) { e.preventDefault(); dlg.focus(); return; }
+      const first = f[0], last = f[f.length - 1];
+      if (!dlg.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && (document.activeElement === first || document.activeElement === dlg)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+    return;
+  }
+  if (e.key === 'Escape') closeFabMenu();
+  // set editor: Enter on weight moves to reps; Enter on reps closes the keyboard
+  if (e.key === 'Enter' && e.target.dataset) {
+    if (e.target.dataset.setW !== undefined) { e.preventDefault(); document.querySelector('[data-set-r]')?.focus(); }
+    else if (e.target.dataset.setR !== undefined) { e.preventDefault(); e.target.blur(); }
+  }
+});
 function toast(msg, action) {
   const root = document.getElementById('toast-root');
   const el = document.createElement('div');
@@ -1202,6 +1403,9 @@ document.addEventListener('click', e => {
   }
   const a = el.dataset.action;
   if (el.dataset.closeFab !== undefined) closeFabMenu();
+  // commit anything typed into the open set before any action can re-render or switch
+  if (App.activeSession && a !== 'modal-backdrop') readSetInputs();
+  const uid = el.dataset.uid, si = Number(el.dataset.si);
 
   switch (a) {
     case 'fab-toggle': toggleFabMenu(); break;
@@ -1334,23 +1538,36 @@ document.addEventListener('click', e => {
     case 'train-nav': App.trainView = el.dataset.view; App._renderedTab = null; App.render(); break;
     case 'train-back': App.trainView = 'home'; App._renderedTab = null; App.render(); break;
     case 'pick-day': App.trainDay = Number(el.dataset.idx); App.render(); break;
-    case 'start-workout': startWorkout(Number(el.dataset.idx)); break;
-    case 'start-freestyle': startWorkout(0, true); break;
-    case 'edit-load': readSetInputs(); openLoadModal(el.dataset.name); break;
+    case 'start-workout': App.tab = 'train'; App.trainView = 'home'; startWorkout(Number(el.dataset.idx)); break;
+    case 'start-freestyle': App.tab = 'train'; startWorkout(0, true); break;
+    case 'resume-workout': App.tab = 'train'; App.render(); break;
+    case 'routine-edit-day':
+      App.tab = 'train'; App.trainView = 'routine'; App.routineDay = Number(el.dataset.idx);
+      App._renderedTab = null; App.render(); break;
+    case 'close-modal': closeModal(); break;
+    case 'why-target': openWhyTarget(el.dataset.name, el.dataset.target); break;
+    case 'edit-load': openLoadModal(el.dataset.name); break;
     case 'save-load-kind':
       setLoadOverride(el.dataset.name, el.dataset.kind);
       closeModal(); App.render(); break;
-    case 'add-set': readSetInputs(); addSet(Number(el.dataset.xi)); break;
-    case 'add-warmup': readSetInputs(); addWarmup(Number(el.dataset.xi)); break;
-    case 'set-done': toggleSetDone(Number(el.dataset.xi), Number(el.dataset.si)); break;
-    case 'step-weight': stepSetWeight(Number(el.dataset.xi), Number(el.dataset.si), Number(el.dataset.dir)); break;
-    case 'step-reps': stepSetReps(Number(el.dataset.xi), Number(el.dataset.si), Number(el.dataset.dir)); break;
-    case 'set-type': cycleSetType(Number(el.dataset.xi), Number(el.dataset.si)); break;
+    case 'focus-ex': focusExercise(uid, { moveFocus: !el.closest('#rest-root') }); break;
+    case 'select-set': selectSet(uid, si); break;
+    case 'ex-menu': openExerciseMenu(uid); break;
+    case 'set-menu': openSetMenu(uid, si); break;
+    case 'move-ex': closeModal(); moveExercise(uid, Number(el.dataset.dir)); break;
+    case 'add-set': addSet(uid); break;
+    case 'add-warmup': addWarmup(uid); break;
+    case 'complete-set': completeSet(uid, si); break;
+    case 'set-undone': uncompleteSet(uid, si); break;
+    case 'step-weight': stepSetWeight(uid, si, Number(el.dataset.dir)); break;
+    case 'step-reps': stepSetReps(uid, si, Number(el.dataset.dir)); break;
+    case 'set-type': closeModal(); setSetType(uid, si, el.dataset.type); break;
     case 'rest-add': if (App.rest) { App.rest.endsAt += 30000; App.rest.total += 30; App.rest.beeped = false; persistSession(); paintRest(); } break;
     case 'rest-skip': App.rest = null; persistSession(); paintRest(); break;
-    case 'del-set': deleteSet(Number(el.dataset.xi), Number(el.dataset.si)); break;
-    case 'del-exercise': deleteExercise(Number(el.dataset.xi)); break;
-    case 'add-exercise': readSetInputs(); openAddExercise(); break;
+    case 'del-set': closeModal(); deleteSet(uid, si); break;
+    case 'del-exercise': closeModal(); deleteExercise(uid); break;
+    case 'add-exercise': openAddExercise(); break;
+    case 'review-finish': openReviewSheet(); break;
 
     /* routine editor */
     case 'routine-open-day':
@@ -1418,9 +1635,15 @@ document.addEventListener('click', e => {
     case 'coach-set-target': applyCoach(a, el.dataset.key, el.dataset.d); break;
     case 'coach-dismiss': dismissCoach(el.dataset.key); App.render(); break;
     case 'finish-workout': finishWorkout(); break;
+    case 'open-progression': openProgressionSheet(el.dataset.name); break;
+    case 'pg-mode': progressionSheetDraft(document.querySelector('#modal-root [data-action="pg-save"]')?.dataset.name, { mode: el.dataset.v }); break;
+    case 'pg-hold-open': progressionSheetDraft(el.dataset.name, { holdOpen: true }); break;
+    case 'pg-hold-cancel': progressionSheetDraft(el.dataset.name, { holdOpen: false, holdVal: undefined }); break;
+    case 'pg-save': saveProgressionSheet(el.dataset.name); break;
+    case 'pg-resume': resumeProgression(el.dataset.name); break;
     case 'discard-workout':
       if (confirm('Discard this workout? Every set you logged in it will be lost.')) {
-        App.activeSession = null; App.rest = null; App.undo = null;
+        App.activeSession = null; App.rest = null; App.undo = null; App.setSel = null;
         clearPersistedSession(); paintRest(); App.render();
       }
       break;

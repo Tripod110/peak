@@ -18,6 +18,64 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v37 — bold, focused training
+2026-09-15
+
+**Today leads with the workout.** One hero card with three states: *Up next* (the queued day,
+its first lifts at today's weights, and **Start workout**), *Workout in progress* (sets done,
+**Resume workout**), and *Trained today* (score, sets, volume, duration, **View workout**, a
+secondary **Train again**). Below it: protein progress, last night's sleep duration and
+lifting sessions in the last 7 days. Quick log and the Explore drill-ins stay; install and
+backup notices moved under the main content with their actions and dismissal unchanged.
+
+**Train overview.** The selected day is the headline, day chips stay visible, and each
+exercise row opens **Why this target?** — the prescription, its reasoning, last session's
+actual sets and plates. The cue legend and plateau calls moved into a collapsed *Why these
+targets?* section instead of stacking alert cards above the plan.
+
+**One exercise at a time.** A compact header (elapsed time, sets done), one expanded
+exercise, and every other exercise as a one-line row with its completion count. The next
+set is a large weight/reps editor; other sets are tappable summaries, and completed sets stay
+editable. **Complete set** and the rest timer share one dock above the tab bar — never a second
+rest bar — and the page reserves its height so nothing hides behind it. Finishing an exercise
+opens the next unfinished one in routine order, wrapping to anything skipped. When every set is
+done the dock offers **Review & finish**; nothing is ever saved automatically, and finishing
+early goes through a review sheet listing what will and won't be saved.
+
+- Exercises in a live session carry a stable `uid`; focus is stored as `focusUid`. Both are
+  optional — older sessions get them on restore, and a missing or stale focus falls back to the
+  first unfinished exercise, then the first exercise. Duplicate names, reorder, delete and undo
+  all keep the right exercise open.
+- Deletion and set type moved into labelled menus (⋯). Undo still works. Exercises can be moved
+  up/down from the menu.
+- Selecting a set, opening an exercise, or a coaching pre-fill never marks a set performed or
+  edited. Only a field whose value actually changed counts as an edit.
+- Fixed: ending a session with nothing logged stripped the live session's planned sets.
+- Fixed: "last time" paired the heaviest weight with the best reps from a different set.
+- Dialogs are named, trap focus, close on Escape (except onboarding) and return focus to their
+  opener. Set completion and exercise changes are announced; timer ticks are not. 44px targets,
+  visible keyboard focus, `prefers-reduced-motion`, local SVG icons in the tab bar.
+
+**Progression settings** (from an exercise's *Why this target?* sheet or its ⋯ menu), stored
+under the new `forge:progressionPrefs` key, keyed by trimmed lower-case name:
+
+- **Custom increment** — replaces the automatic jump, stored in kg (total load, or per hand
+  for per-hand lifts), used exactly rather than rounded back onto 5 lb / 2.5 kg steps.
+- **Keep my weight** — holds the load across workouts until **Resume progression**. Overrides
+  increases *and* deloads; records and plateau watch keep running and the plan says "paused".
+  Saving a hold mid-workout updates only untouched, incomplete, normal working sets; resuming
+  takes effect next workout. Hidden for lifts with no external load.
+- `nextTarget` remains the single source for previews, pre-fills, added sets and explanations.
+- No migration: a missing preference is the old behaviour; backups round-trip the key and older
+  backups import unchanged.
+
+Tests: `node --test tests/*.test.mjs` — 14 regression tests covering the above.
+
+> **Not verified on a real phone.** Keyboard overlap with the dock, safe-area insets under the
+> dock, and one-handed reach to *Complete set* need the real-device pass in SHIPPING.md.
+
+---
+
 ## v32 — logging a night stops feeling like data entry
 `35dc6bb` · 2026-08-09 · **live**
 

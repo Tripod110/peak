@@ -402,13 +402,20 @@ function renderPickerModal() {
 function pickerChoose(name) {
   const { action, ctx } = App.picker || {};
   closeModal();
+  if (action === 'session' && !App.activeSession) { App.picker = null; App.render(); return; }
   if (action === 'routine') {
     if (routineAddExercise(ctx.day, name)) toast(`${name} added to ${activeRoutine().days[ctx.day].name}`);
     else toast('Already in that day');
   } else if (action === 'session') {
     const target = defaultTargetFor(name);
-    App.activeSession.exercises.push({ name, target, sets: plannedSetsFor(name, target) });
+    const uid = newExerciseUid();
+    App.activeSession.exercises.push({ uid, name, target, sets: plannedSetsFor(name, target) });
+    // the lift you just added is the one you're about to do
+    App.activeSession.focusUid = uid;
+    App.setSel = null;
+    App._scrollFocus = 'scroll';
     persistSession();
+    announce(`${name} added and open`);
   }
   App.picker = null;
   App.render();

@@ -491,12 +491,82 @@ function findTargetFor(name) {
   return '';
 }
 
-/* → {type, w, sets, reps, text, short, lastText, rebuilding} — w is in the
-   user's display unit (lb or kg), 0 for bodyweight, undefined for a new lift */
+/* ---------- progression preferences ----------
+   Two per-exercise overrides on top of automatic double progression:
+
+     incKg — a custom increase. Total logged load, or per-hand load for per-hand
+             lifts — i.e. the same number you type into the weight field. Stored
+             in kg like every other weight, so switching units only changes how
+             it's shown.
+     hold  — {kg, since}. "Keep my weight": the prescription stays at this load,
+             no increases and no deloads, until you resume progression. Records
+             and plateau detection carry on underneath; the plan just says it's
+             paused instead of arguing with you.
+
+   Keyed by trimmed, lower-cased name — the same convention the history lookups
+   use. Nothing here exists until someone sets it, and a missing entry is
+   exactly the old behaviour, so there is no migration. */
+const PROG_KEY = 'progressionPrefs';
+function progKey(name) { return String(name || '').trim().toLowerCase(); }
+function getProgressionPrefs() {
+  const p = Store.get(PROG_KEY, {});
+  return p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+}
+/* sanitised: anything malformed (a hand-edited backup) reads as "no preference" */
+function progressionPref(name) {
+  const raw = getProgressionPrefs()[progKey(name)] || {};
+  const out = {};
+  if (Number.isFinite(raw.incKg) && raw.incKg > 0) out.incKg = raw.incKg;
+  if (raw.hold && Number.isFinite(raw.hold.kg) && raw.hold.kg > 0) out.hold = { kg: raw.hold.kg, since: raw.hold.since || null };
+  return out;
+}
+function setProgressionPref(name, patch) {
+  const all = { ...getProgressionPrefs() };
+  const key = progKey(name);
+  if (!key) return;
+  const next = { ...(all[key] || {}), ...patch };
+  Object.keys(next).forEach(k => { if (next[k] == null) delete next[k]; });
+  if (Object.keys(next).length) all[key] = next; else delete all[key];
+  Store.set(PROG_KEY, all);
+}
+
+/* Does this lift carry external load? Weight you've logged says yes outright;
+   otherwise the name decides — a plank or a push-up has nothing to increment,
+   a "Weighted Pull-up" does. */
+const BODYWEIGHT_RE = /\(seconds?\)|plank|hollow hold|push.?up|pull.?up|chin.?up|\bdips?\b|crunch|sit.?up|leg raise|knee raise|toes.?to.?bar|\bv.?up\b|dead bug|russian twist|inverted row|nordic|sissy squat|ab wheel|rollout|bench dip|burpee/i;
+function exerciseHasLoad(name) {
+  if (bestWorkingWeightKg(name) > 0) return true;
+  if (progressionPref(name).hold) return true;
+  return /weighted/i.test(name) || !BODYWEIGHT_RE.test(name);
+}
+
+const r1 = v => Math.round(v * 10) / 10;
+
+/* → {type, w, wKg, sets, reps, text, short, lastText, rebuilding, paused} — w is
+   in the user's display unit (lb or kg), 0 for bodyweight, undefined for a new
+   lift. wKg, when present, is the exact stored load behind w, so pre-filling a
+   set doesn't round-trip a held or custom weight through the display rounding.
+
+   This is the ONE place a target is decided: the Train preview, the session
+   pre-fill, an added set and the "Why this target?" sheet all read it. */
 function nextTarget(name, targetStr, stalledNames) {
   const tgt = parseTarget(targetStr) || { sets: 3, reps: 8 };
+  const pref = progressionPref(name);
+  const u = wUnit();
   const last = lastSessionSets(name);
+  const isStalled = () => (stalledNames || new Set(detectPlateaus().map(p => p.name.toLowerCase()))).has(name.toLowerCase());
+
+  const holdResult = lastText => {
+    const w = r1(toW(pref.hold.kg));
+    const stalled = isStalled();
+    return { type: 'hold', paused: true, w, wKg: pref.hold.kg, sets: tgt.sets, reps: tgt.reps, lastText,
+      short: `keeping ${w} ${u} — progression paused`,
+      text: `Progression paused — you chose to keep ${w} ${u}, so Peak won't add weight or deload this lift.${
+        stalled ? ' Plateau watch still sees no recent PR on it.' : ''} Aim for ${tgt.sets}×${tgt.reps}, and resume progression in Progression settings when you're ready to build again.` };
+  };
+
   if (!last || !last.sets.length) {
+    if (pref.hold) return holdResult(undefined);
     return { type: 'baseline', sets: tgt.sets, reps: tgt.reps, short: 'first time — set a baseline',
       text: `First time — find a working weight for ${tgt.sets}×${tgt.reps}. That's your baseline.` };
   }
@@ -505,22 +575,41 @@ function nextTarget(name, targetStr, stalledNames) {
   const when = prettyDate(last.date).replace(/^\w+, /, '');
 
   if (maxKg <= 0) { // bodyweight / timed
+    if (pref.hold) return holdResult(`${bestReps} reps · ${when}`);
     return { type: 'add_reps', w: 0, sets: tgt.sets, reps: bestReps + 1, short: `last ${bestReps} reps`,
       text: `Beat ${bestReps} — aim ${bestReps + 1}+ this time.`,
       lastText: `${bestReps} reps · ${when}` };
   }
 
-  const u = wUnit();
   const lastDisp = toW(maxKg);
-  const lastText = `${Math.round(lastDisp)} ${u} × ${bestReps} · ${when}`;
   const topSets = last.sets.filter(s => Math.abs((s.weight || 0) - maxKg) < 0.01);
+  /* a set that actually happened — the heaviest weight with the reps done AT
+     that weight, not the session's best reps borrowed from a lighter set */
+  const topReps = Math.max(...topSets.map(s => s.reps));
+  const lastText = `${r1(lastDisp)} ${u} × ${topReps} · ${when}`;
   const allHit = topSets.length >= tgt.sets && topSets.every(s => s.reps >= tgt.reps);
+
+  // a hold outranks everything below: no increase, no deload
+  if (pref.hold) return holdResult(lastText);
+
+  /* A custom increment is the user's own grid. Rounding its result back onto
+     the automatic 5 lb / 2.5 kg steps would silently undo it (185 + 2.5 → 190),
+     so custom values stay exact and plate math flags anything unloadable. */
+  const custom = pref.incKg > 0;
+  const incText = custom ? r1(toW(pref.incKg)) : null;
 
   /* Completing the prescription always earns the increment. Testing the stall
      flag first is what turned one deload into an endless staircase down: the
      all-time best stays unbeaten while you rebuild, so the lift reads as stalled
      every session and got cut another 10% off the already-reduced weight. */
   if (allHit) {
+    if (custom) {
+      const wKg = maxKg + pref.incKg;
+      const val = r1(toW(wKg));
+      return { type: 'add_weight', w: val, wKg, custom: true, sets: tgt.sets, reps: tgt.reps, lastText,
+        short: `up ${incText} ${u} from ${r1(lastDisp)} ${u}`,
+        text: `Hit all ${tgt.sets}×${tgt.reps} — go up your custom ${incText} ${u} to ${val} ${u}.` };
+    }
     const inc = incrementW(name, lastDisp);
     const val = roundW(lastDisp + inc, name);
     return { type: 'add_weight', w: val, sets: tgt.sets, reps: tgt.reps, lastText,
@@ -528,26 +617,181 @@ function nextTarget(name, targetStr, stalledNames) {
       text: `Hit all ${tgt.sets}×${tgt.reps} — go up to ${val} ${u}.` };
   }
 
-  const stalled = (stalledNames || new Set(detectPlateaus().map(p => p.name.toLowerCase()))).has(name.toLowerCase());
+  const stalled = isStalled();
   const bestDisp = toW(bestWorkingWeightKg(name));
 
   // Deload only from the top. Below your best you are already climbing back.
   if (stalled && lastDisp >= bestDisp * 0.98) {
     const val = roundW(lastDisp * 0.9, name);
-    const inc = incrementW(name, val);
+    const inc = custom ? incText : incrementW(name, val);
     return { type: 'deload', w: val, sets: tgt.sets, reps: tgt.reps, lastText,
       short: `stalled at ${Math.round(lastDisp)} ${u} — deload`,
       text: `Stalled — deload to ${val} ${u} × ${tgt.reps}, then add ${inc} ${u} each session you complete until you pass ${Math.round(bestDisp)} ${u}.` };
   }
 
-  const val = roundW(lastDisp, name);
+  const val = custom ? r1(lastDisp) : roundW(lastDisp, name);
   const spread = topSets.map(s => s.reps).join('/');
   const rebuilding = stalled && lastDisp < bestDisp * 0.98;
-  return { type: 'add_reps', w: val, sets: tgt.sets, reps: tgt.reps, lastText, rebuilding,
+  return { type: 'add_reps', w: val, wKg: custom ? maxKg : undefined, sets: tgt.sets, reps: tgt.reps, lastText, rebuilding,
     short: rebuilding ? `rebuilding — ${Math.round(lastDisp)} of ${Math.round(bestDisp)} ${u}` : `last ${spread} — finish the sets`,
     text: rebuilding
       ? `Climbing back to ${Math.round(bestDisp)} ${u} — stay at ${val} ${u} and get all ${tgt.sets} sets to ${tgt.reps}.`
       : `Stay at ${val} ${u} — last time ${spread}. Get all ${tgt.sets} sets to ${tgt.reps}.` };
+}
+
+/* ---------- progression settings sheet ---------- */
+/* "2.5" not "2.50", "1.13" not "1.1339" — enough precision that a 1.25 kg
+   increment still reads correctly in lb */
+function fmtInc(disp) { return String(Math.round(disp * 100) / 100); }
+
+function openProgressionSheet(name, draft) {
+  const pref = progressionPref(name);
+  const u = wUnit();
+  const perHand = perHandLift(name);
+  const unitLabel = perHand ? `${u} per hand` : u;
+  const hasLoad = exerciseHasLoad(name);
+  const last = lastSessionSets(name);
+  const lastKg = last && last.sets.length ? Math.max(...last.sets.map(s => s.weight || 0)) : 0;
+  const autoInc = incrementW(name, lastKg > 0 ? toW(lastKg) : 0);
+  const d = draft || {};
+  const mode = d.mode || (pref.incKg ? 'custom' : 'auto');
+  const holdOpen = d.holdOpen ?? !!pref.hold;
+
+  let holdDefault = '';
+  if (pref.hold) holdDefault = fmtW1(toW(pref.hold.kg));
+  else if (lastKg > 0) holdDefault = fmtW1(toW(lastKg));
+  else {
+    const pr = nextTarget(name, findTargetFor(name));
+    if (pr.w > 0) holdDefault = fmtW1(pr.w);
+  }
+
+  if (!hasLoad) {
+    openModal(`
+      <h3>${esc(name)}</h3>
+      <div class="modal-sub">Progression settings</div>
+      <p class="sheet-p">This exercise has no external load logged, so there is no weight to increase or hold. Peak progresses it by adding reps${isTimedLift(name) ? ' (seconds)' : ''} each session.</p>
+      <p class="chart-note">Log a set with added weight and weight settings appear here.</p>
+      <button class="btn mt" data-action="close-modal">Close</button>
+    `);
+    return;
+  }
+
+  openModal(`
+    <h3>${esc(name)}</h3>
+    <div class="modal-sub">Progression settings · weights in ${esc(unitLabel)}</div>
+
+    <div class="sheet-h" id="pg-inc-h">When you hit every set</div>
+    <div class="seg" id="pg-mode" role="radiogroup" aria-labelledby="pg-inc-h">
+      <button data-v="auto" role="radio" aria-checked="${mode === 'auto'}" class="${mode === 'auto' ? 'on' : ''}" data-action="pg-mode">Automatic</button>
+      <button data-v="custom" role="radio" aria-checked="${mode === 'custom'}" class="${mode === 'custom' ? 'on' : ''}" data-action="pg-mode">Custom increment</button>
+    </div>
+    ${mode === 'auto'
+      ? `<p class="chart-note">Peak scales the jump to the load — about ${fmtInc(autoInc)} ${esc(unitLabel)} at your current weight.</p>`
+      : `<label for="pg-inc">Add this much each time (${esc(unitLabel)})</label>
+         <input id="pg-inc" type="number" inputmode="decimal" step="any" min="0" value="${pref.incKg ? fmtInc(toW(pref.incKg)) : ''}" placeholder="e.g. ${isMetric() ? '1.25' : '2.5'}">
+         <p class="chart-note">${perHand ? 'Per hand, the same number you log for each dumbbell.' : 'Total load, the same number you log.'} Used exactly — never rounded to plate steps; the plate indicator shows when a weight can't be loaded exactly.</p>`}
+
+    <div class="sheet-h">Keep my weight</div>
+    ${holdOpen ? `
+      <label for="pg-hold">Hold every working set at (${esc(unitLabel)})</label>
+      <input id="pg-hold" type="number" inputmode="decimal" step="any" min="0" value="${esc(d.holdVal ?? holdDefault)}" placeholder="weight">
+      <p class="chart-note">${pref.hold ? `Held since ${esc(pref.hold.since ? prettyDate(pref.hold.since) : 'earlier')}. ` : ''}No increases or deloads until you resume. Records and plateau watch keep running.${App.activeSession ? ' Saving updates this workout\'s untouched sets only — anything you completed or edited stays as it is.' : ''}</p>
+      ${pref.hold
+        ? `<button class="btn mt" data-action="pg-resume" data-name="${esc(name)}">Resume progression</button>
+           <p class="chart-note">Takes effect from your next workout.</p>`
+        : `<button class="btn ghost small mt" data-action="pg-hold-cancel" data-name="${esc(name)}">Don't hold</button>`}`
+    : `<p class="chart-note">Stay at one load for a while — a new movement pattern, an injury, a cut — without Peak pushing you up.</p>
+       <button class="btn mt" data-action="pg-hold-open" data-name="${esc(name)}">Keep my weight</button>`}
+
+    <button class="btn accent big mt" data-action="pg-save" data-name="${esc(name)}">Save settings</button>
+    <button class="btn ghost mt" data-action="close-modal">Cancel</button>
+  `);
+  const dlg = document.querySelector('#modal-root .modal');
+  if (dlg) { dlg.dataset.pgMode = mode; dlg.dataset.pgHold = holdOpen ? '1' : ''; }
+}
+
+/* redraw the sheet with a change, keeping whatever was already typed */
+function progressionSheetDraft(name, change) {
+  const dlg = document.querySelector('#modal-root .modal');
+  const draft = {
+    mode: dlg?.dataset.pgMode || 'auto',
+    holdOpen: !!dlg?.dataset.pgHold,
+    holdVal: document.getElementById('pg-hold')?.value
+  };
+  const typedInc = document.getElementById('pg-inc')?.value;
+  Object.assign(draft, change);
+  openProgressionSheet(name, draft);
+  if (typedInc != null && document.getElementById('pg-inc')) document.getElementById('pg-inc').value = typedInc;
+  const focusId = change.holdOpen ? 'pg-hold' : change.mode === 'custom' ? 'pg-inc' : null;
+  if (focusId) document.getElementById(focusId)?.focus();
+}
+
+/* A hold saved mid-workout applies to sets that are still just the plan:
+   not done, never edited, ordinary working sets. They stay unperformed and
+   untouched, so an early finish still leaves them out of history. */
+function applyHoldToSession(name, kg) {
+  const s = App.activeSession;
+  if (!s) return 0;
+  const key = progKey(name);
+  let n = 0;
+  s.exercises.forEach(ex => {
+    if (progKey(ex.name) !== key) return;
+    ex.sets.forEach(st => {
+      if (st.done || st.touched || (st.type || 'normal') !== 'normal') return;
+      st.weight = kg;
+      n++;
+    });
+  });
+  if (n) persistSession();
+  return n;
+}
+
+function saveProgressionSheet(name) {
+  const dlg = document.querySelector('#modal-root .modal');
+  if (!dlg) return;
+  const pref = progressionPref(name);
+  const patch = {};
+  const u = wUnit();
+
+  if ((dlg.dataset.pgMode || 'auto') === 'custom') {
+    const inp = document.getElementById('pg-inc');
+    const v = Number(inp?.value);
+    if (!inp || inp.value === '' || !(v > 0)) { toast(`Enter an increment above 0 ${u}`); inp?.focus(); return; }
+    // an unchanged field keeps the stored kg exactly — no drift from display rounding
+    patch.incKg = pref.incKg && inp.value === inp.defaultValue ? pref.incKg : fromW(v);
+  } else {
+    patch.incKg = null;
+  }
+
+  let holdKg = null, holdChanged = false;
+  if (dlg.dataset.pgHold) {
+    const inp = document.getElementById('pg-hold');
+    const v = Number(inp?.value);
+    if (!inp || inp.value === '' || !(v > 0)) { toast(`Enter the weight to keep, above 0 ${u}`); inp?.focus(); return; }
+    holdKg = pref.hold && inp.value === fmtW1(toW(pref.hold.kg)) ? pref.hold.kg : fromW(v);
+    holdChanged = !pref.hold || Math.abs(pref.hold.kg - holdKg) > 1e-9;
+    patch.hold = { kg: holdKg, since: pref.hold && !holdChanged ? pref.hold.since : todayKey() };
+  } else {
+    patch.hold = null;
+  }
+
+  setProgressionPref(name, patch);
+  const updated = holdKg && holdChanged ? applyHoldToSession(name, holdKg) : 0;
+  closeModal();
+  App.render();
+  const msg = holdKg
+    ? `Keeping ${fmtW1(toW(holdKg))} ${u} on ${name}${updated ? ` — ${updated} planned set${updated !== 1 ? 's' : ''} updated` : ''}`
+    : patch.incKg ? `${name}: +${fmtInc(toW(patch.incKg))} ${u} when you hit every set` : `${name}: automatic progression`;
+  toast(msg);
+  announce(msg);
+}
+
+function resumeProgression(name) {
+  setProgressionPref(name, { hold: null });
+  closeModal();
+  App.render();
+  toast(`${name}: progression resumes next workout`);
+  announce(`${name}: progression resumes next workout`);
 }
 
 /* ---------- progress / volume engine ----------
@@ -663,7 +907,7 @@ function trainingCalendar(days) {
   return `<div class="cal-grid">${cells}</div>`;
 }
 
-const CUE = { add_weight: '▲', add_reps: '→', deload: '▼', baseline: '●' };
+const CUE = { add_weight: '▲', add_reps: '→', deload: '▼', baseline: '●', hold: '=' };
 function cueColor(type) {
   return type === 'add_weight' ? 'var(--good)' : type === 'deload' ? 'var(--warning)' : 'var(--ink-2)';
 }
@@ -680,7 +924,11 @@ function persistSession() {
 function restoreSession() {
   const s = Store.get(ACTIVE_KEY, null);
   if (!s || !Array.isArray(s.exercises)) return null;
+  // sessions saved before exercise ids existed get them now; focus falls back
+  // to the first unfinished exercise when it is missing or stale
+  ensureSessionIds(s);
   App.activeSession = s;
+  Store.set(ACTIVE_KEY, s);
   const r = Store.get(REST_KEY, null);
   if (r && r.endsAt > Date.now()) App.rest = r;   // endsAt is absolute, so it just resumes
   return s;
@@ -775,13 +1023,85 @@ function renderTrainHome() {
 
   return `
   ${renderLowSleepNudge()}
-  ${renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames)}
+  ${renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames, plateaus)}
 
-  ${/* Directly under the plan, because these alerts are what explain the ▼ and ▲
-        cues in it — they are the reasoning behind today's numbers, not general
-        news, and they read as noise anywhere else. */ ''}
-  ${plateaus.map(pl => {
+  ${renderCoachCard()}
+
+  <div class="grid-2">
+    <button class="btn" data-action="start-freestyle">✎ Freestyle session</button>
+    <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
+  </div>
+  <div class="chart-note center" style="margin-bottom:14px">Freestyle logs anything off-plan. Cardio is tracked separately and never fills a lifting slot.</div>
+
+  <div class="card">
+    <h2>Your training <span class="h2-right">tap any row</span></h2>
+    ${navRow('history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
+    ${navRow('routine', '✎', 'Edit your routine',
+      `${tpl.days.length} days${isCustomRoutine() ? ' · yours' : ' · standard'}`)}
+    ${navRow('muscles', '💪', 'Weekly sets by muscle',
+      !hasLifts ? 'no data yet' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
+      !hasLifts ? '' : (mv.unclassified.length || low) ? 'warn' : 'good')}
+    ${navRow('moved', '🏋', 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
+    ${navRow('records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
+    ${navRow('consistency', '📅', 'Consistency',
+      `${wkLifts}/${p.gymDays} this week${streak ? ` · ${streak}-week streak` : ''}`)}
+    ${wkCardio ? `<div class="chart-note">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week.</div>` : ''}
+    ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
+  </div>`;
+}
+
+function navRow(view, ico, label, value, tone) {
+  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
+  return `
+  <button class="nav-row" data-action="train-nav" data-view="${view}">
+    <span class="nr-ico" aria-hidden="true">${ico}</span>
+    <span class="nr-label">${esc(label)}</span>
+    <span class="nr-value" style="color:${color}">${esc(value)}</span>
+    <span class="nr-chev" aria-hidden="true">›</span>
+  </button>`;
+}
+
+/* ---------- 1. the hero: what to do today ----------
+   The selected day, what's in it, and Start — in that order, and nothing else
+   competing. The reasoning behind the numbers (cue legend, plateau calls) is one
+   tap away under "Why these targets?", and each lift's own explanation opens
+   from its row. */
+
+const CUE_LEGEND = {
+  add_weight: 'go up',
+  add_reps: 'same weight, chase the reps',
+  deload: 'drop back and rebuild',
+  baseline: 'new lift — set a baseline',
+  hold: 'weight held — progression paused'
+};
+
+/* planned sets and a rough duration for a routine day */
+function dayPlanStats(day) {
+  const sets = day.ex.reduce((n, [, t]) => n + (parseTarget(t)?.sets || 3), 0);
+  return { sets, estMin: Math.max(20, Math.round(sets * 2.6 / 5) * 5) };
+}
+
+/* "185 lb × 5", "12 reps", "pick a weight" for a prescription */
+function prescriptionValue(name, pr) {
+  const u = wUnit();
+  const timed = isTimedLift(name);
+  if (pr.w > 0) return `${fmtW1(pr.w)}<span class="unit"> ${perHandLift(name) ? u + '/hand' : u} × ${pr.reps}${timed ? 's' : ''}</span>`;
+  if (pr.w === 0) return `${pr.reps}<span class="unit"> ${timed ? 'sec' : 'reps'}</span>`;
+  return '<span class="unit">pick a weight</span>';
+}
+
+function renderPlateauNotes(plateaus, stalledNames) {
+  if (!plateaus.length) return plateauWatchRow();
+  return plateaus.map(pl => {
     const dl = nextTarget(pl.name, findTargetFor(pl.name), stalledNames);
+    if (dl.type === 'hold') {
+      return `
+      <div class="alert">
+        <span class="a-ico">❚❚</span>
+        <div class="a-body"><b>Plateau: ${esc(pl.name)} — progression paused</b>
+        No PR in ${pl.sessions} sessions (${pl.days} days). You're keeping ${esc(fmtW1(dl.w))} ${wUnit()}, so Peak won't deload it — resume progression when you want the fix.</div>
+      </div>`;
+    }
     /* The prescription is always concrete, so lead with it. A generic tip only
        earns space when the prescription is "hold and finish the sets", which on
        its own doesn't tell you how to break out. Never show a tip that can
@@ -799,74 +1119,21 @@ function renderTrainHome() {
       <div class="a-body"><b>${heading}</b>
       ${esc(body)}${esc(plateauVolumeNote(pl.name))}</div>
     </div>`;
-  }).join('')}
-  ${plateaus.length ? '' : plateauWatchRow()}
-
-  ${renderCoachCard()}
-
-  <div class="grid-2">
-    <button class="btn" data-action="start-freestyle">✎ Freestyle lift</button>
-    <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
-  </div>
-  <div class="chart-note center" style="margin-bottom:14px">Freestyle logs anything off-plan. Cardio is tracked separately and never fills a lifting slot.</div>
-
-  <div class="card">
-    <h2>Your training <span class="h2-right">tap any row</span></h2>
-    ${navRow('muscles', '💪', 'Weekly sets by muscle',
-      !hasLifts ? 'no data yet' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
-      !hasLifts ? '' : (mv.unclassified.length || low) ? 'warn' : 'good')}
-    ${navRow('moved', '🏋', 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
-    ${navRow('records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
-    ${navRow('consistency', '📅', 'Consistency',
-      `${wkLifts}/${p.gymDays} this week${streak ? ` · ${streak}-week streak` : ''}`)}
-    ${navRow('history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
-    ${navRow('routine', '✎', 'Edit your routine',
-      `${tpl.days.length} days${isCustomRoutine() ? ' · yours' : ' · standard'}`)}
-    ${wkCardio ? `<div class="chart-note">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week.</div>` : ''}
-    ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
-  </div>`;
+  }).join('');
 }
 
-function navRow(view, ico, label, value, tone) {
-  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
-  return `
-  <button class="nav-row" data-action="train-nav" data-view="${view}">
-    <span class="nr-ico">${ico}</span>
-    <span class="nr-label">${esc(label)}</span>
-    <span class="nr-value" style="color:${color}">${esc(value)}</span>
-    <span class="nr-chev">›</span>
-  </button>`;
-}
-
-/* ---------- 1. the hero: what to do today ----------
-   Read then act, in that order: the plan is what tells you whether to start, so
-   Start sits under it rather than above it. Everything you might reasonably do
-   from this screen is now visible without opening anything. */
-
-const CUE_LEGEND = {
-  add_weight: 'go up',
-  add_reps: 'same weight, chase the reps',
-  deload: 'drop back and rebuild',
-  baseline: 'new lift — set a baseline'
-};
-
-function renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames) {
-  const plannedSets = day.ex.reduce((n, [, t]) => n + (parseTarget(t)?.sets || 3), 0);
-  const estMin = Math.max(20, Math.round(plannedSets * 2.6 / 5) * 5);
-  const u = wUnit();
+function renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames, plateaus = []) {
+  const { sets: plannedSets, estMin } = dayPlanStats(day);
   const isNext = dayIdx === nextIdx;
-  const prescriptions = day.ex.map(([n, tstr]) => [n, nextTarget(n, tstr, stalledNames)]);
-  const cuesUsed = [...new Set(prescriptions.map(([, pr]) => pr.type))];
+  const prescriptions = day.ex.map(([n, tstr]) => [n, tstr, nextTarget(n, tstr, stalledNames)]);
+  const cuesUsed = [...new Set(prescriptions.map(([, , pr]) => pr.type))];
+  const flagged = plateaus.filter(pl => day.ex.some(([n]) => n.toLowerCase() === pl.name.toLowerCase())).length;
 
   return `
-  <div class="card">
-    <div class="spread">
-      <div>
-        <div class="muted small">${isNext ? 'Up next' : 'Training instead'} · ${esc(tpl.name)}</div>
-        <div class="hero-num" style="font-size:30px">${esc(day.name)}</div>
-      </div>
-      <div class="muted small center" style="line-height:1.5">${day.ex.length} lifts<br>${plannedSets} sets<br>~${estMin} min</div>
-    </div>
+  <section class="card hero-card" aria-labelledby="train-day-title">
+    <div class="eyebrow">${isNext ? 'Up next' : 'Training instead'} · ${esc(tpl.name)}</div>
+    <h2 class="hero-title" id="train-day-title">${esc(day.name)}</h2>
+    <div class="hero-meta">${day.ex.length} exercise${day.ex.length !== 1 ? 's' : ''} · ${plannedSets} sets · ~${estMin} min</div>
 
     <div class="day-chips" role="group" aria-label="Choose which day to train">
       ${tpl.days.map((d, i) => `
@@ -874,32 +1141,44 @@ function renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames) {
           aria-pressed="${i === dayIdx}">${esc(d.name)}${i === nextIdx ? '<span class="dc-next">next</span>' : ''}</button>`).join('')}
     </div>
 
-    <div class="plan">
-      ${prescriptions.map(([n, pr]) => {
-        const val = pr.w > 0 ? `${pr.w}<span class="unit"> × ${pr.reps}${perHandLift(n) ? ` ${u}/hand` : ''}</span>`
-          : pr.w === 0 ? `<span class="unit">${pr.reps} reps</span>`
-          : '<span class="unit">pick a weight</span>';
-        const note = pr.type === 'deload' ? 'deload' : pr.rebuilding ? 'climbing back' : '';
+    ${day.ex.length ? `
+    <ul class="plan" aria-label="Exercises in ${esc(day.name)}">
+      ${prescriptions.map(([n, tstr, pr]) => {
+        const note = pr.type === 'deload' ? 'deload' : pr.type === 'hold' ? 'paused' : pr.rebuilding ? 'climbing back' : '';
         // what to actually put on the bar, so the number above isn't homework
         const spec = pr.w > 0 ? loadSpec(n) : null;
         const m = spec ? plateMath(pr.w, spec.baseDisp, spec.sides) : null;
         const plates = m && m.list.length ? plateSummary(m, spec) : '';
         return `
-        <div class="plan-row">
+        <li><button class="plan-row" data-action="why-target" data-name="${esc(n)}" data-target="${esc(tstr)}"
+          aria-label="${esc(n)}: ${esc(cueHeadline(n, pr))}. Why this target?">
           <span class="pl-cue" style="color:${cueColor(pr.type)}" aria-hidden="true">${CUE[pr.type] || '→'}</span>
           <span class="pl-name">
             <span class="pl-nm">${esc(n)}${note ? ` <span class="pl-note">${esc(note)}</span>` : ''}</span>
-            ${plates ? `<span class="pl-plates">${esc(plates)}</span>` : ''}</span>
-          <span class="pl-val">${val}</span>
-        </div>`;
+            ${plates ? `<span class="pl-plates">${esc(plates)}</span>` : `<span class="pl-plates">${esc(tstr)}</span>`}</span>
+          <span class="pl-val">${prescriptionValue(n, pr)}</span>
+          <span class="pl-chev" aria-hidden="true">${icon('chevron')}</span>
+        </button></li>`;
       }).join('')}
+    </ul>
+    <details class="why">
+      <summary>Why these targets?${flagged ? ` <span class="pill warn">${flagged} flagged</span>` : ''}</summary>
+      <div class="why-body">
+        <div class="cue-key">
+          ${cuesUsed.map(t => `<span><b style="color:${cueColor(t)}">${CUE[t] || '→'}</b> ${esc(CUE_LEGEND[t] || '')}</span>`).join('')}
+        </div>
+        <p class="chart-note">Tap any exercise for its own explanation and progression settings.</p>
+        <div class="mt">${renderPlateauNotes(plateaus, stalledNames)}</div>
+      </div>
+    </details>
+    <button class="btn accent big mt" data-action="start-workout" data-idx="${dayIdx}">${icon('play')} Start ${esc(day.name)}</button>`
+    : `
+    <div class="empty-inline">
+      <b>No exercises in ${esc(day.name)} yet.</b>
+      <span class="muted">Add some to this day, or log a freestyle session instead.</span>
     </div>
-    <div class="cue-key">
-      ${cuesUsed.map(t => `<span><b style="color:${cueColor(t)}">${CUE[t] || '→'}</b> ${esc(CUE_LEGEND[t] || '')}</span>`).join('')}
-    </div>
-
-    <button class="btn accent mt" data-action="start-workout" data-idx="${dayIdx}">Start ${esc(day.name)}</button>
-  </div>`;
+    <button class="btn accent big mt" data-action="routine-edit-day" data-idx="${dayIdx}">${icon('plus')} Add exercises to ${esc(day.name)}</button>`}
+  </section>`;
 }
 
 /* ---------- 2. weight moved: the number that only goes up ---------- */
@@ -1109,6 +1388,7 @@ function renderRecentCard(all, limit) {
 
 /* ---------- active session ---------- */
 function startWorkout(dayIdx, freestyle = false) {
+  if (App.activeSession) { App.render(); return; }   // a double tap on Start must not replace a live session
   const p = getProfile();
   const tpl = activeRoutine();
   const day = freestyle ? null : (tpl.days[dayIdx] || tpl.days[0]);
@@ -1120,21 +1400,25 @@ function startWorkout(dayIdx, freestyle = false) {
     template: p.template,
     dayName: freestyle ? 'Freestyle' : day.name,
     freestyle,
-    exercises: freestyle ? [] : day.ex.map(([name, target]) => ({ name, target, sets: plannedSetsFor(name, target, stalled) }))
+    exercises: freestyle ? [] : day.ex.map(([name, target]) => ({ uid: newExerciseUid(), name, target, sets: plannedSetsFor(name, target, stalled) }))
   };
+  ensureSessionIds(App.activeSession);
+  App.setSel = null;
   persistSession();
   App.render();
+  announce(`${App.activeSession.dayName} started${App.activeSession.exercises[0] ? ` — ${App.activeSession.exercises[0].name} is open` : ''}`);
 }
 
 /* The prescription is already known, so build its rows up front. Creating them
-   by hand was 20 taps before a single number could be entered. */
+   by hand was 20 taps before a single number could be entered. These rows are a
+   plan, not a record: planned and untouched until you complete or edit them. */
 function plannedSetsFor(name, target, stalled) {
   const t = parseTarget(target) || { sets: 3, reps: 8 };
   const pr = nextTarget(name, target, stalled);
   const sets = [];
   for (let i = 0; i < t.sets; i++) {
     sets.push({
-      weight: pr.w > 0 ? fromW(pr.w) : null,
+      weight: pr.w > 0 ? (pr.wKg ?? fromW(pr.w)) : null,
       reps: pr.reps ?? t.reps,
       type: 'normal', done: false, planned: true
     });
@@ -1298,26 +1582,87 @@ function startRest(sec, label) {
   persistSession();
   paintRest();
 }
+/* ---------- the bottom action dock ----------
+   One place for the thing you do next: the rest countdown and "Complete set"
+   share a single bar above the tab bar, so there is never a second rest bar and
+   the main action is always under your thumb. It repaints every second, so it is
+   only rebuilt when what it shows actually changes — otherwise a keyboard user
+   sitting on "+30s" would lose focus once a second. */
+let _dockKey = '';
+function dockAction() {
+  const s = App.activeSession;
+  if (!s || App.tab !== 'train' || !getProfile()) return null;
+  ensureSessionIds(s);
+  if (!s.exercises.length) return { label: 'Add an exercise', action: 'add-exercise' };
+  const live = sessionLiveStats();
+  if (live.total > 0 && live.doneAll === live.total) return { label: 'Review & finish', action: 'review-finish' };
+  const ex = focusedExercise();
+  if (!ex.sets.length) return { label: 'Add a set', action: 'add-set', uid: ex.uid };
+  const si = nextPendingSetIndex(ex);
+  if (si < 0) {
+    const next = sessionExercise(firstPendingFrom(s, exerciseIndex(ex.uid) + 1));
+    return next ? { label: `Next: ${next.name}`, action: 'focus-ex', uid: next.uid } : { label: 'Review & finish', action: 'review-finish' };
+  }
+  const label = isWarmup(ex.sets[si]) ? 'Complete warmup' : `Complete set ${workingNumber(ex, si)} of ${workingCount(ex)}`;
+  return { label, action: 'complete-set', uid: ex.uid, si };
+}
+function setDockHeight(px) {
+  document.documentElement.style.setProperty('--dock-h', px + 'px');
+}
 function paintRest() {
   const root = document.getElementById('rest-root');
   if (!root) return;
-  if (!App.rest) { root.innerHTML = ''; return; }
-  const left = Math.ceil((App.rest.endsAt - Date.now()) / 1000);
-  if (left <= -2) { App.rest = null; persistSession(); root.innerHTML = ''; return; }
-  const done = left <= 0;
-  if (done && !App.rest.beeped) { App.rest.beeped = true; restBeep(); }
-  const pct = done ? 100 : Math.min(100, (1 - left / App.rest.total) * 100);
-  const mm = Math.max(0, Math.floor(left / 60)), ss = Math.max(0, left % 60);
-  root.innerHTML = `
-    <div class="rest-bar">
-      <div class="rest-fill" style="width:${pct}%;background:${done ? 'var(--good)' : 'var(--blue)'}"></div>
-      <div class="rest-inner">
-        <span class="rest-time">${done ? "Rest done — go" : `${mm}:${String(ss).padStart(2, '0')}`}</span>
-        <span class="rest-label">${esc(App.rest.label || 'rest')}</span>
-        <button class="btn small ghost" data-action="rest-add">+30s</button>
-        <button class="btn small ghost" data-action="rest-skip">${done ? 'Dismiss' : 'Skip'}</button>
-      </div>
+  let left = null;
+  if (App.rest) {
+    left = Math.ceil((App.rest.endsAt - Date.now()) / 1000);
+    if (left <= -2) { App.rest = null; persistSession(); left = null; }
+  }
+  const act = dockAction();
+  document.body.classList.toggle('in-workout', !!act);
+  if (!App.rest && !act) {
+    if (_dockKey) { root.innerHTML = ''; _dockKey = ''; }
+    setDockHeight(0);
+    return;
+  }
+  const done = !!App.rest && left <= 0;
+  if (done && !App.rest.beeped) {
+    App.rest.beeped = true;
+    restBeep();
+    announce('Rest done');
+  }
+  const key = [App.rest ? 'rest' : '', done ? 'done' : '', App.rest?.label || '',
+    act ? `${act.action}|${act.uid || ''}|${act.si ?? ''}|${act.label}` : ''].join('/');
+  if (key !== _dockKey) {
+    const hadFocus = root.contains(document.activeElement) ? document.activeElement.dataset.action : null;
+    root.innerHTML = `
+    <div class="dock ${act ? '' : 'rest-only'}" role="region" aria-label="${act ? 'Workout controls' : 'Rest timer'}">
+      ${App.rest ? `
+      <div class="dock-rest ${done ? 'done' : ''}">
+        <div class="rest-track" aria-hidden="true"><div class="rest-fill" data-rest-fill></div></div>
+        <span class="rest-time" data-rest-time></span>
+        <span class="rest-label">${done ? 'Rest done' : 'Rest'}${App.rest.label ? ` · ${esc(App.rest.label)}` : ''}</span>
+        <button class="btn small ghost" data-action="rest-add" aria-label="Add 30 seconds of rest">+30s</button>
+        <button class="btn small ghost" data-action="rest-skip">${done ? 'Dismiss' : 'Skip rest'}</button>
+      </div>` : ''}
+      ${act ? `
+      <button class="btn accent dock-main" data-action="${act.action}"${act.uid ? ` data-uid="${act.uid}"` : ''}${act.si != null ? ` data-si="${act.si}"` : ''}>
+        ${act.action === 'complete-set' || act.action === 'review-finish' ? icon('check') : act.action === 'focus-ex' ? icon('chevron') : icon('plus')}
+        <span>${esc(act.label)}</span></button>` : ''}
     </div>`;
+    _dockKey = key;
+    if (hadFocus) {
+      (root.querySelector(`[data-action="${hadFocus}"]`) || root.querySelector('.dock-main'))?.focus({ preventScroll: true });
+    }
+    setDockHeight(root.offsetHeight);
+  }
+  if (App.rest) {
+    const pct = done ? 100 : Math.min(100, (1 - left / App.rest.total) * 100);
+    const mm = Math.max(0, Math.floor(left / 60)), ss = Math.max(0, left % 60);
+    const t = root.querySelector('[data-rest-time]');
+    const f = root.querySelector('[data-rest-fill]');
+    if (t) t.textContent = done ? 'Go' : `${mm}:${String(ss).padStart(2, '0')}`;
+    if (f) f.style.width = pct + '%';
+  }
 }
 function restBeep() {
   try {
@@ -1366,121 +1711,298 @@ function checkSetPR(exName, st) {
 
 function sessionLiveStats() {
   const s = App.activeSession;
-  let sets = 0, volKg = 0, warm = 0, planned = 0;
+  let sets = 0, volKg = 0, warm = 0, planned = 0, total = 0, doneAll = 0;
   s.exercises.forEach(ex => (ex.sets || []).forEach(st => {
+    total++;
+    if (st.done) doneAll++;
     if (!st.done) { if (!isWarmup(st)) planned++; return; }
     if (!st.reps) return;
     if (isWarmup(st)) { warm++; return; }
     sets++; volKg += setLoadKg(ex.name, st) * st.reps;
   }));
-  return { sets, volKg, warm, remaining: planned };
+  return { sets, volKg, warm, remaining: planned, total, doneAll };
 }
 
-function renderActiveSession() {
-  const s = App.activeSession;
-  const live = sessionLiveStats();
-  const elapsed = s.startedAt ? Math.floor((Date.now() - s.startedAt) / 1000) : 0;
-  const stale = s.date !== todayKey();
-  return `
-  ${stale ? `<div class="alert" style="border-left-color:var(--warning)"><span class="a-ico">⏳</span>
-    <div class="a-body"><b>This session is from ${prettyDate(s.date)}.</b>
-    Finish it to save it under that date, or discard it.</div></div>` : ''}
-  <div class="card">
-    <div class="spread">
-      <h2 class="mb0">${esc(s.dayName)} — in progress</h2>
-      <span class="muted small" id="sess-timer">${fmtClock(elapsed)}</span>
-    </div>
-    <div class="grid-4 mt">
-      <div class="stat"><div class="sv">${live.sets}</div><div class="sl">sets done</div></div>
-      <div class="stat"><div class="sv">${live.volKg > 0 ? fmtWt(live.volKg) : '—'}</div><div class="sl">${wUnit()} moved</div></div>
-      <div class="stat"><div class="sv">${live.remaining}</div><div class="sl">sets left</div></div>
-      <div class="stat"><div class="sv">${live.warm}</div><div class="sl">warmups</div></div>
-    </div>
-    <div class="chart-note">Sets are pre-filled from your plan — adjust the numbers if they differ and tap ✓ as you finish each one. Only ticked or edited sets are saved.</div>
-    ${/* Finish used to live only under every exercise, so ending a session early —
-          or after the last set of a long day — meant scrolling the whole workout
-          to reach it. It belongs where the session summary is too. */ ''}
-    <button class="btn primary mt" data-action="finish-workout">✓ Finish workout${live.remaining ? ` (${live.remaining} set${live.remaining > 1 ? 's' : ''} left)` : ''}</button>
-  </div>
-  ${s.exercises.map((ex, xi) => renderExerciseBlock(ex, xi)).join('')}
-  <button class="btn mt" data-action="add-exercise">＋ Add exercise</button>
-  <button class="btn primary mt" data-action="finish-workout">✓ Finish workout</button>
-  <button class="btn ghost danger mt" data-action="discard-workout">Discard</button>`;
-}
 function fmtClock(sec) {
   const m = Math.floor(sec / 60), ss = sec % 60;
   return (m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + ':' + String(ss).padStart(2, '0'));
 }
 
-function renderExerciseBlock(ex, xi) {
-  const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
-  const last = lastSessionSets(ex.name);
-  const prevWork = last ? last.sets : [];
+/* ---------- focused workout: which exercise is which ----------
+   One exercise is open at a time, so "the open one" has to survive everything a
+   session goes through: reordering, deleting, undo, a reload, and a routine that
+   lists the same lift twice. An array index survives none of those — delete the
+   second exercise and the index silently points at the third. Every exercise in
+   a live session carries its own id instead, and focus is stored by that id.
+
+   Both fields are optional additions to the stored session. A session saved by
+   an older build simply has neither, and gets them on restore. */
+function newExerciseUid() {
+  return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+function ensureSessionIds(s) {
+  if (!s || !Array.isArray(s.exercises)) return s;
+  const seen = new Set();
+  s.exercises.forEach(ex => {
+    if (typeof ex.uid !== 'string' || !ex.uid || seen.has(ex.uid)) ex.uid = newExerciseUid();
+    seen.add(ex.uid);
+    if (!Array.isArray(ex.sets)) ex.sets = [];
+  });
+  if (!s.exercises.some(ex => ex.uid === s.focusUid)) s.focusUid = defaultFocusUid(s);
+  return s;
+}
+function sessionExercise(uid) {
+  const s = App.activeSession;
+  return (s && uid) ? s.exercises.find(ex => ex.uid === uid) || null : null;
+}
+function exerciseIndex(uid) {
+  const s = App.activeSession;
+  return s ? s.exercises.findIndex(ex => ex.uid === uid) : -1;
+}
+function exPending(ex) { return (ex.sets || []).some(st => !st.done); }
+function exComplete(ex) { return (ex.sets || []).length > 0 && !exPending(ex); }
+/* the first exercise with sets left, scanning forward from `start` and wrapping
+   round to the ones before it — routine order, never "whatever is nearest" */
+function firstPendingFrom(s, start) {
+  const n = s.exercises.length;
+  for (let k = 0; k < n; k++) {
+    const ex = s.exercises[(((start + k) % n) + n) % n];
+    if (exPending(ex)) return ex.uid;
+  }
+  return null;
+}
+function defaultFocusUid(s) {
+  if (!s.exercises.length) return null;
+  return firstPendingFrom(s, 0) || s.exercises[0].uid;
+}
+function focusedExercise() {
+  const s = App.activeSession;
+  if (!s) return null;
+  if (!sessionExercise(s.focusUid)) s.focusUid = defaultFocusUid(s);
+  return sessionExercise(s.focusUid);
+}
+
+/* The set on screen in the editor: whichever one you picked, else the next one
+   still to do. Picking a set is navigation — it never marks anything performed
+   or edited, so an early finish still leaves an untouched plan out of history. */
+function currentSetIndex(ex) {
+  const sel = App.setSel;
+  if (sel && sel.uid === ex.uid && ex.sets[sel.si]) return sel.si;
+  return ex.sets.findIndex(st => !st.done);
+}
+/* the set "Complete set" acts on — a picked set only if it still needs doing */
+function nextPendingSetIndex(ex) {
+  const sel = App.setSel;
+  if (sel && sel.uid === ex.uid && ex.sets[sel.si] && !ex.sets[sel.si].done) return sel.si;
+  return ex.sets.findIndex(st => !st.done);
+}
+function workingCount(ex) { return workingSets(ex.sets).length; }
+function workingNumber(ex, si) {
+  let n = 0;
+  for (let i = 0; i <= si; i++) if (ex.sets[i] && !isWarmup(ex.sets[i])) n++;
+  return n;
+}
+function setLabel(ex, si) {
+  return isWarmup(ex.sets[si]) ? 'Warmup' : `Set ${workingNumber(ex, si)}`;
+}
+function isTimedLift(name) { return /\(seconds?\)/i.test(name || ''); }
+function fmtW1(disp) { return String(Math.round((disp || 0) * 10) / 10); }
+
+/* one set as it was actually lifted: "185 lb × 5", "12 reps", "45s" */
+function setValueText(name, st) {
   const u = wUnit();
-  const perHand = perHandLift(ex.name);
-  const prevLine = prevWork.length
-    ? prevWork.map(s => s.weight > 0 ? `${Math.round(toW(s.weight))}×${s.reps}` : `${s.reps}`).join('  ')
-    : '';
-  const allDone = ex.sets.length > 0 && ex.sets.every(st => st.done);
+  const timed = isTimedLift(name);
+  const reps = st.reps != null ? `${st.reps}${timed ? 's' : ''}` : '—';
+  if (st.weight > 0) return `${fmtW1(toW(st.weight))} ${u} × ${reps}`;
+  return timed ? reps : `${reps} reps`;
+}
+/* Last session exactly as logged, set by set. The old single line paired the
+   heaviest weight with the most reps even when they came from different sets,
+   which described a set nobody had ever done. */
+function prevSetsText(name, sets) {
+  if (!sets || !sets.length) return '';
+  const u = wUnit();
+  const anyLoad = sets.some(st => st.weight > 0);
+  const body = sets.map(st => st.weight > 0 ? `${fmtW1(toW(st.weight))}×${st.reps}` : `${st.reps}${isTimedLift(name) ? 's' : ''}`).join(' · ');
+  return anyLoad ? `${body} ${perHandLift(name) ? u + '/hand' : u}` : body;
+}
+
+/* the short, glanceable version of a prescription; the full reasoning lives
+   behind "Why this target?" */
+function cueHeadline(name, pr) {
+  const u = wUnit();
+  const load = pr.w > 0 ? `${fmtW1(pr.w)} ${perHandLift(name) ? u + '/hand' : u}` : '';
+  const reps = `${pr.reps}${isTimedLift(name) ? 's' : ''}`;
+  switch (pr.type) {
+    case 'baseline': return 'First time — find a working weight';
+    case 'add_weight': return `Go up to ${load} × ${reps}`;
+    case 'deload': return `Deload to ${load} × ${reps}`;
+    case 'hold': return `Keeping ${load} × ${reps} · progression paused`;
+    default: return pr.w > 0 ? `Stay at ${load} — finish ${pr.sets}×${reps}` : `Aim for ${reps}${isTimedLift(name) ? '' : '+ reps'}`;
+  }
+}
+
+function renderActiveSession() {
+  const s = App.activeSession;
+  ensureSessionIds(s);
+  const live = sessionLiveStats();
+  const elapsed = s.startedAt ? Math.floor((Date.now() - s.startedAt) / 1000) : 0;
+  const stale = s.date !== todayKey();
+  const focus = focusedExercise();
+  const pct = live.total ? Math.round(live.doneAll / live.total * 100) : 0;
+  const allDone = live.total > 0 && live.doneAll === live.total;
   return `
-  <div class="card ${allDone ? 'ex-complete' : ''}">
-    <div class="ex-head">
-      <span class="ex-name">${esc(ex.name)}${allDone ? ' <span class="pill good">done</span>' : ''}</span>
-      <span class="ex-target">${ex.target ? 'target ' + esc(ex.target) : ''}</span>
-      <button class="x-btn" data-action="del-exercise" data-xi="${xi}" aria-label="Remove ${esc(ex.name)} from this session">✕</button>
+  ${stale ? `<div class="alert" style="border-left-color:var(--warning)"><span class="a-ico">⏳</span>
+    <div class="a-body"><b>This session is from ${prettyDate(s.date)}.</b>
+    Finish it to save it under that date, or discard it.</div></div>` : ''}
+  <section class="wk-head" aria-label="Workout progress">
+    <div class="eyebrow">${allDone ? `${icon('check')} Every set complete` : '<span class="live-dot" aria-hidden="true"></span> Workout in progress'}</div>
+    <div class="wk-title-row">
+      <h2 class="wk-title">${esc(s.dayName)}</h2>
+      <span class="wk-clock" id="sess-timer" role="timer" aria-label="Elapsed time">${fmtClock(elapsed)}</span>
     </div>
-    <div class="last-time" style="color:${cueColor(pr.type)};font-weight:600">${CUE[pr.type] || '→'} ${esc(pr.text)}</div>
-    ${prevLine ? `<div class="last-time">Previous: ${esc(prevLine)}${perHand ? ` ${u}/hand` : ''}</div>` : ''}
-    <div id="plates-${xi}">${plateBlock(ex)}</div>
-    ${(() => { let workIdx = 0; return ex.sets.map((st, si) => {
-      const type = st.type || 'normal';
-      const warm = type === 'warmup';
-      if (!warm) workIdx++;
-      const badge = SET_BADGE[type];
-      // previous-session hints belong on working sets only, matched by working index
-      const prevSet = warm ? null : prevWork[workIdx - 1];
-      const wPlace = prevSet && prevSet.weight > 0 ? String(Math.round(toW(prevSet.weight) * 10) / 10) : (perHand ? `${u}/hand` : u);
-      const rPlace = prevSet ? String(prevSet.reps) : 'reps';
-      return `
-      <div class="set-row ${st.done ? 'done' : ''} ${st.planned && !st.done ? 'planned' : ''}">
-        <button class="set-no ${badge ? 'typed' : ''}" data-action="set-type" data-xi="${xi}" data-si="${si}"
-          style="${badge ? `color:${SET_BADGE_COLOR[type]};font-weight:800` : ''}"
-          title="Tap to change set type">${badge || workIdx}</button>
-        <span class="stepper-group">
-          <button class="stepper-btn" data-action="step-weight" data-dir="-1" data-xi="${xi}" data-si="${si}" aria-label="Decrease weight">−</button>
-          <input type="number" step="any" inputmode="decimal" aria-label="Weight in ${perHand ? u + ' per hand' : u}"
-            placeholder="${wPlace}" value="${st.weight != null && st.weight !== 0 ? Math.round(toW(st.weight) * 10) / 10 : ''}"
-            data-set-w data-xi="${xi}" data-si="${si}">
-          <button class="stepper-btn" data-action="step-weight" data-dir="1" data-xi="${xi}" data-si="${si}" aria-label="Increase weight">+</button>
-        </span>
-        <span class="stepper-group">
-          <button class="stepper-btn" data-action="step-reps" data-dir="-1" data-xi="${xi}" data-si="${si}" aria-label="Decrease reps">−</button>
-          <input type="number" inputmode="numeric" aria-label="Reps" placeholder="${rPlace}" value="${st.reps ?? ''}"
-            data-set-r data-xi="${xi}" data-si="${si}">
-          <button class="stepper-btn" data-action="step-reps" data-dir="1" data-xi="${xi}" data-si="${si}" aria-label="Increase reps">+</button>
-        </span>
-        <button class="done-btn ${st.done ? 'on' : ''}" data-action="set-done" data-xi="${xi}" data-si="${si}"
-          aria-label="Mark set ${workIdx} complete">✓</button>
-        <button class="x-btn" data-action="del-set" data-xi="${xi}" data-si="${si}" aria-label="Delete set ${workIdx}">✕</button>
-      </div>`;
-    }).join(''); })()}
-    ${/* The set number doubles as the set-type control, which no tooltip can teach
-          on a phone. Say it once, on the first exercise, rather than never. */
-      xi === 0 ? '<div class="chart-note">Tap a set\'s number to mark it a warmup, a failure set, or a drop set — those are logged but never counted toward volume or PRs.</div>' : ''}
-    <div class="row mt">
-      <button class="btn small grow" data-action="add-set" data-xi="${xi}">＋ Add set</button>
-      <button class="btn small" data-action="add-warmup" data-xi="${xi}">＋ Warmup</button>
-    </div>
+    <div class="wk-bar" role="progressbar" aria-label="Sets completed" aria-valuemin="0"
+      aria-valuemax="${live.total}" aria-valuenow="${live.doneAll}"><span style="width:${pct}%"></span></div>
+    <div class="wk-meta"><b>${live.doneAll}</b> of ${live.total} set${live.total !== 1 ? 's' : ''} done${
+      live.volKg > 0 ? ` · ${fmtWt(live.volKg)} ${wUnit()} moved` : ''}</div>
+  </section>
+  ${s.exercises.length ? `
+  <div class="ex-list">
+    ${s.exercises.map((ex, xi) => ex.uid === focus?.uid
+      ? renderFocusedExercise(ex, xi, s.exercises.length)
+      : renderExerciseRow(ex)).join('')}
+  </div>` : `
+  <div class="card empty-state">
+    <h3>No exercises yet</h3>
+    <p class="muted">${s.freestyle ? "Freestyle session — add whatever you're training and log it as you go." : 'Add an exercise to start logging sets.'}</p>
+    <button class="btn accent big mt" data-action="add-exercise">${icon('plus')} Add exercise</button>
+  </div>`}
+  <div class="wk-foot">
+    ${s.exercises.length ? `<button class="btn" data-action="add-exercise">${icon('plus')} Add exercise</button>` : ''}
+    <button class="btn" data-action="review-finish">${allDone ? 'Review &amp; finish' : 'Review &amp; finish early'}</button>
+    <button class="btn ghost danger" data-action="discard-workout">Discard workout</button>
   </div>`;
 }
 
-/* The weight you are about to load — the next set you haven't ticked, not the
-   heaviest of the session. A warmup ramp changes the plates on every set, and an
-   indicator showing the top set while you're loading the first one is a wrong
-   answer delivered confidently. */
+/* a closed exercise: enough to know where you stand, one tap to open */
+function renderExerciseRow(ex) {
+  const total = ex.sets.length, done = ex.sets.filter(st => st.done).length;
+  const complete = exComplete(ex);
+  const status = !total ? 'no sets' : complete ? 'complete' : `${done} of ${total} sets done`;
+  return `
+  <button class="ex-row ${complete ? 'complete' : ''}" data-action="focus-ex" data-uid="${ex.uid}"
+    aria-label="${esc(ex.name)}, ${status}. Open exercise">
+    <span class="exr-badge" aria-hidden="true">${complete ? icon('check') : `${done}/${total}`}</span>
+    <span class="exr-name">${esc(ex.name)}</span>
+    <span class="exr-meta" aria-hidden="true">${esc(ex.target || '')}</span>
+    <span class="exr-chev" aria-hidden="true">${icon('chevron')}</span>
+  </button>`;
+}
+
+function renderFocusedExercise(ex, xi, count) {
+  const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
+  const last = lastSessionSets(ex.name);
+  const prevWork = last ? last.sets : [];
+  const done = ex.sets.filter(st => st.done).length;
+  const cur = currentSetIndex(ex);
+  const nextSi = nextPendingSetIndex(ex);
+  let workIdx = 0;
+  const rows = ex.sets.map((st, si) => {
+    if (!isWarmup(st)) workIdx++;
+    const prevSet = isWarmup(st) ? null : prevWork[workIdx - 1];
+    return si === cur ? renderSetEditor(ex, st, si, prevSet) : renderSetLine(ex, st, si, si === nextSi);
+  }).join('');
+  return `
+  <section class="card ex-focus" id="ex-focus" aria-labelledby="exf-title">
+    <div class="exf-head">
+      <div class="grow">
+        <div class="eyebrow">Exercise ${xi + 1} of ${count} · ${done}/${ex.sets.length} sets</div>
+        <h3 class="exf-title" id="exf-title" tabindex="-1">${esc(ex.name)}${perHandLift(ex.name) ? ' <span class="exf-tag">per hand</span>' : ''}</h3>
+      </div>
+      <button class="icon-btn2" data-action="ex-menu" data-uid="${ex.uid}" aria-label="Options for ${esc(ex.name)}">${icon('more')}</button>
+    </div>
+    <div class="exf-coach">
+      <span class="exf-cue" style="color:${cueColor(pr.type)}" aria-hidden="true">${CUE[pr.type] || '→'}</span>
+      <span class="exf-cue-text">${esc(cueHeadline(ex.name, pr))}</span>
+      <button class="link-btn" data-action="why-target" data-name="${esc(ex.name)}" data-target="${esc(ex.target || '')}">Why this target?</button>
+    </div>
+    ${prevWork.length ? `<div class="exf-prev"><span class="muted">Last time · ${esc(prettyDate(last.date))}</span><br>${esc(prevSetsText(ex.name, prevWork))}</div>` : ''}
+    <div class="set-list">${rows || '<div class="muted small">No sets yet — add one below.</div>'}</div>
+    <div class="exf-actions">
+      <button class="btn small" data-action="add-set" data-uid="${ex.uid}">${icon('plus')} Add set</button>
+      <button class="btn small" data-action="add-warmup" data-uid="${ex.uid}">${icon('plus')} Warmup</button>
+    </div>
+  </section>`;
+}
+
+function renderSetLine(ex, st, si, isNext) {
+  const type = st.type || 'normal';
+  const badge = SET_BADGE[type];
+  const label = setLabel(ex, si);
+  const val = setValueText(ex.name, st);
+  const state = st.done ? 'Done' : isNext ? 'Next' : st.touched ? 'Edited' : 'Planned';
+  const typeWord = type !== 'normal' && type !== 'warmup' ? ` (${type === 'drop' ? 'drop set' : 'to failure'})` : '';
+  return `
+  <div class="set-line ${st.done ? 'done' : ''} ${isNext ? 'next' : ''}">
+    <button class="set-sum" data-action="select-set" data-uid="${ex.uid}" data-si="${si}"
+      aria-label="${label}${typeWord}: ${esc(val)}, ${state.toLowerCase()}. Edit set">
+      <span class="ss-no" style="${badge ? `color:${SET_BADGE_COLOR[type]}` : ''}" aria-hidden="true">${badge || workingNumber(ex, si)}</span>
+      <span class="ss-val" aria-hidden="true">${esc(val)}</span>
+      <span class="ss-state" aria-hidden="true">${st.done ? icon('check') : esc(state)}</span>
+    </button>
+    <button class="set-more" data-action="set-menu" data-uid="${ex.uid}" data-si="${si}" aria-label="Options for ${label.toLowerCase()}">${icon('more')}</button>
+  </div>`;
+}
+
+/* The one set you are about to lift, big enough to read from the bench. The
+   inputs carry the exercise id rather than an index, so a reorder or delete
+   between keystrokes can never write a number into the wrong lift. */
+function renderSetEditor(ex, st, si, prevSet) {
+  const u = wUnit();
+  const type = st.type || 'normal';
+  const label = isWarmup(st) ? 'Warmup' : `Set ${workingNumber(ex, si)} of ${workingCount(ex)}`;
+  const typeName = { failure: 'to failure', drop: 'drop set' }[type];
+  const timed = isTimedLift(ex.name);
+  const noLoad = !(st.weight > 0) && typeof exerciseHasLoad === 'function' && !exerciseHasLoad(ex.name);
+  const id = `se-${ex.uid}-${si}`;
+  const wVal = st.weight != null && st.weight !== 0 ? fmtW1(toW(st.weight)) : '';
+  const prevTxt = prevSet ? (prevSet.weight > 0 ? `${fmtW1(toW(prevSet.weight))} × ${prevSet.reps}` : `${prevSet.reps}${timed ? 's' : ''}`) : '';
+  const untouched = !st.done && !st.touched;
+  return `
+  <div class="set-edit ${st.done ? 'done' : ''} ${untouched ? 'planned' : ''}" id="set-edit" tabindex="-1" role="group" aria-labelledby="${id}-l">
+    <div class="se-head">
+      <span class="se-label" id="${id}-l">${label}${typeName ? ` · ${typeName}` : ''}${st.done ? ' · done' : ''}</span>
+      ${prevTxt ? `<span class="se-prev">last time ${esc(prevTxt)}</span>` : ''}
+      <button class="set-more" data-action="set-menu" data-uid="${ex.uid}" data-si="${si}" aria-label="Options for ${esc(label.toLowerCase())}">${icon('more')}</button>
+    </div>
+    <div class="se-field">
+      <label for="${id}-w">${noLoad ? 'Added' : 'Weight'}<span>${perHandLift(ex.name) ? u + ' / hand' : u}</span></label>
+      <button class="se-step" data-action="step-weight" data-dir="-1" data-uid="${ex.uid}" data-si="${si}" aria-label="Decrease weight">${icon('minus')}</button>
+      <input id="${id}-w" type="number" step="any" min="0" inputmode="decimal" enterkeyhint="next" autocomplete="off"
+        value="${wVal}" placeholder="${prevSet && prevSet.weight > 0 ? fmtW1(toW(prevSet.weight)) : '0'}"
+        data-set-w data-uid="${ex.uid}" data-si="${si}">
+      <button class="se-step" data-action="step-weight" data-dir="1" data-uid="${ex.uid}" data-si="${si}" aria-label="Increase weight">${icon('plus')}</button>
+    </div>
+    <div class="se-field">
+      <label for="${id}-r">${timed ? 'Time' : 'Reps'}<span>${timed ? 'seconds' : 'count'}</span></label>
+      <button class="se-step" data-action="step-reps" data-dir="-1" data-uid="${ex.uid}" data-si="${si}" aria-label="Decrease ${timed ? 'seconds' : 'reps'}">${icon('minus')}</button>
+      <input id="${id}-r" type="number" min="0" inputmode="numeric" enterkeyhint="done" autocomplete="off"
+        value="${st.reps ?? ''}" placeholder="${prevSet ? prevSet.reps : '0'}"
+        data-set-r data-uid="${ex.uid}" data-si="${si}">
+      <button class="se-step" data-action="step-reps" data-dir="1" data-uid="${ex.uid}" data-si="${si}" aria-label="Increase ${timed ? 'seconds' : 'reps'}">${icon('plus')}</button>
+    </div>
+    <div id="plates-focus">${plateBlock(ex)}</div>
+    ${st.done ? `<button class="btn small ghost mt" data-action="set-undone" data-uid="${ex.uid}" data-si="${si}">Mark ${esc(label.split(' of')[0].toLowerCase())} not done</button>` : ''}
+  </div>`;
+}
+
+/* The weight you are about to load — the set in the editor, not the heaviest of
+   the session. A warmup ramp changes the plates on every set, and an indicator
+   showing the top set while you're loading the first one is a wrong answer
+   delivered confidently. */
 function plateWeightFor(ex) {
-  const next = (ex.sets || []).find(st => !st.done);
-  if (next && next.weight > 0) return toW(next.weight);
+  const cur = (ex.sets || [])[currentSetIndex(ex)];
+  if (cur && cur.weight > 0) return toW(cur.weight);
   const heaviest = Math.max(0, ...(ex.sets || []).filter(s => !isWarmup(s)).map(s => toW(s.weight || 0)));
   if (heaviest > 0) return heaviest;
   return nextTarget(ex.name, ex.target || findTargetFor(ex.name)).w || 0;
@@ -1491,7 +2013,7 @@ function plateBlock(ex) {
   const stack = plateStack(ex.name, w);
   if (stack) {
     return `<button class="plate-btn" data-action="edit-load" data-name="${esc(ex.name)}"
-      aria-label="Plates for ${esc(ex.name)} — tap to change how this lift is loaded">${stack}</button>`;
+      aria-label="Plates for ${esc(ex.name)} — change how this lift is loaded">${stack}</button>`;
   }
   // nothing to load, or Peak doesn't know — offer the fix rather than staying silent
   if (!(w > 0) || perHandLift(ex.name)) return '';
@@ -1500,183 +2022,400 @@ function plateBlock(ex) {
 
 /* Typing a weight has to move the plates with it; the set inputs deliberately
    never trigger a re-render, so this patches the one block that changed. */
-function repaintPlates(xi) {
-  const el = document.getElementById('plates-' + xi);
-  const ex = App.activeSession?.exercises[xi];
+function repaintPlates(uid) {
+  const el = document.getElementById('plates-focus');
+  const ex = sessionExercise(uid);
   if (el && ex) el.innerHTML = plateBlock(ex);
 }
 
-function addSet(xi) {
-  const ex = App.activeSession.exercises[xi];
+/* ---------- session edits ---------- */
+function addSet(uid) {
+  const ex = sessionExercise(uid);
+  if (!ex) return;
   const prevWorking = workingSets(ex.sets).slice(-1)[0];
   if (prevWorking) { ex.sets.push({ weight: prevWorking.weight, reps: prevWorking.reps, type: 'normal', done: false }); }
   else {
     // pre-fill the first working set with today's prescribed target
     const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
-    ex.sets.push({ weight: pr.w ? fromW(pr.w) : null, reps: pr.reps ?? null, type: 'normal', done: false });
+    ex.sets.push({ weight: pr.w ? (pr.wKg ?? fromW(pr.w)) : null, reps: pr.reps ?? null, type: 'normal', done: false });
   }
   persistSession();
   App.render();
 }
 
 /* a warmup ramp set — ~55% of the working weight, higher reps, never counted */
-function addWarmup(xi) {
-  const ex = App.activeSession.exercises[xi];
+function addWarmup(uid) {
+  const ex = sessionExercise(uid);
+  if (!ex) return;
   const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
   const workDisp = pr.w || Math.round(toW(Math.max(0, ...workingSets(ex.sets).map(s => s.weight || 0))));
   const warmDisp = workDisp > 0 ? roundW(workDisp * 0.55, ex.name) : 0;
   ex.sets.unshift({ weight: warmDisp ? fromW(warmDisp) : null, reps: Math.max(5, (pr.reps || 8) + 2), type: 'warmup', done: false });
+  // the set being edited moved down one; keep pointing at the same set
+  if (App.setSel && App.setSel.uid === uid) App.setSel = { uid, si: App.setSel.si + 1 };
   persistSession();
   App.render();
 }
 
-/* +/- steppers so weight/reps can be adjusted without the on-screen keyboard */
-function stepSetWeight(xi, si, dir) {
-  readSetInputs();
-  const ex = App.activeSession.exercises[xi];
-  const st = ex.sets[si];
+/* +/- steppers so weight/reps can be adjusted without the on-screen keyboard.
+   These are real edits, so they do mark the set touched. */
+function stepSetWeight(uid, si, dir) {
+  const st = sessionExercise(uid)?.sets[si];
+  if (!st) return;
   const step = isMetric() ? 1 : 2.5;
   const cur = st.weight != null ? toW(st.weight) : 0;
   st.weight = fromW(Math.max(0, Math.round((cur + dir * step) * 10) / 10));
   st.touched = true;
   st.planned = false;
-  repaintPlates(xi);
+  App.setSel = { uid, si };
   persistSession();
   App.render();
 }
 
-function stepSetReps(xi, si, dir) {
-  readSetInputs();
-  const ex = App.activeSession.exercises[xi];
-  const st = ex.sets[si];
+function stepSetReps(uid, si, dir) {
+  const st = sessionExercise(uid)?.sets[si];
+  if (!st) return;
   const cur = st.reps != null ? st.reps : 0;
   st.reps = Math.max(0, cur + dir);
   st.touched = true;
   st.planned = false;
+  App.setSel = { uid, si };
   persistSession();
   App.render();
 }
 
-function cycleSetType(xi, si) {
-  readSetInputs();
-  const st = App.activeSession.exercises[xi].sets[si];
-  const i = SET_TYPES.indexOf(st.type || 'normal');
-  st.type = SET_TYPES[(i + 1) % SET_TYPES.length];
+function setSetType(uid, si, type) {
+  const st = sessionExercise(uid)?.sets[si];
+  if (!st || !SET_TYPES.includes(type) || (st.type || 'normal') === type) return;
+  st.type = type;
   st.touched = true;
   persistSession();
   App.render();
 }
 
-/* marking a working set done starts rest and fires any live PR */
-function toggleSetDone(xi, si) {
-  readSetInputs();
-  const ex = App.activeSession.exercises[xi];
-  const st = ex.sets[si];
-  st.done = !st.done;
-  if (st.done) {
-    if (!st.reps) { st.done = false; toast('Enter reps first'); App.render(); return; }
-    st.planned = false;
-    if (navigator.vibrate) navigator.vibrate(30);
-    const pr = checkSetPR(ex.name, st);
-    if (pr) toast(pr);
-    if (!isWarmup(st)) startRest(suggestedRestSec(ex.name), ex.name);
-  }
+/* opening an exercise is navigation only — nothing about its sets changes */
+function focusExercise(uid, opts = {}) {
+  const s = App.activeSession;
+  const ex = sessionExercise(uid);
+  if (!s || !ex) return;
+  const changed = s.focusUid !== uid;
+  s.focusUid = uid;
+  App.setSel = null;
+  persistSession();
+  App._scrollFocus = opts.moveFocus === false ? 'scroll' : 'focus';
+  App.render();
+  if (changed) announce(`${ex.name} open — ${ex.sets.filter(st => st.done).length} of ${ex.sets.length} sets done`);
+}
+
+function selectSet(uid, si) {
+  const s = App.activeSession;
+  const ex = sessionExercise(uid);
+  if (!s || !ex || !ex.sets[si]) return;
+  s.focusUid = uid;
+  App.setSel = { uid, si };
+  App._focusSetEditor = true;
   persistSession();
   App.render();
 }
 
-/* deletes are undoable — the ✕ sits next to ✓ and gets hit by accident */
-function deleteSet(xi, si) {
-  readSetInputs();
-  const ex = App.activeSession.exercises[xi];
+/* Completing a set starts rest and fires any live PR. Finishing the last set of
+   an exercise opens the next unfinished one in routine order, wrapping round to
+   anything skipped earlier. It never finishes the workout — that is always a
+   deliberate review. */
+let _lastCompleteAt = 0;
+function completeSet(uid, si) {
+  const s = App.activeSession;
+  const xi = exerciseIndex(uid);
+  const ex = s?.exercises[xi];
+  const st = ex?.sets[si];
+  if (!st || st.done) return;
+  // a double tap must not tick off the set after this one too
+  if (Date.now() - _lastCompleteAt < 450) return;
+  if (!st.reps) {
+    toast(isTimedLift(ex.name) ? 'Enter the time first' : 'Enter reps first');
+    App.setSel = { uid, si };
+    App.render();
+    document.querySelector('[data-set-r]')?.focus();
+    return;
+  }
+  _lastCompleteAt = Date.now();
+  st.done = true;
+  st.planned = false;
+  if (navigator.vibrate) navigator.vibrate(30);
+  const pr = checkSetPR(ex.name, st);
+  if (pr) toast(pr);
+  if (!isWarmup(st)) startRest(suggestedRestSec(ex.name), ex.name);
+  App.setSel = null;
+  let msg = `${ex.name}: ${setLabel(ex, si).toLowerCase()} complete.`;
+  if (!exPending(ex)) {
+    const next = firstPendingFrom(s, xi + 1);
+    if (next) {
+      s.focusUid = next;
+      App._scrollFocus = 'scroll';
+      msg += ` ${ex.name} finished. Next: ${sessionExercise(next).name}.`;
+    } else {
+      msg += ' Every set is done — review and finish when you are ready.';
+    }
+  }
+  persistSession();
+  App.render();
+  announce(msg);
+}
+
+function uncompleteSet(uid, si) {
+  const ex = sessionExercise(uid);
+  const st = ex?.sets[si];
+  if (!st || !st.done) return;
+  st.done = false;
+  // it was performed once, so it stays a real (touched) set rather than reverting to plan
+  st.touched = true;
+  App.setSel = { uid, si };
+  persistSession();
+  App.render();
+  announce(`${ex.name}: ${setLabel(ex, si).toLowerCase()} marked not done`);
+}
+
+/* deletes are undoable, and live behind a labelled menu rather than an ✕ that
+   sat next to ✓ and got hit by accident */
+function deleteSet(uid, si) {
+  const ex = sessionExercise(uid);
+  if (!ex || !ex.sets[si]) return;
   const [removed] = ex.sets.splice(si, 1);
-  App.undo = { kind: 'set', xi, si, set: removed };
+  App.undo = { kind: 'set', uid, si, set: removed };
+  App.setSel = null;
   persistSession();
   App.render();
   toast('Set removed', { label: 'Undo', action: 'undo-last' });
 }
-function deleteExercise(xi) {
-  readSetInputs();
-  const [removed] = App.activeSession.exercises.splice(xi, 1);
+function deleteExercise(uid) {
+  const s = App.activeSession;
+  const xi = exerciseIndex(uid);
+  if (!s || xi < 0) return;
+  const [removed] = s.exercises.splice(xi, 1);
+  if (s.focusUid === uid) {
+    // the next unfinished lift in routine order, else whatever is first
+    s.focusUid = s.exercises.length ? (firstPendingFrom(s, xi) || s.exercises[0].uid) : null;
+    App.setSel = null;
+  }
   App.undo = { kind: 'exercise', xi, exercise: removed };
   persistSession();
   App.render();
   toast(`${removed.name} removed`, { label: 'Undo', action: 'undo-last' });
 }
+function moveExercise(uid, dir) {
+  const s = App.activeSession;
+  const xi = exerciseIndex(uid);
+  const to = xi + dir;
+  if (!s || xi < 0 || to < 0 || to >= s.exercises.length) return;
+  [s.exercises[xi], s.exercises[to]] = [s.exercises[to], s.exercises[xi]];
+  persistSession();
+  App.render();
+  announce(`${s.exercises[to].name} moved ${dir < 0 ? 'up' : 'down'} to position ${to + 1}`);
+}
 function undoLast() {
   const u = App.undo;
   if (!u) return;
-  if (u.kind === 'set' && App.activeSession) App.activeSession.exercises[u.xi]?.sets.splice(u.si, 0, u.set);
-  if (u.kind === 'exercise' && App.activeSession) App.activeSession.exercises.splice(u.xi, 0, u.exercise);
+  const s = App.activeSession;
+  if (u.kind === 'set' && s) sessionExercise(u.uid)?.sets.splice(u.si, 0, u.set);
+  if (u.kind === 'exercise' && s) {
+    s.exercises.splice(Math.min(u.xi, s.exercises.length), 0, u.exercise);
+    // restoring never steals focus from an exercise that is still open
+    ensureSessionIds(s);
+  }
   if (u.kind === 'food') restoreFoodEntry(u.key, u.entry);
   App.undo = null;
-  if (App.activeSession) persistSession();
+  if (s) persistSession();
   App.render();
 }
 
+/* Flush whatever is typed into the open set before anything re-renders or
+   switches. Only a field whose value really changed counts as an edit — a
+   pre-filled number that was merely rendered must stay untouched, or ending
+   early would save a set nobody lifted. */
+function applySetField(inp) {
+  const st = sessionExercise(inp.dataset.uid)?.sets[inp.dataset.si];
+  if (!st) return false;
+  const v = inp.value === '' ? null : Number(inp.value);
+  if (v != null && !Number.isFinite(v)) return false;
+  if (inp.dataset.setW !== undefined) st.weight = v == null ? null : fromW(Math.max(0, v));
+  else st.reps = v == null ? null : Math.max(0, Math.round(v));
+  st.touched = true;
+  st.planned = false;
+  inp.defaultValue = inp.value;   // applied; a later flush must not count it twice
+  return true;
+}
+let _typeTimer = null;
 function readSetInputs() {
   if (!App.activeSession) return;
-  document.querySelectorAll('[data-set-w]').forEach(inp => {
-    const st = App.activeSession.exercises[inp.dataset.xi]?.sets[inp.dataset.si];
-    if (st) st.weight = inp.value === '' ? null : fromW(Number(inp.value));
+  let changed = false;
+  document.querySelectorAll('[data-set-w], [data-set-r]').forEach(inp => {
+    if (inp.value !== inp.defaultValue && applySetField(inp)) changed = true;
   });
-  document.querySelectorAll('[data-set-r]').forEach(inp => {
-    const st = App.activeSession.exercises[inp.dataset.xi]?.sets[inp.dataset.si];
-    if (st) st.reps = inp.value === '' ? null : Number(inp.value);
-  });
+  if (changed || _typeTimer) { clearTimeout(_typeTimer); _typeTimer = null; persistSession(); }
 }
 
-/* Typing marks a set as touched so an edited-but-unticked set is still saved,
-   and mirrors the session to storage without re-rendering (which would steal focus). */
-let _typeTimer = null;
+/* Typing applies immediately and mirrors to storage without re-rendering, which
+   would steal focus and close the keyboard mid-number. */
 document.addEventListener('input', e => {
   const el = e.target;
   if (!App.activeSession || !el.dataset) return;
   if (el.dataset.setW === undefined && el.dataset.setR === undefined) return;
-  const st = App.activeSession.exercises[el.dataset.xi]?.sets[el.dataset.si];
-  if (st) { st.touched = true; st.planned = false; }
-  if (st && el.dataset.setW !== undefined) {
-    // apply this one field immediately so the plate indicator tracks what you type
-    st.weight = el.value === '' ? null : fromW(Number(el.value));
-    repaintPlates(el.dataset.xi);
-  }
+  if (!applySetField(el)) return;
+  if (el.dataset.setW !== undefined) repaintPlates(el.dataset.uid);
   clearTimeout(_typeTimer);
-  _typeTimer = setTimeout(() => { readSetInputs(); persistSession(); }, 400);
+  _typeTimer = setTimeout(() => { _typeTimer = null; persistSession(); }, 400);
 });
 
-function finishWorkout() {
-  readSetInputs();
+/* ---------- menus & sheets ---------- */
+function openExerciseMenu(uid) {
   const s = App.activeSession;
-  // Only sets the user ticked or edited count. Rows are pre-filled now, so
-  // "has reps" alone would save a whole workout nobody performed.
-  s.exercises = s.exercises
-    .map(ex => ({ ...ex, sets: ex.sets.filter(st => (st.done || st.touched) && st.reps > 0)
+  const xi = exerciseIndex(uid);
+  if (!s || xi < 0) return;
+  const ex = s.exercises[xi];
+  openModal(`
+    <h3>${esc(ex.name)}</h3>
+    <div class="modal-sub">Exercise ${xi + 1} of ${s.exercises.length} · ${ex.sets.filter(st => st.done).length} of ${ex.sets.length} sets done</div>
+    <div class="sheet-list">
+      ${typeof openProgressionSheet === 'function' ? `<button class="sheet-item" data-action="open-progression" data-name="${esc(ex.name)}">${icon('sliders')} Progression settings</button>` : ''}
+      <button class="sheet-item" data-action="edit-load" data-name="${esc(ex.name)}">${icon('dumbbell')} How this lift is loaded</button>
+      <button class="sheet-item" data-action="move-ex" data-uid="${uid}" data-dir="-1" ${xi === 0 ? 'disabled' : ''}>${icon('up')} Move up</button>
+      <button class="sheet-item" data-action="move-ex" data-uid="${uid}" data-dir="1" ${xi === s.exercises.length - 1 ? 'disabled' : ''}>${icon('down')} Move down</button>
+      <button class="sheet-item danger" data-action="del-exercise" data-uid="${uid}">${icon('trash')} Remove ${esc(ex.name)} from this workout</button>
+    </div>
+    <button class="btn mt" data-action="close-modal">Cancel</button>
+  `);
+}
+
+const SET_TYPE_LABEL = {
+  normal: 'Working set', warmup: 'Warmup — not counted',
+  failure: 'Taken to failure', drop: 'Drop set'
+};
+function openSetMenu(uid, si) {
+  const ex = sessionExercise(uid);
+  const st = ex?.sets[si];
+  if (!st) return;
+  const label = setLabel(ex, si);
+  const type = st.type || 'normal';
+  openModal(`
+    <h3>${esc(label)} · ${esc(ex.name)}</h3>
+    <div class="modal-sub">${esc(setValueText(ex.name, st))}${st.done ? ' · done' : ''}. Warmups are logged but never count toward volume or records.</div>
+    <div class="sheet-h" id="set-type-h">Set type</div>
+    <div class="sheet-list" role="radiogroup" aria-labelledby="set-type-h">
+      ${SET_TYPES.map(t => `
+        <button class="sheet-item" role="radio" aria-checked="${t === type}" data-action="set-type"
+          data-uid="${uid}" data-si="${si}" data-type="${t}">
+          <span class="grow">${esc(SET_TYPE_LABEL[t])}</span>${t === type ? icon('check') : ''}</button>`).join('')}
+    </div>
+    <div class="sheet-list mt">
+      <button class="sheet-item danger" data-action="del-set" data-uid="${uid}" data-si="${si}">${icon('trash')} Remove ${esc(label.toLowerCase())}</button>
+    </div>
+    <button class="btn mt" data-action="close-modal">Cancel</button>
+  `);
+}
+
+/* the reasoning behind a number, one tap away instead of always on screen */
+function openWhyTarget(name, targetStr) {
+  const plateaus = detectPlateaus();
+  const stalled = new Set(plateaus.map(p => p.name.toLowerCase()));
+  const pr = nextTarget(name, targetStr || findTargetFor(name), stalled);
+  const last = lastSessionSets(name);
+  const plateau = plateaus.find(p => p.name.toLowerCase() === name.toLowerCase());
+  const u = wUnit();
+  const big = pr.w > 0 ? `${fmtW1(pr.w)}<span class="unit"> ${perHandLift(name) ? u + '/hand' : u} × ${pr.reps}${isTimedLift(name) ? 's' : ''}</span>`
+    : pr.w === 0 ? `${pr.reps}<span class="unit"> ${isTimedLift(name) ? 'seconds' : 'reps'}</span>`
+    : '<span class="unit">Pick a working weight</span>';
+  openModal(`
+    <h3>${esc(name)}</h3>
+    <div class="modal-sub">${targetStr ? `Plan ${esc(targetStr)} · ` : ''}${esc(CUE_LEGEND[pr.type] || '')}</div>
+    <div class="why-big">${big}</div>
+    ${pr.w > 0 ? plateStack(name, pr.w) : ''}
+    <div class="sheet-h">Why this target?</div>
+    <p class="sheet-p">${esc(pr.text)}${plateau && pr.type !== 'hold' ? esc(plateauVolumeNote(name)) : ''}</p>
+    ${last && last.sets.length ? `
+      <div class="sheet-h">Last time · ${esc(prettyDate(last.date))}</div>
+      <p class="sheet-p">${esc(prevSetsText(name, last.sets))}</p>` : ''}
+    ${typeof openProgressionSheet === 'function' ? `<button class="btn mt" data-action="open-progression" data-name="${esc(name)}">${icon('sliders')} Progression settings</button>` : ''}
+    <button class="btn ghost mt" data-action="close-modal">Close</button>
+  `);
+}
+
+/* Ending a session is always reviewed, never automatic — and ending early shows
+   exactly what will be saved and what will not. */
+function openReviewSheet() {
+  const s = App.activeSession;
+  if (!s) return;
+  readSetInputs();
+  const live = sessionLiveStats();
+  const elapsed = s.startedAt ? Math.floor((Date.now() - s.startedAt) / 1000) : 0;
+  let loggedAny = false;
+  const rows = s.exercises.map(ex => {
+    const kept = ex.sets.filter(st => (st.done || st.touched) && st.reps > 0);
+    const editedOnly = kept.filter(st => !st.done).length;
+    const left = ex.sets.filter(st => !st.done && !(st.touched && st.reps > 0)).length;
+    if (kept.length) loggedAny = true;
+    return `
+    <div class="review-ex">
+      <b>${esc(ex.name)}</b>
+      <div class="rv-sets">${kept.length ? esc(kept.map(st => setValueText(ex.name, st) + (isWarmup(st) ? ' (warmup)' : '')).join(' · ')) : '<span class="muted">Nothing logged</span>'}</div>
+      ${editedOnly ? `<div class="rv-note">${editedOnly} edited but not ticked — saved as logged</div>` : ''}
+      ${left ? `<div class="rv-left">${left} set${left !== 1 ? 's' : ''} remaining — not saved</div>` : ''}
+    </div>`;
+  }).join('');
+  const allDone = live.total > 0 && live.doneAll === live.total;
+  openModal(`
+    <h3>${allDone ? 'Finish workout' : 'Finish early?'}</h3>
+    <div class="modal-sub">${esc(s.dayName)} · ${fmtClock(elapsed)} · ${live.doneAll} of ${live.total} sets done</div>
+    ${rows || '<div class="muted small">No exercises in this session.</div>'}
+    ${loggedAny
+      ? `<button class="btn accent big mt" data-action="finish-workout">${icon('check')} Save workout</button>`
+      : `<div class="chart-note mt">Complete or edit at least one set and it can be saved.</div>`}
+    <button class="btn mt" data-action="close-modal">Keep training</button>
+  `);
+}
+
+function finishWorkout() {
+  const s = App.activeSession;
+  if (!s) return;   // a second tap after the first one already saved
+  readSetInputs();
+  // Only sets the user ticked or edited count. Rows are pre-filled, so "has
+  // reps" alone would save a whole workout nobody performed. The live session
+  // is left intact until the save succeeds — returning early used to strip it.
+  const exercises = s.exercises
+    .map(({ uid, ...ex }) => ({ ...ex, sets: ex.sets.filter(st => (st.done || st.touched) && st.reps > 0)
       .map(st => ({ weight: st.weight || 0, reps: st.reps, type: st.type || 'normal' })) }))
     .filter(ex => ex.sets.length > 0);
-  if (!s.exercises.length) { toast('Tick ✓ on the sets you completed first'); return; }
+  if (!exercises.length) { toast('Complete or edit at least one set first'); return; }
+  const { focusUid, ...saved } = s;
+  saved.exercises = exercises;
   // PR check (weighted lifts only)
   const prs = [];
-  s.exercises.forEach(ex => {
+  saved.exercises.forEach(ex => {
     const prevBest = Math.max(0, ...exerciseHistory(ex.name).map(h => h.bestE1rm));
     const nowBest = Math.max(0, ...workingSets(ex.sets).map(st => e1rm(st.weight, st.reps)));
-    if (nowBest > prevBest + 0.01 && prevBest > 0) prs.push(ex.name);
+    if (nowBest > prevBest + 0.01 && prevBest > 0 && !prs.includes(ex.name)) prs.push(ex.name);
   });
-  s.score = scoreWorkout(s);
-  if (s.startedAt) s.durationMin = Math.max(1, Math.round((Date.now() - s.startedAt) / 60000));
+  saved.score = scoreWorkout(saved);
+  if (saved.startedAt) saved.durationMin = Math.max(1, Math.round((Date.now() - saved.startedAt) / 60000));
   // same MET formula cardio uses (train.js saveCardio); 6 MET is a reasonable
   // flat estimate for straight-set resistance training (ACSM puts it 3-6)
   const kg = getProfile()?.weightKg;
-  if (kg && s.durationMin) s.kcalEst = Math.round(6 * 3.5 * kg / 200 * s.durationMin);
-  saveWorkout(s);
+  if (kg && saved.durationMin) saved.kcalEst = Math.round(6 * 3.5 * kg / 200 * saved.durationMin);
+  saveWorkout(saved);
   App.activeSession = null;
   App.rest = null;
   App.undo = null;
+  App.setSel = null;
   clearPersistedSession();
   App.trainView = 'home';
   App.trainDay = null;   // the template queues the next day; a manual pick is spent
+  // land on Today, where the finished session is summarised
+  App.tab = 'today';
+  App.todayView = 'home';
+  if (typeof closeModal === 'function') closeModal();
   paintRest();
-  toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${s.score}` : `Workout saved — score ${s.score} 💪`);
+  toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${saved.score}` : `Workout saved — score ${saved.score} 💪`);
   App.render();
+  announce(`Workout saved. Score ${saved.score}.`);
 }
 
 /* The old add-exercise modal was a text box with a datalist behind it: on a

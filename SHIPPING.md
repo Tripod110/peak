@@ -40,6 +40,7 @@ Run every time. Nothing here takes more than a couple of minutes.
 
 - [ ] `node tools/release.mjs --check` passes
 - [ ] `for f in *.js; do node --check "$f"; done` — all clean
+- [ ] `node --test tests/*.test.mjs` — progression and workout-flow regression tests pass
 - [ ] Onboarding completes from a wiped state (`Settings → Reset everything`, then reload)
 - [ ] Start a workout → log a set → reload the page mid-session → the session comes back
 - [ ] `Settings → Export data` produces a valid JSON file, then `Import backup` restores it
@@ -53,7 +54,9 @@ a phone. Do this once properly before the first public push, then only when layo
 
 - [ ] iPhone Safari: install to home screen, confirm no gap above the tab bar and nothing
       hidden behind the home indicator (`env(safe-area-inset-bottom)`)
-- [ ] iPhone: the in-gym set row — can you hit ✓ without hitting ✕, one-handed, in a hurry?
+- [ ] iPhone + Android: in a workout, focus the reps field — the keyboard must not cover the
+      field or push the *Complete set* dock over it; the dock clears the home indicator
+- [ ] One-handed: reach *Complete set* and the weight/reps steppers in a hurry
 - [ ] Android Chrome: install prompt appears, launches standalone
 - [ ] Rotate to landscape on both; nothing overlaps
 - [ ] Pinch-zoom works (it should — `user-scalable=no` was removed deliberately)
