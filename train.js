@@ -954,18 +954,6 @@ const TRAIN_SUBVIEWS = {
   history: { title: 'Session history', sub: 'everything you have logged' }
 };
 
-function subHeader(view) {
-  const meta = TRAIN_SUBVIEWS[view] || { title: '', sub: '' };
-  return `
-  <div class="sub-head">
-    <button class="back-btn" data-action="train-back" aria-label="Back to training">‹</button>
-    <div class="grow">
-      <div class="sub-title">${esc(meta.title)}</div>
-      <div class="muted small">${esc(meta.sub)}</div>
-    </div>
-  </div>`;
-}
-
 function renderTrainSub(view) {
   const p = getProfile();
   const all = getWorkouts();
@@ -977,9 +965,9 @@ function renderTrainSub(view) {
     case 'consistency': body = renderConsistencyCard(p, all) || emptyNote('Your training calendar starts with your first session.'); break;
     case 'history': body = renderRecentCard(all, 40); break;
   }
-  return subHeader(view) + body;
+  const meta = TRAIN_SUBVIEWS[view] || { title: '', sub: '' };
+  return navHeader(meta.title, meta.sub, 'train-back') + body;
 }
-function emptyNote(t) { return `<div class="card"><div class="muted small">${esc(t)}</div></div>`; }
 
 /* Same-day, forward-looking — "you slept badly, ease off today" — distinct
    from sleep.js's renderSleepTrainingLink(), which is a retrospective stat
@@ -1035,30 +1023,19 @@ function renderTrainHome() {
 
   <div class="card">
     <h2>Your training <span class="h2-right">tap any row</span></h2>
-    ${navRow('history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
-    ${navRow('routine', '✎', 'Edit your routine',
+    ${navRow('train-nav', 'history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
+    ${navRow('train-nav', 'routine', '✎', 'Edit your routine',
       `${tpl.days.length} days${isCustomRoutine() ? ' · yours' : ' · standard'}`)}
-    ${navRow('muscles', '💪', 'Weekly sets by muscle',
+    ${navRow('train-nav', 'muscles', '💪', 'Weekly sets by muscle',
       !hasLifts ? 'no data yet' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
       !hasLifts ? '' : (mv.unclassified.length || low) ? 'warn' : 'good')}
-    ${navRow('moved', '🏋', 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
-    ${navRow('records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
-    ${navRow('consistency', '📅', 'Consistency',
+    ${navRow('train-nav', 'moved', '🏋', 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
+    ${navRow('train-nav', 'records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
+    ${navRow('train-nav', 'consistency', '📅', 'Consistency',
       `${wkLifts}/${p.gymDays} this week${streak ? ` · ${streak}-week streak` : ''}`)}
     ${wkCardio ? `<div class="chart-note">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week.</div>` : ''}
     ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}
   </div>`;
-}
-
-function navRow(view, ico, label, value, tone) {
-  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
-  return `
-  <button class="nav-row" data-action="train-nav" data-view="${view}">
-    <span class="nr-ico" aria-hidden="true">${ico}</span>
-    <span class="nr-label">${esc(label)}</span>
-    <span class="nr-value" style="color:${color}">${esc(value)}</span>
-    <span class="nr-chev" aria-hidden="true">›</span>
-  </button>`;
 }
 
 /* ---------- 1. the hero: what to do today ----------
@@ -2184,11 +2161,10 @@ function deleteSet(uid, si) {
   const ex = sessionExercise(uid);
   if (!ex || !ex.sets[si]) return;
   const [removed] = ex.sets.splice(si, 1);
-  App.undo = { kind: 'set', uid, si, set: removed };
   App.setSel = null;
   persistSession();
   App.render();
-  toast('Set removed', { label: 'Undo', action: 'undo-last' });
+  destructive('set', { uid, si, set: removed }, 'Set removed');
 }
 function deleteExercise(uid) {
   const s = App.activeSession;
@@ -2200,10 +2176,9 @@ function deleteExercise(uid) {
     s.focusUid = s.exercises.length ? (firstPendingFrom(s, xi) || s.exercises[0].uid) : null;
     App.setSel = null;
   }
-  App.undo = { kind: 'exercise', xi, exercise: removed };
   persistSession();
   App.render();
-  toast(`${removed.name} removed`, { label: 'Undo', action: 'undo-last' });
+  destructive('exercise', { xi, exercise: removed }, `${removed.name} removed`);
 }
 function moveExercise(uid, dir) {
   const s = App.activeSession;
@@ -2215,21 +2190,17 @@ function moveExercise(uid, dir) {
   App.render();
   announce(`${s.exercises[to].name} moved ${dir < 0 ? 'up' : 'down'} to position ${to + 1}`);
 }
-function undoLast() {
-  const u = App.undo;
-  if (!u) return;
+/* Restores for what this file deletes — undoLast() in ui.js dispatches here. */
+registerUndo('set', u => {
+  if (App.activeSession) sessionExercise(u.uid)?.sets.splice(u.si, 0, u.set);
+});
+registerUndo('exercise', u => {
   const s = App.activeSession;
-  if (u.kind === 'set' && s) sessionExercise(u.uid)?.sets.splice(u.si, 0, u.set);
-  if (u.kind === 'exercise' && s) {
-    s.exercises.splice(Math.min(u.xi, s.exercises.length), 0, u.exercise);
-    // restoring never steals focus from an exercise that is still open
-    ensureSessionIds(s);
-  }
-  if (u.kind === 'food') restoreFoodEntry(u.key, u.entry);
-  App.undo = null;
-  if (s) persistSession();
-  App.render();
-}
+  if (!s) return;
+  s.exercises.splice(Math.min(u.xi, s.exercises.length), 0, u.exercise);
+  // restoring never steals focus from an exercise that is still open
+  ensureSessionIds(s);
+});
 
 /* Flush whatever is typed into the open set before anything re-renders or
    switches. Only a field whose value really changed counts as an edit — a

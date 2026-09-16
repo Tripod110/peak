@@ -87,26 +87,14 @@ function renderFoodHome() {
 
   <div class="card">
     <h2>Explore</h2>
-    ${foodNavRow('frequents', '🔁', 'Frequent foods', freqCount() ? `${freqCount()} saved` : 'none yet')}
-    ${foodNavRow('days', '📅', 'Past days', `${loggedDayCount(14)} of last 14 logged`)}
-    <button class="nav-row" data-action="goto-nutrition">
-      <span class="nr-ico">📈</span>
-      <span class="nr-label">Nutrition trends</span>
-      <span class="nr-value">14-day charts</span>
-      <span class="nr-chev">›</span>
-    </button>
+    ${navRow('food-nav', 'frequents', '🔁', 'Frequent foods', freqCount() ? `${freqCount()} saved` : 'none yet')}
+    ${navRow('food-nav', 'days', '📅', 'Past days', `${loggedDayCount(14)} of last 14 logged`)}
+    ${navRow('goto-nutrition', null, '📈', 'Nutrition trends', '14-day charts')}
   </div>`;
 }
 
-function foodNavRow(view, ico, label, value) {
-  return `
-  <button class="nav-row" data-action="food-nav" data-view="${view}">
-    <span class="nr-ico">${ico}</span>
-    <span class="nr-label">${esc(label)}</span>
-    <span class="nr-value">${esc(value)}</span>
-    <span class="nr-chev">›</span>
-  </button>`;
-}
+/* Restores for what Food deletes — undoLast() in ui.js dispatches here. */
+registerUndo('food', u => restoreFoodEntry(u.key, u.entry));
 
 function freqCount() { return Store.get('recentFoods', []).length; }
 function loggedDayCount(days) {

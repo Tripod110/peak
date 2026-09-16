@@ -16,7 +16,7 @@ const CACHE = 'peak-v38';
 const SHELL = [
   './', 'index.html',
   'style.css?v=38',
-  'store.js?v=38', 'charts.js?v=38', 'quips.js?v=38', 'api.js?v=38',
+  'store.js?v=38', 'ui.js?v=38', 'charts.js?v=38', 'quips.js?v=38', 'api.js?v=38',
   'food.js?v=38', 'train.js?v=38', 'routines.js?v=38', 'sleep.js?v=38', 'grocery.js?v=38', 'app.js?v=38',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];

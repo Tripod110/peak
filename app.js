@@ -200,7 +200,11 @@ function focusSelector(el) {
   if (el.id) return '#' + CSS.escape(el.id);
   const a = el.dataset?.action;
   if (!a) return null;
-  return `[data-action="${CSS.escape(a)}"]` + ['uid', 'si', 'dir', 'idx', 'view', 'type', 'name', 'tab']
+  /* Every data-* key a re-rendered control can be identified by. A key that is
+     missing here does not throw — focus silently lands on <body> instead, which
+     is how Food, Grocery, Sleep and the routine editor all quietly lost it. Add
+     the key when you add the attribute. */
+  return `[data-action="${CSS.escape(a)}"]` + ['uid', 'si', 'dir', 'idx', 'view', 'type', 'name', 'tab', 'id', 'key', 'day', 'ex', 'd', 'q']
     .filter(k => el.dataset[k] != null)
     .map(k => `[data-${k}="${CSS.escape(el.dataset[k])}"]`).join('');
 }
@@ -212,28 +216,6 @@ function announce(msg) {
   if (!el) return;
   el.textContent = '';
   setTimeout(() => { el.textContent = msg; }, 50);
-}
-
-/* Local line icons: no icon font, no network, and they take the text colour so
-   every theme gets them for free. */
-const ICONS = {
-  play: '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>',
-  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-  more: '<circle cx="5.5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.7" fill="currentColor" stroke="none"/>',
-  chevron: '<path d="M9.5 6l6 6-6 6"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  minus: '<path d="M5 12h14"/>',
-  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
-  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
-  trash: '<path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/>',
-  sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
-  dumbbell: '<path d="M6.5 7.5v9M17.5 7.5v9M3.5 10v4M20.5 10v4M6.5 12h11"/>',
-  moon: '<path d="M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z"/>',
-  egg: '<path d="M12 3.5c3.3 0 6 4.4 6 8.6 0 3.9-2.7 6.4-6 6.4s-6-2.5-6-6.4c0-4.2 2.7-8.6 6-8.6z"/>',
-  calendar: '<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'
-};
-function icon(name) {
-  return `<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
 }
 
 function esc(s) {
@@ -314,17 +296,15 @@ function renderTodayHero() {
   if (s) {
     ensureSessionIds(s);
     const live = sessionLiveStats();
-    const pct = live.total ? Math.round(live.doneAll / live.total * 100) : 0;
     const mins = s.startedAt ? Math.max(0, Math.round((Date.now() - s.startedAt) / 60000)) : 0;
     const open = focusedExercise();
-    return `
-    <section class="card hero-card live" aria-labelledby="today-hero-title">
-      <div class="eyebrow"><span class="live-dot" aria-hidden="true"></span> Workout in progress</div>
-      <h2 class="hero-title" id="today-hero-title">${esc(s.dayName)}</h2>
-      <div class="hero-meta">${live.doneAll} of ${live.total} sets done · started ${mins} min ago${open ? ` · ${esc(open.name)} open` : ''}</div>
-      <div class="wk-bar" role="progressbar" aria-label="Sets completed" aria-valuemin="0" aria-valuemax="${live.total}" aria-valuenow="${live.doneAll}"><span style="width:${pct}%"></span></div>
-      <button class="btn accent big mt" data-action="resume-workout">${icon('play')} Resume workout</button>
-    </section>`;
+    return heroCard({
+      id: 'today-hero', state: 'live', eyebrowTone: 'live', eyebrow: 'Workout in progress',
+      title: s.dayName,
+      meta: `${live.doneAll} of ${live.total} sets done · started ${mins} min ago${open ? ` · ${open.name} open` : ''}`,
+      bodyHtml: progressBar(live.doneAll, live.total, 'Sets completed'),
+      actions: [{ label: 'Resume workout', icon: 'play', action: 'resume-workout', cls: 'accent big' }]
+    });
   }
 
   const tk = todayKey();
@@ -332,52 +312,56 @@ function renderTodayHero() {
   if (done) {
     const sets = (done.exercises || []).reduce((n, e) => n + workingSets(e.sets).length, 0);
     const vol = sessionVolumeKg(done);
-    return `
-    <section class="card hero-card done" aria-labelledby="today-hero-title">
-      <div class="eyebrow good">${icon('check')} Trained today</div>
-      <h2 class="hero-title" id="today-hero-title">${esc(done.dayName)}</h2>
-      <div class="hero-stats">
-        <div><span class="hs-v">${done.score ?? '—'}</span><span class="hs-l">score</span></div>
-        <div><span class="hs-v">${sets}</span><span class="hs-l">sets</span></div>
-        ${vol > 0 ? `<div><span class="hs-v">${fmtWt(vol)}</span><span class="hs-l">${wUnit()} moved</span></div>` : ''}
-        ${done.durationMin ? `<div><span class="hs-v">${done.durationMin}</span><span class="hs-l">min</span></div>` : ''}
-      </div>
-      <button class="btn big mt" data-action="view-workout" data-id="${esc(done.id)}">View workout</button>
-      <button class="btn ghost mt" data-action="quick-train">Train again</button>
-    </section>`;
+    return heroCard({
+      id: 'today-hero', state: 'done', eyebrowTone: 'good', eyebrowIcon: 'check', eyebrow: 'Trained today',
+      title: done.dayName,
+      bodyHtml: heroStats([
+        { v: done.score ?? '—', l: 'score' },
+        { v: sets, l: 'sets' },
+        vol > 0 ? { v: fmtWt(vol), l: `${wUnit()} moved` } : null,
+        done.durationMin ? { v: done.durationMin, l: 'min' } : null
+      ]),
+      actions: [
+        { label: 'View workout', action: 'view-workout', data: { id: done.id }, cls: 'big' },
+        { label: 'Train again', action: 'quick-train', cls: 'ghost' }
+      ]
+    });
   }
 
   const tpl = activeRoutine();
   const idx = nextDayIndex();
   const day = tpl.days[idx];
   if (!day || !day.ex.length) {
-    return `
-    <section class="card hero-card" aria-labelledby="today-hero-title">
-      <div class="eyebrow">Up next · ${esc(tpl.name)}</div>
-      <h2 class="hero-title" id="today-hero-title">${esc(day ? day.name : 'Nothing planned')}</h2>
+    return heroCard({
+      id: 'today-hero', eyebrow: `Up next · ${tpl.name}`,
+      title: day ? day.name : 'Nothing planned',
+      bodyHtml: `
       <div class="empty-inline">
         <b>No exercises planned for this day.</b>
         <span class="muted">Add some to your routine, or log a freestyle session.</span>
-      </div>
-      <button class="btn accent big mt" data-action="routine-edit-day" data-idx="${idx}">${icon('plus')} Add exercises</button>
-      <button class="btn ghost mt" data-action="start-freestyle">Start a freestyle session</button>
-    </section>`;
+      </div>`,
+      actions: [
+        { label: 'Add exercises', icon: 'plus', action: 'routine-edit-day', data: { idx }, cls: 'accent big' },
+        { label: 'Start a freestyle session', action: 'start-freestyle', cls: 'ghost' }
+      ]
+    });
   }
   const { sets, estMin } = dayPlanStats(day);
   const stalled = new Set(detectPlateaus().map(p => p.name.toLowerCase()));
   const shown = day.ex.slice(0, 4);
-  return `
-  <section class="card hero-card" aria-labelledby="today-hero-title">
-    <div class="eyebrow">Up next · ${esc(tpl.name)}</div>
-    <h2 class="hero-title" id="today-hero-title">${esc(day.name)}</h2>
-    <div class="hero-meta">${day.ex.length} exercise${day.ex.length !== 1 ? 's' : ''} · ${sets} sets · ~${estMin} min</div>
-    <ul class="hero-list">
-      ${shown.map(([n, t]) => `<li><span class="hl-n">${esc(n)}</span><span class="hl-v">${prescriptionValue(n, nextTarget(n, t, stalled))}</span></li>`).join('')}
-      ${day.ex.length > shown.length ? `<li class="hl-more">+ ${day.ex.length - shown.length} more</li>` : ''}
-    </ul>
-    <button class="btn accent big mt" data-action="start-workout" data-idx="${idx}">${icon('play')} Start workout</button>
-    <button class="btn ghost mt" data-action="quick-train">Choose another day</button>
-  </section>`;
+  return heroCard({
+    id: 'today-hero', eyebrow: `Up next · ${tpl.name}`,
+    title: day.name,
+    meta: `${day.ex.length} exercise${day.ex.length !== 1 ? 's' : ''} · ${sets} sets · ~${estMin} min`,
+    bodyHtml: heroList(
+      shown.map(([n, t]) => ({ n, vHtml: prescriptionValue(n, nextTarget(n, t, stalled)) })),
+      day.ex.length - shown.length
+    ),
+    actions: [
+      { label: 'Start workout', icon: 'play', action: 'start-workout', data: { idx }, cls: 'accent big' },
+      { label: 'Choose another day', action: 'quick-train', cls: 'ghost' }
+    ]
+  });
 }
 
 function renderTodayHome() {
@@ -412,27 +396,19 @@ function renderTodayHome() {
   return `
   ${renderTodayHero()}
 
-  <div class="stat-tiles">
-    <button class="tile" data-action="today-nav" data-view="nutrition"
-      aria-label="Protein today: ${protein} of ${t.protein} grams. Open nutrition trends">
-      <span class="tile-l">${icon('egg')} Protein</span>
-      <span class="tile-v">${protein}<small> / ${t.protein} g</small></span>
-      <span class="tile-bar" aria-hidden="true"><span style="width:${proteinPct}%"></span></span>
-    </button>
-    <button class="tile" data-action="quick-sleep"
-      aria-label="${night ? `Sleep last night: ${fmtDur(night.durationMin)}. Edit sleep log` : 'Sleep not logged. Log last night'}">
-      <span class="tile-l">${icon('moon')} Sleep</span>
-      ${night ? `<span class="tile-v">${Math.floor(night.durationMin / 60)}<small>h </small>${String(night.durationMin % 60).padStart(2, '0')}<small>m</small></span>
-        <span class="tile-s">last night</span>`
-        : `<span class="tile-v tile-empty">Not logged</span><span class="tile-s">tap to log</span>`}
-    </button>
-    <button class="tile" data-action="today-nav" data-view="streaks"
-      aria-label="${wk} of ${p.gymDays} lifting sessions in the last 7 days. Open consistency">
-      <span class="tile-l">${icon('calendar')} Week</span>
-      <span class="tile-v">${wk}<small> / ${p.gymDays}</small></span>
-      <span class="tile-s">sessions, 7 days</span>
-    </button>
-  </div>
+  ${tileStrip([
+    tile({ action: 'today-nav', data: { view: 'nutrition' }, ico: 'egg', label: 'Protein',
+      value: protein, unit: `/ ${t.protein} g`, pct: proteinPct,
+      ariaLabel: `Protein today: ${protein} of ${t.protein} grams. Open nutrition trends` }),
+    tile({ action: 'quick-sleep', ico: 'moon', label: 'Sleep',
+      ...(night
+        ? { valueHtml: `${Math.floor(night.durationMin / 60)}<small>h </small>${String(night.durationMin % 60).padStart(2, '0')}<small>m</small>`,
+            sub: 'last night', ariaLabel: `Sleep last night: ${fmtDur(night.durationMin)}. Edit sleep log` }
+        : { empty: true, value: 'Not logged', sub: 'tap to log', ariaLabel: 'Sleep not logged. Log last night' }) }),
+    tile({ action: 'today-nav', data: { view: 'streaks' }, ico: 'calendar', label: 'Week',
+      value: wk, unit: `/ ${p.gymDays}`, sub: 'sessions, 7 days',
+      ariaLabel: `${wk} of ${p.gymDays} lifting sessions in the last 7 days. Open consistency` })
+  ])}
 
   ${showFocus ? `
   <div class="focus-line">
@@ -454,10 +430,10 @@ function renderTodayHome() {
 
   <div class="card">
     <h2>Explore</h2>
-    ${todayNavRow('week', '📈', 'This week', weak.short, weak.tone)}
-    ${todayNavRow('nutrition', '🍽', 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
-    ${todayNavRow('weight', '⚖', 'Body weight', weightNavValue(p, latestDisp, wChange))}
-    ${todayNavRow('streaks', '🔥', 'Consistency', streakSummary())}
+    ${navRow('today-nav', 'week', '📈', 'This week', weak.short, weak.tone)}
+    ${navRow('today-nav', 'nutrition', '🍽', 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
+    ${navRow('today-nav', 'weight', '⚖', 'Body weight', weightNavValue(p, latestDisp, wChange))}
+    ${navRow('today-nav', 'streaks', '🔥', 'Consistency', streakSummary())}
     <div class="chart-note">Target ${kcalTarget.toLocaleString()} kcal${trainKcalToday ? ` (+${trainKcalToday} from today's training)` : ''} · ${GOAL_LABEL[p.goal]}${slScore != null ? ` · sleep score ${slScore}` : ''}</div>
   </div>`;
 }
@@ -472,17 +448,6 @@ function weightNavValue(p, latestDisp, wChange) {
     return `${latestDisp} ${u} · ${left} ${u} to goal`;
   }
   return `${latestDisp} ${u}${wChange != null ? ` · ${wChange > 0 ? '+' : ''}${wChange} this week` : ''}`;
-}
-
-function todayNavRow(view, ico, label, value, tone) {
-  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
-  return `
-  <button class="nav-row" data-action="today-nav" data-view="${view}">
-    <span class="nr-ico">${ico}</span>
-    <span class="nr-label">${esc(label)}</span>
-    <span class="nr-value" style="color:${color}">${esc(value)}</span>
-    <span class="nr-chev">›</span>
-  </button>`;
 }
 
 /* ---------- shared weakest-link analysis ----------
@@ -1490,10 +1455,9 @@ document.addEventListener('click', e => {
     case 'del-food': {
       const entry = findFoodEntry(App.foodDay, el.dataset.id);
       if (!entry) break;
-      App.undo = { kind: 'food', key: App.foodDay, entry };
       removeFoodEntry(App.foodDay, el.dataset.id);
       App.render();
-      toast(`Removed ${entry.name}`, { label: 'Undo', action: 'undo-last' });
+      destructive('food', { key: App.foodDay, entry }, `Removed ${entry.name}`);
       break;
     }
     case 'readd-food': {

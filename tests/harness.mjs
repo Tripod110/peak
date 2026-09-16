@@ -38,7 +38,7 @@ export function makeContext() {
   };
   vm.createContext(ctx);
   // Object.keys(localStorage) is how wipeAll enumerates — mirror the browser
-  const src = ['store.js', 'train.js', 'routines.js'].map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n;\n');
+  const src = ['store.js', 'ui.js', 'train.js', 'routines.js'].map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n;\n');
   vm.runInContext(`
     var App = { activeSession: null, rest: null, undo: null, setSel: null, tab: 'train', render() {} };
     function esc(s) { return String(s ?? ''); }
@@ -46,7 +46,6 @@ export function makeContext() {
     function announce() {}
     function openModal() {}
     function closeModal() {}
-    function icon() { return ''; }
     function paintRest() {}
     const CHART = { good: 'g', warning: 'w', critical: 'c', orange: 'o', blue: 'b', aqua: 'a', muted: 'm' };
     ${src}
@@ -54,7 +53,7 @@ export function makeContext() {
       nextTarget, progressionPref, setProgressionPref, getProgressionPrefs, exerciseHasLoad,
       plannedSetsFor, startWorkout, restoreSession, persistSession, ensureSessionIds, focusedExercise,
       completeSet, deleteExercise, undoLast, moveExercise, finishWorkout, applyHoldToSession,
-      prevSetsText, lastSessionSets, todayKey, lbToKg, kgToLb, fromW, toW,
+      prevSetsText, lastSessionSets, todayKey, lbToKg, kgToLb, fromW, toW, registerUndo, destructive,
       sanitizeStored, normTime, getProfile };
   `, ctx);
   // wipeAll uses Object.keys(localStorage); give it the real key list
