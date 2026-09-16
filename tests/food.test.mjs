@@ -93,3 +93,38 @@ test('the nutrition score rewards protein and calorie accuracy, and survives a d
   assert.ok(P.nutritionScore(day(1)) < score, 'a day nowhere near target scores lower');
   assert.equal(P.nutritionScore(day(5)), null, 'a day with nothing logged has no score');
 });
+
+/* ---- v40 ---- */
+
+test('one walk over the fortnight answers all three questions home asks', () => {
+  P.addFoodEntry(day(0), meal());
+  P.addFoodEntry(day(2), meal());
+  P.addFoodEntry(day(20), meal());
+  P.App.foodDay = day(0);
+
+  const sum = P.daySummary();
+  assert.equal(sum.loggedCount, 2, 'the day three weeks back is outside the window');
+  assert.equal(sum.lastLogged, day(2));
+  assert.deepEqual([...sum.rows.map(r => r.key)], [day(0), day(2)], 'newest first, and only logged days');
+  assert.equal(sum.rows[0].items.length, 1);
+
+  assert.equal(P.loggedDayCount(14), sum.loggedCount, 'the old helpers still agree with it');
+  assert.equal(P.lastLoggedDay(), sum.lastLogged);
+});
+
+test('forgetting a frequent food can be taken back', () => {
+  ['Greek yogurt', 'Oats', 'Chicken'].forEach(n => {
+    P.addFoodEntry(day(0), meal({ name: n }));
+    P.addFoodEntry(day(1), meal({ name: n }));
+  });
+  const before = P.Store.get('recentFoods', []).map(r => r.name);
+  const idx = 1;
+  const rec = P.Store.get('recentFoods', []);
+  const [entry] = rec.splice(idx, 1);
+  P.Store.set('recentFoods', rec);
+
+  P.destructive('recent-food', { idx, entry }, 'forgot');
+  P.undoLast();
+  assert.deepEqual([...P.Store.get('recentFoods', []).map(r => r.name)], [...before],
+    'back in the same position in the ranking');
+});

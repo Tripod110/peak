@@ -1446,7 +1446,11 @@ document.addEventListener('click', e => {
     }
 
     /* food */
-    case 'food-day': App.foodDay = shiftDay(App.foodDay, Number(el.dataset.dir)); App.render(); break;
+    case 'food-day':
+      App.foodDay = shiftDay(App.foodDay, Number(el.dataset.dir));
+      App.render();
+      announce(App.foodDay === todayKey() ? 'Today' : prettyDate(App.foodDay));
+      break;
     case 'open-scan': openScanModal(); break;
     case 'scan-pick': document.getElementById('scan-file').click(); break;
     case 'scan-run': runScan(); break;
@@ -1461,6 +1465,7 @@ document.addEventListener('click', e => {
       removeFoodEntry(App.foodDay, el.dataset.id);
       App.render();
       destructive('food', { key: App.foodDay, entry }, `Removed ${entry.name}`);
+      announce(`${entry.name} removed`);
       break;
     }
     case 'readd-food': {
@@ -1482,12 +1487,17 @@ document.addEventListener('click', e => {
     }
     case 'del-recent': {
       const rec = Store.get('recentFoods', []);
-      rec.splice(Number(el.dataset.idx), 1);
+      const idx = Number(el.dataset.idx);
+      const [entry] = rec.splice(idx, 1);
+      if (!entry) break;
       Store.set('recentFoods', rec);
       App.render();
+      destructive('recent-food', { idx, entry }, `Forgot ${entry.name}`);
       break;
     }
     case 'food-nav': App.foodView = el.dataset.view; App._renderedTab = null; App.render(); break;
+    case 'food-today': App.foodDay = todayKey(); App.render(); break;
+    case 'food-score': openNutritionScoreSheet(); break;
     case 'food-back': App.foodView = 'home'; App._renderedTab = null; App.render(); break;
     case 'open-day': App.foodDay = el.dataset.key; App.foodView = 'home'; App._renderedTab = null; App.render(); break;
     case 'goto-nutrition': App.tab = 'today'; App.todayView = 'nutrition'; App._renderedTab = null; App.render(); break;
@@ -1497,8 +1507,15 @@ document.addEventListener('click', e => {
     /* today */
     case 'today-nav': App.todayView = el.dataset.view; App._renderedTab = null; App.render(); break;
     case 'today-back': App.todayView = 'home'; App._renderedTab = null; App.render(); break;
-    case 'quick-scan': App.tab = 'food'; App.foodDay = todayKey(); App.render(); openScanModal(); break;
-    case 'quick-food': App.tab = 'food'; App.foodDay = todayKey(); App.render(); openManualFood(); break;
+    /* Land on the food home, the way quick-train lands on the train home. These
+       two used to leave App.foodView wherever it was, so the Scan sheet opened
+       over the Past days drill-in and closing it left you there. */
+    case 'quick-scan':
+      App.tab = 'food'; App.foodDay = todayKey(); App.foodView = 'home'; App._renderedTab = null;
+      App.render(); openScanModal(); break;
+    case 'quick-food':
+      App.tab = 'food'; App.foodDay = todayKey(); App.foodView = 'home'; App._renderedTab = null;
+      App.render(); openManualFood(); break;
     case 'quick-train': App.tab = 'train'; App.trainView = 'home'; App.trainDay = null; App.render(); break;
     case 'quick-sleep': App.tab = 'sleep'; App.sleepDay = todayKey(); App.render(); openSleepLog(); break;
     case 'quick-weight': openWeightModal(); break;

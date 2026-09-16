@@ -69,7 +69,7 @@ export function makeContext() {
       sanitizeStored, normTime, getProfile, AISLE_IDS,
       addFoodEntry, updateFoodEntry, removeFoodEntry, restoreFoodEntry, findFoodEntry, foodForDay, dayTotals,
       nutritionScore, computeTargets, rememberRecentFood, getGroceryFoodCache,
-      loggedDayCount, lastLoggedDay,
+      loggedDayCount, lastLoggedDay, daySummary,
       sleepDurationMin, sleepDurationPoints, sleepConsistency, sleepScore, usualNight, sleepAvgDays,
       sleepTrainingLink, setSleepEntry, removeSleepEntry, getSleep, minutesOf, timeOf, median, SLEEP_BANDS,
       parseQty, aisleFor, groupByAisle, yourUsuals, groceryAdd, groceryQty, groceryAddFromSection,
