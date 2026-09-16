@@ -43,13 +43,13 @@ function sparkline(values, { w = 150, h = 40, color = CHART.blue, markers = [], 
   const goalLine = goal != null
     ? `<line x1="${pad}" x2="${w - padR + 8}" y1="${y(goal)}" y2="${y(goal)}" stroke="${CHART.baseline}" stroke-width="1" stroke-dasharray="3 3"/>` : '';
   const marks = markers.filter(i => i >= 0 && i < values.length && i !== li).map(i =>
-    `<circle cx="${x(i)}" cy="${y(values[i])}" r="3" fill="${CHART.good}" stroke="#1a1a19" stroke-width="1.5"><title>PR</title></circle>`).join('');
+    `<circle cx="${x(i)}" cy="${y(values[i])}" r="3" fill="${CHART.good}" stroke="var(--surface)" stroke-width="1.5"><title>PR</title></circle>`).join('');
   return `
   <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="trend ending at ${fmt(values[li])}">
     ${goalLine}
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${marks}
-    <circle cx="${x(li)}" cy="${y(values[li])}" r="3.5" fill="${color}" stroke="#1a1a19" stroke-width="1.5"/>
+    <circle cx="${x(li)}" cy="${y(values[li])}" r="3.5" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>
     <text x="${x(li) + 7}" y="${Math.min(Math.max(y(values[li]) + 4, 11), h - 2)}" fill="${CHART.ink2}" font-size="11" font-weight="600">${fmt(values[li])}</text>
   </svg>`;
 }
@@ -105,7 +105,7 @@ function lineChart(points, { w = 320, h = 130, color = CHART.violet, goal = null
       ${gap ? `stroke-dasharray="3 3" opacity="0.55"` : ''}/>`;
   }
   const dots = points.map((p, i) =>
-    `<circle cx="${X(i)}" cy="${Y(p.value)}" r="3.5" fill="${color}" stroke="#1a1a19" stroke-width="1.5">
+    `<circle cx="${X(i)}" cy="${Y(p.value)}" r="3.5" fill="${color}" stroke="var(--surface)" stroke-width="1.5">
        <title>${esc(p.label)}: ${fmtY(p.value)}${unit}</title>
      </circle>`).join('');
   const first = points[0], last = points[points.length - 1];

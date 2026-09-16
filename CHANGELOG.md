@@ -16,8 +16,112 @@ See [SHIPPING.md](SHIPPING.md).
 > sequence jumps. Every one of those fixes is itemised in [AUDIT.md](AUDIT.md) and attributed
 > to `5f0a417`.
 
+> **There is no v39 release.** v40 landed the Food, Sleep and Grocery rebuild in one push
+> together with v38's security fixes, which had also never been pushed.
+
 > **There is no v33 release.** v33 was committed locally on 2026-08-12 and never pushed; v34–v37
 > shipped from a different machine, branched from v32. Its security fixes reached users in v38.
+
+---
+
+## v40 — the rest of the app catches up
+`pending` · 2026-09-15 · **pending push**
+
+v37 rebuilt Today and Train and left the other three tabs alone, so Peak had two design
+languages: a hero card with a glance strip and drill-ins on two tabs, and a long scroll of
+competing cards on the rest. This is the other three, plus the bugs that turned up while
+reading them properly. **There is no v39** — see the numbering note at the top.
+
+**Every tab is now hero, tiles, list, Explore** ([D-19](DECISIONS.md#d-19)). Eleven drill-in
+subviews, one set of conventions — `App.{tab}View`, `{tab}-nav` / `{tab}-back`, a
+`{TAB}_SUBVIEWS` table, and shared builders in the new `ui.js`. `navRow` existed in three
+copies before this; the hero card and the stat tiles were inline markup nobody could reuse.
+
+**Grocery** leads with the list and the add field, and the four quick-add sections became
+subviews. The segmented switcher they used to live in kept state that nothing ever reset, had
+none of the semantics a tablist needs, and competed with the list for the screen you hold in a
+shop. Aisle grouping got a control instead of switching itself on at the sixth item.
+
+**Sleep** was five blocks fighting for one screen. Home is the night in front of you and how
+the week is going; the chart, the fourteen nights, the training split and the bed/wake
+regularity are each one tap deeper. The night stepper is the hero's top line and now has a
+floor — the ‹ arrow used to walk backwards forever through empty dates.
+
+**Food** opens on how much room is left and how much protein is still to go, with Scan as the
+hero's action. The ring and the four macro bars moved to a Macros drill-in: on a screen opened
+five times a day, one number decides the day and it is protein. The score pill was an
+unexplained diamond; the Score tile now opens a sheet that explains the 45/25/30 split.
+
+**Reordering a workout** ([train.js](train.js)) stops being three taps per place. It was two
+one-step items in a menu that only appeared on the exercise you already had open — every move
+closed the sheet, and touching any other lift meant focusing it first, mid-set. One sheet now,
+every exercise in it, and it stays open while you work. "Do next" drops a lift straight after
+the one you are on, for when the rack is busy. Not drag-and-drop: the document is the scroll
+container and a one-handed drag between sets is the worst possible input for this.
+
+### Fixed
+
+- **A restored backup could brick the app permanently.** `groceryFoodCache` was not in
+  `sanitizeStored`'s whitelist, so a backup carrying a string there survived the import — and a
+  string has `.slice` but not `.map`, so Food threw inside `renderFood`, `App.render` aborted
+  before assigning `view.innerHTML`, and the app came up blank on every boot. Same failure as
+  the sets-is-a-string session in [D-17](DECISIONS.md#d-17): not a hostile value, just a type
+  nobody checked.
+- **`scanStats.scans` was interpolated unescaped** and was unsanitized, so a restored backup
+  could put markup in a number and have Settings render it. Fixed at both layers.
+- **Grocery hid items.** An item whose stored `aisle` was not a real aisle counted toward
+  "N to get" and then rendered in no group at all.
+- **Sleep's learned defaults drifted.** `usualNight` took the last fourteen *entries* rather
+  than the last fourteen *days*, so after a gap in logging a night from three months ago
+  pre-filled tonight's form — the same bug v27 records fixing in `sleepAvgDays`, one function
+  away.
+- **Three definitions of a bad night** became one `SLEEP_BANDS` table. Train warned under 6h,
+  the weekly verdict got severe at a 7h average, and the training split banded at 7h/7h30, so
+  the same week could be called fine, short or severe depending on the screen.
+- **The training split miscounted its own coverage**, telling someone who sleeps 7h10 every
+  night that "0 lifting sessions so far have a logged night attached". The 7h–7h30 gap is
+  deliberate; the count was not.
+- **Editing a food entry counted as eating it again**, so correcting a typo in a meal name
+  ranked the corrected spelling as if you had logged it twice.
+- **`App.scanImage` survived a closed sheet**, so "Rescan" silently re-sent a photo you could
+  no longer see, and opening Scan the next morning still held last night's dinner.
+- **Adding a meal after its staple double-listed the ingredients** — `grocKey` treats
+  "Eggs (dozen)" and "Eggs (dozen ×2)" as the same eggs for dedup.
+- **`focusSelector` lost focus on every re-render** in Food, Grocery, Sleep and the routine
+  editor: their controls key off `data-id` / `data-key` / `data-day` / `data-ex`, none of which
+  were in its whitelist. Because `openModal` reuses it to remember its opener, closing a sheet
+  in those tabs also never gave focus back to the button that opened it.
+- `renderConsistencyNote` hung off the "your sleep is on point" branch, so the person whose
+  wake time swings two hours could never reach it. `sleepDebt` — written, commented, never
+  called — is gone. The chart note promised "tap a dot for details" to people on phones, where
+  the SVG `<title>` it meant does nothing; the trend subview carries the same fourteen values
+  as text instead.
+
+### Destructive actions are undoable, not confirmed
+
+[D-20](DECISIONS.md#d-20). Grocery's delete, clear-checked and quantity-down-from-one destroyed
+data on one tap with no confirm and no undo; Sleep used a native `confirm()` that named neither
+the date nor the length of the night; forgetting a frequent food was silent and permanent. All
+of them go through `destructive()` now and restore at their original position. `confirm()`
+survives in exactly five places, all of them named in D-20 — the ones where an undo could not
+restore what was lost.
+
+### Accessibility
+
+Sleep's quality picker is a real radiogroup with `aria-checked`, its live duration line is
+announced, and its night rows are buttons. Grocery's check control exposes `aria-pressed`, its
+add field has a label, and its aisle headings are headings. Food's past-day rows are buttons
+and its scan spinner is a `role="status"`. All three tabs call `announce()` now — before this,
+`#sr-live` was used by Train and nothing else.
+
+Tests: `node --test tests/*.test.mjs` — **73**, up from 22. The harness loads what index.html
+loads, so Food, Sleep and Grocery are testable at all for the first time; 28 of the new tests
+were written as characterization tests *before* the rebuild, so a rewrite that quietly changed
+a number would fail rather than pass.
+
+> **Not verified on a real phone.** Eleven drill-ins, a hero card containing a text input
+> (Grocery), and a sheet you operate repeatedly (Reorder) are exactly what a desktop browser
+> cannot judge. The real-device pass in [SHIPPING.md](SHIPPING.md) has still never been run.
 
 ---
 

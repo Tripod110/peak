@@ -25,6 +25,8 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-15](#d-15) | Routines fork on write; built-ins are never mutated | 🟢 Decided · v31 |
 | [D-16](#d-16) | The coach reads the plan for volume, the log for habits | 🟢 Decided · v31 |
 | [D-17](#d-17) | Restored backups are untrusted; escape at the sink and coerce at the boundary | 🟢 Decided · v33 |
+| [D-19](#d-19) | Every tab is hero, tiles, list, Explore — no flat tabs, no in-page switchers | 🟢 Decided · v40 |
+| [D-20](#d-20) | Destructive actions are undoable, not confirmed | 🟢 Decided · v40 |
 
 ---
 
@@ -375,3 +377,67 @@ throughout — `onerror` never fired. Without it this was straightforwardly "ste
 and everything else on the origin." It downgraded a High to a Medium, which is exactly what
 defence in depth is supposed to do, and is a good argument for never adding `'unsafe-inline'`
 to `script-src` for convenience.
+
+## <a name="d-19"></a>D-19 · Every tab is hero, tiles, list, Explore
+**🟢 Decided.** v40 · `ui.js`, every tab file
+
+v37 rebuilt Today and Train around one shape and left the other three tabs alone, so Peak had
+two design languages: a hero card with a glance strip and drill-ins on two tabs, and a long
+scroll of competing cards on the rest. Sleep stacked five blocks; Grocery hid four sections
+behind an in-page segmented switcher whose state nothing ever reset.
+
+**Decided:** every tab's home screen is, in order — a **hero** that answers "what now?" for
+whatever the tab is about, a **stat-tile strip** of at most three numbers, the tab's **main
+list**, and an **Explore** card of nav rows into drill-in subviews. Everything that is a record
+rather than a decision goes one tap deeper.
+
+The conventions that make it one pattern rather than five:
+
+- State is `App.{tab}View`, defaulting to `'home'`, and the tab bar resets it.
+- Actions are `{tab}-nav` (carrying `data-view`) and `{tab}-back`. Both set
+  `App._renderedTab = null`, or the drill-in opens scrolled to wherever home was.
+- The subview table is a `const {TAB}_SUBVIEWS` of `{title, sub}`, rendered by the shared
+  `navHeader`.
+- Markup comes from the shared builders in `ui.js` — `heroCard`, `tile`, `navRow`,
+  `heroStats`, `progressBar`. A tab that needs a shape none of them make gets a new builder
+  there, not a private copy.
+
+**Rejected: in-page segmented switchers for navigation.** They carry state nothing resets, they
+need tablist semantics nobody adds, and they compete with the content for a 375px screen. A
+`.seg` control is still right for picking a *value* — units, sex, a theme — which is what the
+remaining ones do.
+
+**Rejected: a tile that is not a destination.** Every tile is a button that goes somewhere. A
+number with nowhere to go is a card. This is why Grocery has no tile strip: its one number is
+already the hero's title, and every candidate tile duplicated an Explore row.
+
+**Cost, accepted:** eleven subviews is a lot of screens to walk before a release, so
+SHIPPING.md's pre-flight now names them.
+
+## <a name="d-20"></a>D-20 · Destructive actions are undoable, not confirmed
+**🟢 Decided.** v40 · `ui.js` (`destructive`, `registerUndo`), every tab file
+
+Peak destroyed data three different ways depending on which tab you were in: Food's entry
+delete had a full undo, Sleep's night delete used a native `confirm()` that named neither the
+date nor the length of what it was about to erase, and Grocery's delete, clear-checked and
+quantity-down-from-one destroyed on one tap with nothing at all.
+
+**Decided: deleting something offers Undo; it does not ask first.** A confirm makes you answer
+for an action whose result you have not seen, and it costs the same two taps whether you meant
+it or not — an undo costs one tap only when you were wrong. `destructive(kind, data, message)`
+is the one way to delete, and `registerUndo(kind, fn)` puts each restore next to the code that
+deleted it. Restores put the row back at its original index: a shopping list ordered by the
+shop, or a ranked list of frequent foods, is not much use reshuffled.
+
+**`confirm()` survives in exactly five places**, and naming them is the point — otherwise the
+next release deletes them too:
+
+| Kept | Why |
+|---|---|
+| `reset-app` | the whole dataset; there is nothing left to undo with |
+| `discard-workout` | throws away a session that was never saved |
+| `routine-use-template` | replaces a custom routine wholesale |
+| `routine-reset` | same |
+| `routine-del-day` | takes a day and everything in it out of the plan |
+
+The test is whether an undo could actually restore what was lost. Where it could, it does.

@@ -165,7 +165,7 @@ support via a service worker. Charts are hand-rolled inline SVG.
 | [worker/README.md](worker/README.md) | The Worker behind meal-scan proxying and push reminders |
 | [worker/API.md](worker/API.md) | The Worker's API contract — `/scan` as built, plus what's planned |
 
-Current release: **v38** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
+Current release: **v40** (see [CHANGELOG.md](CHANGELOG.md)). One open verification item —
 the real-device pass in [SHIPPING.md](SHIPPING.md) has never been run, and v30's ergonomics
 changes, and v37's whole one-exercise-at-a-time session view, are exactly what a desktop
 browser cannot verify.

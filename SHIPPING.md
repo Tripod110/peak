@@ -44,7 +44,14 @@ Run every time. Nothing here takes more than a couple of minutes.
 - [ ] Onboarding completes from a wiped state (`Settings → Reset everything`, then reload)
 - [ ] Start a workout → log a set → reload the page mid-session → the session comes back
 - [ ] `Settings → Export data` produces a valid JSON file, then `Import backup` restores it
-- [ ] No console errors after visiting all five tabs and every drill-in
+- [ ] No console errors after visiting all five tabs and all eleven drill-ins (Today: week,
+      nutrition, weight, streaks · Train: moved, muscles, records, consistency, history · Food:
+      macros, frequents, days · Sleep: nights, trend, training, consistency · Grocery: usuals,
+      staples, snacks, meals)
+- [ ] Every destructive action offers Undo and the Undo actually restores it, in the position
+      it came from (food entry, frequent food, sleep night, grocery item, clear checked)
+- [ ] In a session with several exercises: open Reorder, move a lift three places and use
+      "Do next" — the sheet must stay open the whole time
 - [ ] **Real device pass** (see below) — the one gate that has never actually been run
 
 ### Real-device pass
