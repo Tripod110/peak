@@ -98,3 +98,89 @@ test('checking an item off tells Food about it, exactly once', () => {
   P.rememberGroceryFood('greek yogurt');
   assert.deepEqual([...P.getGroceryFoodCache()], ['greek yogurt'], 'newest spelling wins, no duplicate');
 });
+
+/* ---- v40 ---- */
+
+test('an item stored with an aisle Peak does not recognise still appears on the list', () => {
+  P.setGrocery([
+    { id: 'g1', name: 'Chicken thighs', qty: 1, done: false, aisle: 'produce2' },
+    { id: 'g2', name: 'Rice', qty: 1, done: false, aisle: 'pantry' }
+  ]);
+  const groups = P.groupByAisle(P.getGrocery());
+  const shown = groups.flatMap(g => g.items).map(i => i.name);
+  assert.equal(shown.length, 2, 'it used to count toward "N to get" and then render nowhere');
+  assert.ok(shown.includes('Chicken thighs'));
+  assert.equal(groups.find(g => g.items.some(i => i.name === 'Chicken thighs')).id, 'meat',
+    'and it lands where its name says it belongs');
+});
+
+test('packaging is not identity: the same item written two ways is one row', () => {
+  assert.ok(P.groceryMatch('Eggs (dozen)', 'Eggs (dozen ×2)'));
+  assert.ok(P.groceryMatch('Chicken thighs (family pack)', 'chicken thighs'));
+  assert.ok(P.groceryMatch('Canned tuna ×4', 'Canned tuna'));
+  assert.ok(!P.groceryMatch('Ground turkey', 'Ground beef'));
+  assert.ok(!P.groceryMatch('', 'anything'));
+
+  P.groceryAdd('Eggs (dozen ×2)');
+  P.groceryAddFromSection('meals', P.EASY_MEALS.findIndex(m => m.items.some(i => /^eggs/i.test(i))));
+  assert.equal(names().filter(n => /eggs/i.test(n)).length, 1,
+    'adding a meal after its staple must not put the same eggs on twice');
+});
+
+test('grouping follows the preference, not just the length of the list', () => {
+  ['Greek yogurt', 'Chicken thighs', 'Rice'].forEach(n => P.groceryAdd(n));
+  const open = () => P.getGrocery().filter(i => !i.done);
+
+  assert.equal(P.grocGrouped(open()), null, 'auto leaves a short list flat');
+
+  P.setSettings({ grocGroup: 'aisle' });
+  assert.equal(P.grocGrouped(open()).length, 3, 'always means always');
+
+  P.setSettings({ grocGroup: 'flat' });
+  assert.equal(P.grocGrouped(open()), null, 'off means off');
+
+  P.setSettings({ grocGroup: 'auto' });
+  ['Oats', 'Milk', 'Bananas'].forEach(n => P.groceryAdd(n));
+  assert.ok(P.grocGrouped(open()), 'and auto switches on once the list is worth walking');
+});
+
+test('deleting an item offers it back, in the place it came from', () => {
+  ['First', 'Second', 'Third'].forEach(n => P.groceryAdd(n));
+  const middle = P.getGrocery()[1];
+  const idx = 1;
+
+  P.setGrocery(P.getGrocery().filter(i => i.id !== middle.id));
+  P.destructive('grocery-item', { idx, item: middle }, 'removed');
+  assert.equal(P.App.undo.kind, 'grocery-item');
+
+  P.undoLast();
+  assert.deepEqual([...names()], ['Third', 'Second', 'First'], 'back in the middle, not on top');
+  assert.equal(P.App.undo, null, 'and the offer is spent');
+});
+
+test('the last − on an item is a delete, and it is undoable like any other', () => {
+  P.groceryAdd('Greek yogurt');
+  const it = P.getGrocery()[0];
+  P.groceryQty(it.id, -1);
+  assert.equal(P.getGrocery().length, 0);
+
+  P.undoLast();
+  assert.deepEqual([...names()], ['Greek yogurt'], 'a mis-tap at quantity one is not permanent');
+  assert.equal(P.getGrocery()[0].qty, 1);
+});
+
+test('clearing the cart can be taken back whole', () => {
+  ['Milk', 'Rice', 'Oats'].forEach(n => P.groceryAdd(n));
+  const list = P.getGrocery();
+  list[0].done = true; list[2].done = true;     // Oats and Milk are in the cart
+  P.setGrocery(list);
+
+  const cleared = P.getGrocery().map((item, idx) => ({ item, idx })).filter(({ item }) => item.done);
+  P.setGrocery(P.getGrocery().filter(i => !i.done));
+  P.destructive('grocery-clear', { items: cleared }, 'cleared');
+  assert.equal(P.getGrocery().length, 1);
+
+  P.undoLast();
+  assert.equal(P.getGrocery().length, 3);
+  assert.deepEqual([...names()], ['Oats', 'Rice', 'Milk'], 'every row back at its own index');
+});

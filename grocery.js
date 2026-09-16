@@ -1,4 +1,4 @@
-/* Forge — Grocery tab: list + budget protein staples + deficit-aware suggestions */
+/* Peak — Grocery tab: list + budget protein staples + deficit-aware suggestions */
 
 const STAPLES = [
   { name: 'Chicken thighs (family pack)', protein: '~90g protein/lb', tag: 'cheapest meat protein' },
@@ -59,10 +59,10 @@ const GROC_SECTIONS = {
    to someone who has logged the same six things for three months. `recentFoods`
    is the honest answer to "what does this person buy", so use it. */
 function yourUsuals(limit) {
-  const onList = new Set(getGrocery().filter(i => !i.done).map(i => foodKey(i.name)));
+  const onList = new Set(getGrocery().filter(i => !i.done).map(i => grocKey(i.name)));
   return Store.get('recentFoods', [])
     .filter(f => (f.count || 1) >= 2)                 // logged twice = a habit, not a one-off
-    .filter(f => !onList.has(foodKey(f.name)))
+    .filter(f => !onList.has(grocKey(f.name)))
     .slice(0, limit || 18)
     .map(f => ({
       name: f.name,
@@ -70,6 +70,18 @@ function yourUsuals(limit) {
       tag: `logged ${f.count}×${f.lastAt ? ' · last ' + shortWhen(f.lastAt) : ''}`
     }));
 }
+/* Two shopping names are the same item when they differ only in packaging:
+   "Eggs (dozen)" from a meal and "Eggs (dozen ×2)" from the staples list are
+   the same eggs, and adding the meal after the staple should not put both on
+   the list. Used for dedup only — what gets displayed is whatever you typed. */
+function grocKey(name) {
+  return foodKey(String(name || '')
+    .replace(/\([^)]*\)/g, ' ')          // (dozen), (family pack), (×4)
+    .replace(/\s*[x×]\s*\d+\s*$/i, '')   // a trailing ×2
+    .replace(/\s+/g, ' '));
+}
+function groceryMatch(a, b) { return !!grocKey(a) && grocKey(a) === grocKey(b); }
+
 function shortWhen(key) {
   const d = daysBetween(key, todayKey());
   return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 7 ? `${d}d ago` : d < 14 ? 'last week' : `${Math.round(d / 7)}w ago`;
@@ -95,7 +107,11 @@ function aisleFor(name) {
 function groupByAisle(items) {
   const groups = new Map();
   items.forEach(i => {
-    const a = i.aisle || aisleFor(i.name);
+    /* Only a known aisle is trusted. An item stored with anything else used to
+       be counted in "N to get" and then rendered in no group at all: present in
+       the total, absent from the list. sanitizeStored drops the bad value on
+       import; this is the other half, for a value already on the device. */
+    const a = AISLE_IDS.includes(i.aisle) ? i.aisle : aisleFor(i.name);
     if (!groups.has(a)) groups.set(a, []);
     groups.get(a).push(i);
   });
@@ -103,46 +119,126 @@ function groupByAisle(items) {
   return AISLES.filter(a => groups.has(a.id)).map(a => ({ ...a, items: groups.get(a.id) }));
 }
 
+/* The four quick-add sections are drill-ins now, not a segmented switcher
+   inside the page. The switcher kept its own state that nothing ever reset, so
+   the tab remembered a section across days, and it competed with the list for
+   the screen you are actually holding in a shop. Keys match GROC_SECTIONS so
+   sectionData() is unchanged. See DECISIONS.md D-19. */
+const GROC_SUBVIEWS = {
+  usuals: { title: 'Your usuals', sub: 'built from what you actually log' },
+  staples: { title: 'Protein staples', sub: 'the most protein per dollar' },
+  snacks: { title: 'Snacks', sub: 'quick grabs that keep protein up' },
+  meals: { title: 'Easy meals', sub: 'tap a meal to add every ingredient' }
+};
+const GROC_VIEW_SECTION = { usuals: 'yours', staples: 'staples', snacks: 'snacks', meals: 'meals' };
+
 function renderGrocery() {
+  return App.grocView === 'home' ? renderGroceryHome() : renderGrocerySub(App.grocView);
+}
+
+function renderGrocerySub(view) {
+  const meta = GROC_SUBVIEWS[view];
+  if (!meta) { App.grocView = 'home'; return renderGroceryHome(); }
+  return navHeader(meta.title, meta.sub, 'groc-back') + renderQuickAdds(view);
+}
+
+/* Grouping: 'auto' switches on once the list is long enough to walk, and the
+   other two are for when you disagree with that. Stored per device, not per
+   list — it is a preference about shops, not about this week's dinner. */
+function grocGrouped(open) {
+  const mode = getSettings().grocGroup;
+  if (mode === 'flat') return null;
+  if (mode === 'aisle') return open.length ? groupByAisle(open) : null;
+  return open.length >= 6 ? groupByAisle(open) : null;
+}
+const GROC_GROUP_LABEL = { auto: 'Aisles: automatic', aisle: 'Aisles: always', flat: 'Aisles: off' };
+const GROC_GROUP_NEXT = { auto: 'aisle', aisle: 'flat', flat: 'auto' };
+
+function renderGroceryHome() {
   const list = getGrocery();
   const open = list.filter(i => !i.done);
   const done = list.filter(i => i.done);
-  const section = GROC_SECTIONS[App.grocSection] ? App.grocSection : 'staples';
-  const data = sectionData(section);
-  // aisles only earn their keep once the list is long enough to walk
-  const grouped = open.length >= 6 ? groupByAisle(open) : null;
+  const grouped = grocGrouped(open);
+  const mode = getSettings().grocGroup;
+  const usuals = yourUsuals().length;
 
   return `
-  ${renderProteinNudge()}
-  ${renderRestockNudge()}
+  ${renderGroceryHero(list, open, done)}
+
   <div class="card">
-    <h2>Shopping list <span class="h2-right">${open.length} to get</span></h2>
-    <div class="row">
-      <input id="g-new" class="grow" placeholder="Add item…  (try “eggs ×2”)" enterkeyhint="done">
-      <button class="btn small primary" data-action="g-add">＋</button>
-    </div>
+    <h2>${open.length ? 'To get' : 'Your list'}
+      <button class="link-btn h2-right" data-action="groc-group"
+        aria-label="Aisle grouping: ${esc(GROC_GROUP_LABEL[mode])}. Change it">${esc(GROC_GROUP_LABEL[mode])}</button></h2>
     <div class="mt">
-      ${list.length === 0 ? '<div class="muted center" style="padding:10px 0">List is empty — tap something below to add it.</div>' : ''}
+      ${!open.length && !done.length ? '<div class="muted center" style="padding:10px 0">Nothing on the list yet — add something above, or borrow from your usuals below.</div>' : ''}
+      ${!open.length && done.length ? '<div class="muted center" style="padding:10px 0">Everything is in the cart.</div>' : ''}
       ${grouped
         ? grouped.map(g => `
-          <div class="aisle">${g.label} <span class="aisle-n">${g.items.length}</span></div>
+          <div class="aisle" role="heading" aria-level="3">${g.label} <span class="aisle-n">${g.items.length}</span></div>
           ${g.items.map(gItem).join('')}`).join('')
         : open.map(gItem).join('')}
-      ${done.length ? `<div class="aisle">✓ In the cart <span class="aisle-n">${done.length}</span></div>` + done.map(gItem).join('') : ''}
+      ${done.length ? `<div class="aisle" role="heading" aria-level="3">✓ In the cart <span class="aisle-n">${done.length}</span></div>` + done.map(gItem).join('') : ''}
     </div>
     ${done.length ? `<button class="btn ghost mt" data-action="g-clear-done">Clear checked (${done.length})</button>` : ''}
     ${grouped ? '<div class="chart-note">Grouped by aisle so you only walk the shop once. Tap an item to check it off, ＋/− to change how many.</div>' : ''}
   </div>
 
+  ${renderProteinNudge()}
+  ${renderRestockNudge()}
+
   <div class="card">
-    <h2>Quick adds</h2>
-    <div class="seg" style="margin-bottom:10px">
-      ${Object.entries(GROC_SECTIONS).map(([k, s]) =>
-        `<button data-action="g-section" data-v="${k}" class="${section === k ? 'on' : ''}">${s.label}</button>`).join('')}
-    </div>
-    <div class="muted small" style="margin-bottom:10px">${GROC_SECTIONS[section].blurb}</div>
+    <h2>Add from</h2>
+    ${navRow('groc-nav', 'usuals', '🔁', 'Your usuals', usuals ? `${usuals} you log often` : 'log a food twice to start')}
+    ${navRow('groc-nav', 'staples', '🥩', 'Protein staples', `${STAPLES.length} cheap per gram`)}
+    ${navRow('groc-nav', 'snacks', '🍫', 'Snacks', `${SNACKS.length} between meals`)}
+    ${navRow('groc-nav', 'meals', '🍳', 'Easy meals', `${EASY_MEALS.length} · adds every ingredient`)}
+  </div>`;
+}
+
+/* The add field lives in the hero because adding is what you came to do. */
+function groceryAddRow() {
+  return `
+    <div class="row mt">
+      <input id="g-new" class="grow" placeholder="Add item…  (try “eggs ×2”)"
+        aria-label="Add an item to your shopping list" enterkeyhint="done">
+      <button class="btn small primary" data-action="g-add" aria-label="Add to list">${icon('plus')}</button>
+    </div>`;
+}
+
+function renderGroceryHero(list, open, done) {
+  if (!list.length) {
+    return heroCard({
+      id: 'groc-hero', eyebrow: 'Shopping list', title: 'Nothing on the list',
+      metaHtml: groceryAddRow(),
+      actions: [{ label: 'Add from your usuals', icon: 'cart', action: 'groc-nav', data: { view: 'usuals' }, cls: 'accent' }]
+    });
+  }
+  if (!open.length) {
+    return heroCard({
+      id: 'groc-hero', state: 'done', eyebrowTone: 'good', eyebrowIcon: 'check',
+      eyebrow: 'Everything is in the cart',
+      title: `${done.length} item${done.length === 1 ? '' : 's'}`,
+      metaHtml: groceryAddRow(),
+      actions: [{ label: `Clear checked (${done.length})`, icon: 'trash', action: 'g-clear-done', cls: 'ghost' }]
+    });
+  }
+  return heroCard({
+    id: 'groc-hero', eyebrow: 'Shopping list',
+    title: `${open.length} to get`,
+    meta: done.length ? `${done.length} already in the cart` : '',
+    metaHtml: groceryAddRow() + (done.length ? progressBar(done.length, list.length, 'Items in the cart') : '')
+  });
+}
+
+function renderQuickAdds(view) {
+  const section = GROC_VIEW_SECTION[view];
+  const data = sectionData(section);
+  /* No blurb here: navHeader's subtitle already says what this list is and how
+     to use it, and saying it twice on a 375px screen costs a row of chips. */
+  return `
+  <div class="card">
     ${data.length ? data.map((s, i) => `
-      <button class="staple-chip" data-action="g-staple" data-sec="${section}" data-idx="${i}">
+      <button class="staple-chip" data-action="g-staple" data-view="${view}" data-idx="${i}">
         <span class="s-name">${esc(s.name)}</span>
         <span class="s-sub">${esc(s.protein)} · ${esc(s.tag)}${s.items ? ' · ' + s.items.length + ' items' : ''}</span>
       </button>`).join('')
@@ -161,9 +257,9 @@ function sectionData(section) {
    A staple you log every few days and haven't bought in longer than that is
    about to run out. Only fires on things with enough history to have a rhythm. */
 function renderRestockNudge() {
-  const onList = new Set(getGrocery().filter(i => !i.done).map(i => foodKey(i.name)));
+  const onList = new Set(getGrocery().filter(i => !i.done).map(i => grocKey(i.name)));
   const due = Store.get('recentFoods', [])
-    .filter(f => (f.count || 0) >= 4 && f.lastAt && !onList.has(foodKey(f.name)))
+    .filter(f => (f.count || 0) >= 4 && f.lastAt && !onList.has(grocKey(f.name)))
     .map(f => ({ name: f.name, gap: daysBetween(f.lastAt, todayKey()) }))
     .filter(f => f.gap >= 5 && f.gap <= 21)
     .slice(0, 3);
@@ -185,7 +281,7 @@ function groceryAddFromSection(sec, idx) {
     const list = getGrocery();
     let n = 0;
     item.items.forEach(name => {
-      if (list.some(i => i.name.toLowerCase() === name.toLowerCase() && !i.done)) return;
+      if (list.some(i => groceryMatch(i.name, name) && !i.done)) return;
       list.unshift({ id: 'g' + Math.random().toString(36).slice(2, 9), name, qty: 1, done: false, aisle: aisleFor(name) });
       n++;
     });
@@ -201,7 +297,8 @@ function gItem(i) {
   const q = i.qty || 1;
   return `
   <div class="g-item ${i.done ? 'done' : ''}">
-    <button class="g-tap" data-action="g-toggle" data-id="${i.id}" aria-label="${i.done ? 'Uncheck' : 'Check off'} ${esc(i.name)}">
+    <button class="g-tap" data-action="g-toggle" data-id="${i.id}" aria-pressed="${!!i.done}"
+      aria-label="${i.done ? 'Uncheck' : 'Check off'} ${esc(i.name)}">
       <span class="g-check">✓</span>
       <span class="g-name">${esc(i.name)}${q > 1 ? ` <span class="g-qty">×${q}</span>` : ''} ${dietaryBadgesHtml(i.name)}</span>
     </button>
@@ -229,9 +326,19 @@ function groceryQty(id, delta) {
   const it = list.find(i => i.id === id);
   if (!it) return;
   const next = (it.qty || 1) + delta;
-  if (next < 1) { setGrocery(list.filter(i => i.id !== id)); toast(`${it.name} removed`); }
-  else { it.qty = next; setGrocery(list); }
+  if (next < 1) {
+    /* Pressing − at one means "I do not need this after all". That is a delete,
+       so it offers the same way back as the x next to it. */
+    const idx = list.indexOf(it);
+    setGrocery(list.filter(i => i.id !== id));
+    App.render();
+    destructive('grocery-item', { idx, item: it }, `${it.name} removed`);
+    return;
+  }
+  it.qty = next;
+  setGrocery(list);
   App.render();
+  announce(`${it.name}, ${next}`);
 }
 
 /* If the trailing 7 days averaged well under protein target, nudge with staples */
@@ -260,7 +367,7 @@ function groceryAdd(raw) {
   const { name, qty } = parseQty(raw);
   if (!name) return;
   const list = getGrocery();
-  const existing = list.find(i => i.name.toLowerCase() === name.toLowerCase() && !i.done);
+  const existing = list.find(i => groceryMatch(i.name, name) && !i.done);
   const warns = dietaryWarnings(name);
   const flag = warns.length ? ` — ${warns[0].tier === 1 ? '⚠ allergy flag' : 'flagged'}: ${warns.map(w => w.label).join(', ')}` : '';
   if (existing) {
@@ -274,3 +381,18 @@ function groceryAdd(raw) {
   }
   App.render();
 }
+
+/* Restores for what Grocery deletes — undoLast() in ui.js dispatches here.
+   Both put the row back where it was rather than on top: a list you are
+   walking is ordered by the shop, and an undo that reshuffles it is its own
+   small betrayal. */
+registerUndo('grocery-item', u => {
+  const list = getGrocery();
+  list.splice(Math.min(u.idx, list.length), 0, u.item);
+  setGrocery(list);
+});
+registerUndo('grocery-clear', u => {
+  const list = getGrocery();
+  u.items.forEach(({ idx, item }) => list.splice(Math.min(idx, list.length), 0, item));
+  setGrocery(list);
+});

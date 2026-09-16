@@ -115,7 +115,7 @@ const App = {
   activeSession: null,
   scanImage: null,
   scanResult: null,
-  grocSection: 'staples',
+  grocView: 'home',
   trainView: 'home',
   trainDay: null,        // null = whichever day the routine has queued next
   routineDay: null,      // which day is expanded in the routine editor
@@ -905,6 +905,8 @@ document.addEventListener('keydown', e => {
     if (e.target.dataset.setW !== undefined) { e.preventDefault(); document.querySelector('[data-set-r]')?.focus(); }
     else if (e.target.dataset.setR !== undefined) { e.preventDefault(); e.target.blur(); }
   }
+  // grocery: Enter adds and keeps the cursor in the field, so you can type a whole shop
+  if (e.key === 'Enter' && e.target.id === 'g-new') { e.preventDefault(); addTypedGrocery(true); }
 });
 function toast(msg, action) {
   const root = document.getElementById('toast-root');
@@ -1637,14 +1639,19 @@ document.addEventListener('click', e => {
       break;
 
     /* grocery */
-    case 'g-add': {
-      const f = document.getElementById('g-new');
-      groceryAdd(f.value); f.value = '';
+    case 'g-add': addTypedGrocery(); break;
+    case 'g-add-name': groceryAdd(el.dataset.name); break;
+    case 'groc-nav': App.grocView = el.dataset.view; App._renderedTab = null; App.render(); break;
+    case 'groc-back': App.grocView = 'home'; App._renderedTab = null; App.render(); break;
+    case 'groc-group': {
+      const st = getSettings();
+      st.grocGroup = GROC_GROUP_NEXT[st.grocGroup] || 'auto';
+      setSettings(st);
+      App.render();
+      announce(GROC_GROUP_LABEL[st.grocGroup]);
       break;
     }
-    case 'g-add-name': groceryAdd(el.dataset.name); break;
-    case 'g-section': App.grocSection = el.dataset.v; App.render(); break;
-    case 'g-staple': groceryAddFromSection(el.dataset.sec || 'staples', Number(el.dataset.idx)); break;
+    case 'g-staple': groceryAddFromSection(GROC_VIEW_SECTION[el.dataset.view] || 'staples', Number(el.dataset.idx)); break;
     case 'g-qty': groceryQty(el.dataset.id, Number(el.dataset.d)); break;
     case 'g-toggle': {
       const list = getGrocery();
@@ -1660,12 +1667,25 @@ document.addEventListener('click', e => {
     case 'g-del': {
       const list = getGrocery();
       const it = list.find(i => i.id === el.dataset.id);
+      if (!it) break;
+      const idx = list.indexOf(it);
       setGrocery(list.filter(i => i.id !== el.dataset.id));
       App.render();
-      if (it) toast(`${it.name} removed`);
+      destructive('grocery-item', { idx, item: it }, `${it.name} removed`);
       break;
     }
-    case 'g-clear-done': setGrocery(getGrocery().filter(i => !i.done)); App.render(); break;
+    case 'g-clear-done': {
+      const list = getGrocery();
+      /* Positions are captured before the removal so undo can put every row
+         back where it was, not in a pile at the top. */
+      const cleared = list.map((item, idx) => ({ item, idx })).filter(({ item }) => item.done);
+      if (!cleared.length) break;
+      setGrocery(list.filter(i => !i.done));
+      App.render();
+      destructive('grocery-clear', { items: cleared },
+        `Cleared ${cleared.length} item${cleared.length === 1 ? '' : 's'}`);
+      break;
+    }
 
     /* settings data */
     case 'export-data': {
@@ -1728,17 +1748,21 @@ document.getElementById('tabbar').addEventListener('click', e => {
   if (App.tab === 'train') App.trainView = 'home';
   if (App.tab === 'today') App.todayView = 'home';
   if (App.tab === 'sleep') App.sleepDay = todayKey();
+  if (App.tab === 'grocery') App.grocView = 'home';
   App.render();
 });
 
-/* enter key on grocery input — clear it so you can keep typing the whole shop */
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.id === 'g-new') {
-    groceryAdd(e.target.value);
-    const again = document.getElementById('g-new');
-    if (again) { again.value = ''; again.focus(); }
-  }
-});
+/* The + button and the Enter key do the same thing; only where the cursor
+   ends up differs, and that is the whole reason this is one function. */
+function addTypedGrocery(keepFocus) {
+  const f = document.getElementById('g-new');
+  if (!f || !f.value.trim()) return;
+  const name = f.value;
+  f.value = '';
+  groceryAdd(name);
+  announce(`${parseQty(name).name} added`);
+  if (keepFocus) document.getElementById('g-new')?.focus();
+}
 
 function shiftDay(key, dir) {
   const nk = shiftKey(key, dir);
