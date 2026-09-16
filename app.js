@@ -1751,8 +1751,8 @@ function scanStatsNote() {
   const st = Store.get('scanStats', null);
   if (!st?.scans) return '';
   const per = n => Math.round(n / st.scans);
-  return `<div class="chart-note">Scan usage on this device: ${st.scans} scan${st.scans > 1 ? 's' : ''} ·
-    ~${per(st.in)} in / ${per(st.out)} out tokens each${st.thoughts ? ` · ${per(st.thoughts)} thinking` : ''} ·
+  return `<div class="chart-note">Scan usage on this device: ${esc(st.scans)} scan${st.scans > 1 ? 's' : ''} ·
+    ~${esc(per(st.in))} in / ${esc(per(st.out))} out tokens each${st.thoughts ? ` · ${esc(per(st.thoughts))} thinking` : ''} ·
     ${esc(st.model || '?')}</div>`;
 }
 

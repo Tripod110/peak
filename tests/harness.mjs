@@ -54,7 +54,8 @@ export function makeContext() {
       plannedSetsFor, startWorkout, restoreSession, persistSession, ensureSessionIds, focusedExercise,
       completeSet, deleteExercise, undoLast, moveExercise, finishWorkout, applyHoldToSession,
       prevSetsText, lastSessionSets, todayKey, lbToKg, kgToLb, fromW, toW, registerUndo, destructive,
-      sanitizeStored, normTime, getProfile };
+      sanitizeStored, normTime, getProfile, AISLE_IDS,
+      addFoodEntry, updateFoodEntry, removeFoodEntry, restoreFoodEntry, findFoodEntry, foodForDay, dayTotals };
   `, ctx);
   // wipeAll uses Object.keys(localStorage); give it the real key list
   vm.runInContext(`Store.wipeAll = function () { localStorage.keys().filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k)); _cache.clear(); };`, ctx);

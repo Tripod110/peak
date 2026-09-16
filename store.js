@@ -249,6 +249,7 @@ function sanitizeStored() {
        the maintenance cost of coercing at the boundary, and it is the right
        trade against a hostile value reaching the render path. */
     theme: THEME_IDS.includes(s.theme) ? s.theme : 'dark',
+    grocGroup: ['auto', 'aisle', 'flat'].includes(s.grocGroup) ? s.grocGroup : 'auto',
     dietary: { restrictions: szArr(szObj(s.dietary).restrictions)
       .filter(id => DIETARY_RESTRICTIONS.some(d => d.id === id)) },
     /* reminder times land in a value="" attribute in Settings — normTime is
@@ -336,9 +337,27 @@ function sanitizeStored() {
     return {
       id: szStr(o.id, 40) || 'g' + Math.random().toString(36).slice(2, 9),
       name: szStr(o.name, 120), qty: szInt(o.qty, 1, 99, 1), done: !!o.done,
-      ...(o.aisle ? { aisle: szStr(o.aisle, 20) } : {})
+      ...(AISLE_IDS.includes(o.aisle) ? { aisle: o.aisle } : {})
     };
   }).filter(i => i.name));
+
+  /* groceryFoodCache — names Grocery hands to Food. Unlisted until v40, which
+     made it the one key that could brick the app permanently: a string here
+     survives the import, a string has .slice but not .map, so food.js throws
+     inside renderFood, App.render aborts before it assigns view.innerHTML, and
+     the app is blank on every boot. Same shape as the sets-is-a-string bug in
+     D-17 — a type nobody checked because nobody wrote that type. */
+  Store.set('groceryFoodCache', szArr(Store.get('groceryFoodCache', []))
+    .slice(0, 20).map(n => szStr(n, 120)).filter(Boolean));
+
+  /* scanStats — Settings interpolates st.scans directly. Numbers were exactly
+     what D-17 said not to trust. */
+  const sc = szObj(Store.get('scanStats', null));
+  if (Object.keys(sc).length) Store.set('scanStats', {
+    scans: szInt(sc.scans, 0, 1e6), in: szInt(sc.in, 0, 1e9), out: szInt(sc.out, 0, 1e9),
+    thoughts: szInt(sc.thoughts, 0, 1e9),
+    model: /^[\w.\-]{1,60}$/.test(sc.model || '') ? sc.model : ''
+  });
 
   // routine — days of [name, "NxM"] pairs, nothing else
   const r = Store.get('routine', null);
@@ -372,6 +391,13 @@ function sanitizeStored() {
     if (Object.keys(out).length) cleanProg[szStr(k, 80)] = out;
   });
   Store.set('progressionPrefs', JSON.parse(JSON.stringify(cleanProg)));
+
+  /* Reviewed and deliberately not re-shaped, so the next reader doesn't redo
+     the audit: quips, weakLink, coachDismissed, modelList, deviceId,
+     installDismissed, lastBackupAt, lastBackupPrompt, backupSnoozeUntil. None
+     of them reaches a sink unescaped, and each is either regenerated on the
+     next render or read through a typed accessor. Add one here the moment that
+     stops being true of it. */
 
   // taught mappings: plain string→value maps only
   ['muscleMap', 'loadMap'].forEach(key => {
@@ -462,6 +488,13 @@ const TIER_PILL = { 1: 'crit', 2: 'warn', 3: 'good' };
    cannot reach a constant defined in the last script on the page. app.js's
    THEMES adds the label and swatch for each of these. */
 const THEME_IDS = ['dark', 'pink', 'ocean', 'forest', 'light'];
+
+/* Shop-order aisle ids. Here rather than with the labels and regexes in
+   grocery.js for the same reason as THEME_IDS: sanitizeStored has to check a
+   restored item's aisle, and store.js loads first. An item whose aisle is not
+   one of these used to be counted in "N to get" and then rendered in no group
+   at all — visible in the count, invisible on the list. */
+const AISLE_IDS = ['frozen', 'produce', 'meat', 'dairy', 'pantry', 'supps', 'other'];
 function activeDietaryIds() { return getSettings().dietary?.restrictions || []; }
 /* returns the matching restriction defs (with .tier/.label) for a bit of free text */
 function dietaryWarnings(text) {
@@ -480,7 +513,7 @@ function getSettings() {
   const s = Store.get('settings', {});
   const merged = {
     apiKey: '', model: DEFAULT_MODEL, timeFmt: '12',
-    units: 'imperial', restSec: 120, theme: 'dark',
+    units: 'imperial', restSec: 120, theme: 'dark', grocGroup: 'auto',
     dietary: { restrictions: [] },
     reminders: { enabled: false, sleep: null, food: null }, ...s
   };
@@ -580,7 +613,10 @@ function updateFoodEntry(key, id, patch) {
   if (i < 0) return null;
   arr[i] = { ...arr[i], ...patch, id };
   Store.set('food', log);
-  rememberRecentFood(arr[i]);
+  /* An edit refreshes the macros Peak remembers for this food, but it is not a
+     second helping: counting it would make correcting a typo in a meal name
+     rank the corrected spelling as if you had eaten it twice. */
+  rememberRecentFood(arr[i], { count: false });
   return arr[i];
 }
 function findFoodEntry(key, id) { return (getFoodLog()[key] || []).find(e => e.id === id) || null; }
@@ -608,7 +644,7 @@ function foodKey(name) { return String(name || '').trim().toLowerCase(); }
 /* Frequent foods, ranked by how often you actually log them — a pure recency
    list decays exactly when it should be improving (one weekend of one-offs
    evicts the breakfast you eat every day). */
-function rememberRecentFood(entry) {
+function rememberRecentFood(entry, { count = true } = {}) {
   const rec = Store.get('recentFoods', []);
   const key = foodKey(entry.name);
   const prev = rec.find(r => foodKey(r.name) === key);
@@ -617,7 +653,8 @@ function rememberRecentFood(entry) {
     name: entry.name, kcal: entry.kcal, protein: entry.protein, carbs: entry.carbs,
     fat: entry.fat, fiber: entry.fiber || 0,
     quality: typeof entry.quality === 'number' ? entry.quality : null,
-    count: (prev?.count || 0) + 1, lastAt: todayKey()
+    count: (prev?.count || 0) + (count ? 1 : 0) || 1,
+    lastAt: count ? todayKey() : (prev?.lastAt || todayKey())
   });
   rest.sort((a, b) => (b.count || 1) - (a.count || 1) || ((a.lastAt || '') < (b.lastAt || '') ? 1 : -1));
   Store.set('recentFoods', rest.slice(0, 40));

@@ -115,3 +115,65 @@ test('progression preferences from a backup are bounded, and prototype keys are 
   assert.equal(Object.prototype.hasOwnProperty.call(all, '__proto__'), false);
   assert.equal(({}).incKg, undefined, 'and the prototype was never touched');
 });
+
+/* ---- v40: keys that reached a sink without passing the boundary ---- */
+
+test('a groceryFoodCache that is not an array cannot brick the Food tab', () => {
+  P.Store.importAll(backup({ groceryFoodCache: 'not an array' }));
+  const cache = P.Store.get('groceryFoodCache', []);
+  assert.ok(Array.isArray(cache), 'a string here used to survive, and a string has .slice but not .map');
+  assert.equal(cache.length, 0);
+});
+
+test('groceryFoodCache is bounded and holds strings only', () => {
+  P.Store.importAll(backup({
+    groceryFoodCache: [...Array(80).keys()].map(i => `Item ${i}`).concat([null, 42, { name: 'x' }])
+  }));
+  const cache = P.Store.get('groceryFoodCache', []);
+  assert.equal(cache.length, 20);
+  assert.ok(cache.every(n => typeof n === 'string' && n.length));
+});
+
+test('scan stats are numbers by the time Settings renders them', () => {
+  P.Store.importAll(backup({ scanStats: { scans: XSS, in: 1e12, out: 500, thoughts: 0, model: `gemini" onload=${XSS}` } }));
+  const st = P.Store.get('scanStats', {});
+  assert.equal(st.scans, 0, 'markup coerces to 0, not to a string that renders');
+  assert.equal(typeof st.out, 'number');
+  assert.equal(st.model, '', 'a model id that is not a model id is dropped');
+});
+
+test('a grocery item with an unrecognised aisle is repaired, never left invisible', () => {
+  P.Store.importAll(backup({
+    grocery: [{ id: 'g1', name: 'Chicken thighs', qty: 1, done: false, aisle: 'produce2' },
+              { id: 'g2', name: 'Frozen peas', qty: 1, done: false, aisle: 'frozen' }]
+  }));
+  const items = P.Store.get('grocery', []);
+  assert.equal(items[0].aisle, undefined, 'unknown aisle dropped, so aisleFor() re-derives it');
+  assert.equal(items[1].aisle, 'frozen', 'a known one is kept');
+  assert.ok(items.every(i => i.aisle === undefined || P.AISLE_IDS.includes(i.aisle)));
+});
+
+test('the grocery grouping preference round-trips, and a made-up value does not', () => {
+  P.setSettings({ grocGroup: 'aisle' });
+  const json = P.Store.exportAll();
+  P.Store.wipeAll();
+  P.Store.importAll(json);
+  assert.equal(P.getSettings().grocGroup, 'aisle');
+  P.Store.importAll(backup({ settings: { grocGroup: `flat" onload=${XSS}` } }));
+  assert.equal(P.getSettings().grocGroup, 'auto');
+});
+
+test('editing a food entry refreshes its macros without counting it as eaten again', () => {
+  P.addFoodEntry(P.todayKey(), { name: 'Chicken burrito bowl', kcal: 700, protein: 50, carbs: 70, fat: 20 });
+  const entry = P.Store.get('food', {})[P.todayKey()][0];
+  const first = P.Store.get('recentFoods', []).find(r => r.name === 'Chicken burrito bowl');
+  assert.equal(first.count, 1);
+
+  P.updateFoodEntry(P.todayKey(), entry.id, { protein: 56 });
+  const after = P.Store.get('recentFoods', []).find(r => r.name === 'Chicken burrito bowl');
+  assert.equal(after.count, 1, 'a correction is not a second helping');
+  assert.equal(after.protein, 56, 'but the numbers Peak remembers do update');
+
+  P.addFoodEntry(P.todayKey(), { name: 'Chicken burrito bowl', kcal: 700, protein: 56, carbs: 70, fat: 20 });
+  assert.equal(P.Store.get('recentFoods', []).find(r => r.name === 'Chicken burrito bowl').count, 2);
+});
