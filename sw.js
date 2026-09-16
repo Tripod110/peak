@@ -12,12 +12,12 @@
    The previous build was network-first for everything, which fixed stale updates
    at the cost of a network timeout on every single launch offline or on 1 bar.
 */
-const CACHE = 'peak-v38';
+const CACHE = 'peak-v40';
 const SHELL = [
   './', 'index.html',
-  'style.css?v=38',
-  'store.js?v=38', 'ui.js?v=38', 'charts.js?v=38', 'quips.js?v=38', 'api.js?v=38',
-  'food.js?v=38', 'train.js?v=38', 'routines.js?v=38', 'sleep.js?v=38', 'grocery.js?v=38', 'app.js?v=38',
+  'style.css?v=40',
+  'store.js?v=40', 'ui.js?v=40', 'charts.js?v=40', 'quips.js?v=40', 'api.js?v=40',
+  'food.js?v=40', 'train.js?v=40', 'routines.js?v=40', 'sleep.js?v=40', 'grocery.js?v=40', 'app.js?v=40',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 

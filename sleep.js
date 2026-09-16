@@ -1,5 +1,21 @@
 /* Peak — Sleep tab: nightly log + score + trend */
 
+/* Every threshold in the app that means "a bad night", in one place. There
+   used to be three: Train warned under 6h, the weekly verdict got severe at a
+   7h average, and the training split banded at 7h/7h30 — so the app could call
+   the same week fine, short and severe depending on which screen you were on.
+   train.js reads this too; it loads first, but the reference is inside a
+   function body, exactly like its existing call to sleepAvgDays. */
+const SLEEP_BANDS = {
+  severe: 360,   // 6h — Train eases off today's volume
+  short: 420,    // 7h — the short side of the training split
+  good: 450,     // 7h30 — the good side of it
+  target: 480    // 8h — what the score and the trend line aim at
+};
+/* The 7h–7h30 gap is deliberate: the split compares two populations, and two
+   populations that touch are one population. Sessions in the gap are counted
+   as covered and excluded from both means — see renderSleepTrainingLink. */
+
 function sleepDurationMin(bed, wake) {
   const [bh, bm] = bed.split(':').map(Number);
   const [wh, wm] = wake.split(':').map(Number);
@@ -93,7 +109,14 @@ function median(nums) {
 
 function usualNight() {
   const s = getSleep();
-  const keys = Object.keys(s).sort().slice(-USUAL_WINDOW);
+  /* A fortnight of nights, not the last fourteen entries. Slicing by count
+     meant a stretch of unlogged weeks let a night from three months ago
+     pre-fill tonight's form — the same bug the v27 changelog records fixing in
+     sleepAvgDays, still living here. Same filter sleepConsistency uses. */
+  const today = todayKey();
+  const keys = Object.keys(s)
+    .filter(k => k <= today && daysBetween(k, today) <= USUAL_WINDOW)
+    .sort();
   if (keys.length < USUAL_MIN_NIGHTS) {
     return { bed: '23:30', wake: '07:00', quality: 3, learned: false, nights: keys.length };
   }
@@ -128,23 +151,27 @@ function sleepAvgDays(days) {
    a handful of sessions, not a controlled result, so it needs real coverage
    before it says anything and it never says "caused". */
 const SLEEP_LINK_MIN = 4;        // sessions needed on EACH side before splitting
-const SLEEP_GOOD_MIN = 450;      // 7h30
-const SLEEP_SHORT_MAX = 420;     // 7h
 
 function sleepTrainingLink() {
   const sleep = getSleep();
   const good = [], short = [];
+  /* Sessions with a logged night attached, banded or not. Reporting only the
+     banded ones told a lifter who sleeps 7h10 every night that "0 sessions so
+     far have a logged night attached", which was false and unfixable — they
+     were logging everything. */
+  let covered = 0;
   getWorkouts().forEach(s => {
     if (s.cardio || s.score == null) return;
     // the night before the session is keyed to the session date itself: Peak
     // logs "last night" against today, which is the night that fuelled today
     const night = sleep[s.date];
     if (!night) return;
-    if (night.durationMin >= SLEEP_GOOD_MIN) good.push(s.score);
-    else if (night.durationMin <= SLEEP_SHORT_MAX) short.push(s.score);
+    covered++;
+    if (night.durationMin >= SLEEP_BANDS.good) good.push(s.score);
+    else if (night.durationMin <= SLEEP_BANDS.short) short.push(s.score);
   });
   if (good.length < SLEEP_LINK_MIN || short.length < SLEEP_LINK_MIN) {
-    return { ready: false, good: good.length, short: short.length };
+    return { ready: false, good: good.length, short: short.length, covered };
   }
   const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
   const g = mean(good), sh = mean(short);
@@ -157,11 +184,14 @@ function sleepTrainingLink() {
 function renderSleepTrainingLink() {
   const l = sleepTrainingLink();
   if (!l.ready) {
-    const total = l.good + l.short;
-    if (total < 2) return '';
+    if (!l.covered) return '';
+    const mid = l.covered - l.good - l.short;
     return `<div class="card">
       <h2>Sleep vs training</h2>
-      <div class="muted small">Peak is collecting this: it compares your session scores after a good night against after a short one. ${total} lifting session${total === 1 ? '' : 's'} so far have a logged night attached — it needs ${SLEEP_LINK_MIN} of each before the comparison means anything.</div>
+      <div class="muted small">Peak is collecting this: it compares your session scores after a good night against after a short one.
+      ${l.covered} lifting session${l.covered === 1 ? '' : 's'} so far have a logged night attached —
+      ${l.good} after 7h30+, ${l.short} after under 7h, and it needs ${SLEEP_LINK_MIN} of each before the comparison means anything.
+      ${mid > 0 ? `The other ${mid} fell between 7h and 7h30, which is deliberately left out: two groups that touch are one group.` : ''}</div>
     </div>`;
   }
   const better = l.delta > 0;
@@ -187,102 +217,209 @@ function renderSleepTrainingLink() {
   </div>`;
 }
 
-/* Rolling shortfall against 8h. Only counts nights you logged, and says how
-   many — a "debt" computed over unlogged nights is fiction. */
-function sleepDebt(days) {
-  const s = getSleep();
-  let debt = 0, nights = 0;
-  for (let i = 0; i < days; i++) {
-    const e = s[todayKey(-i)];
-    if (!e) continue;
-    nights++;
-    debt += 480 - e.durationMin;
-  }
-  return { debt, nights };
-}
+/* Sleep was five stacked cards competing for one screen: the log form, a
+   14-day chart, a verdict, the training split and fourteen night rows. Home is
+   the night in front of you and how the week is going; everything that is a
+   record rather than a decision is one tap deeper. See DECISIONS.md D-19. */
+const SLEEP_SUBVIEWS = {
+  nights: { title: 'Last 14 nights', sub: 'tap any night to log or edit it' },
+  trend: { title: 'Hours slept', sub: '14 days against an 8-hour target' },
+  training: { title: 'Sleep vs training', sub: 'your session scores, split by the night before' },
+  consistency: { title: 'Bed & wake times', sub: 'the habit that moves your body clock' }
+};
 
 function renderSleep() {
-  const s = getSleep();
-  const key = App.sleepDay || todayKey();
-  const isToday = key === todayKey();
-  const entry = s[key];
-  const score = sleepScore(key);
-  const wk = sleepAvgDays(7);
-
-  // last 14 days trend (hours), positioned on a real date axis
-  const points = [];
-  for (let i = 13; i >= 0; i--) {
-    const k = todayKey(-i);
-    if (s[k]) points.push({ label: prettyDate(k).replace(/^\w+, /, ''), value: Math.round(s[k].durationMin / 6) / 10, x: 13 - i });
-  }
-
-  const scoreColor = score == null ? CHART.muted : score >= 75 ? CHART.good : score >= 50 ? CHART.warning : CHART.critical;
-  const logged14 = points.length;
-
-  return `
-  <div class="card">
-    <div class="day-nav">
-      <button class="dn-btn" data-action="sleep-day" data-dir="-1" aria-label="Previous night">‹</button>
-      <div class="dn-label"><b>${isToday ? 'Last night' : prettyDate(key)}</b></div>
-      <button class="dn-btn" data-action="sleep-day" data-dir="1" ${isToday ? 'disabled' : ''} aria-label="Next night">›</button>
-    </div>
-    ${entry ? `
-      <div class="spread mt">
-        <div>
-          <div class="hero-num">${esc(fmtDur(entry.durationMin))}</div>
-          <div class="muted small">${esc(fmtTime(entry.bed))} → ${esc(fmtTime(entry.wake))} · quality ${esc(entry.quality)}/5</div>
-        </div>
-        <div class="center">
-          <div class="hero-num" style="color:${scoreColor}">${score}</div>
-          <div class="muted small">sleep score</div>
-        </div>
-      </div>
-      <div class="grid-2 mt">
-        <button class="btn" data-action="open-sleep-log">Edit</button>
-        <button class="btn ghost danger" data-action="del-sleep" data-key="${key}">Delete</button>
-      </div>`
-    : renderQuickLog(key, isToday)}
-  </div>
-
-  <div class="card">
-    <h2>Hours slept — last 14 days
-      ${wk.avgMin ? `<span class="h2-right">7-day avg ${fmtDur(wk.avgMin)} · ${wk.nights}/7 nights</span>` : ''}</h2>
-    ${lineChart(points, { color: CHART.violet, goal: 8, unit: 'h', ySuffix: 'h' })}
-    <div class="chart-note">Dashed line = 8h target. ${logged14} of the last 14 nights logged. Tap a dot for details.</div>
-  </div>
-
-  ${renderSleepInsight(wk)}
-  ${renderSleepTrainingLink()}
-  ${renderRecentNights()}`;
+  return App.sleepView === 'home' ? renderSleepHome() : renderSleepSub(App.sleepView);
 }
 
-/* ---------- logging an unlogged night ----------
-   Three routes, cheapest first. "I'm up" is the one that should get used: you
-   are holding the phone anyway, the clock knows the time, and Peak knows your
-   usual bedtime — so the only thing left to say is how you feel. */
-/* "I just woke up" only means anything if the clock agrees. Tapped at 6pm it
-   would offer a 19-hour night from this morning's usual bedtime — so the button
-   is shown only when now-minus-your-usual-bedtime is a duration a person could
-   actually have slept. Outside that window it is the ordinary log form. */
-const IMUP_MIN = 180, IMUP_MAX = 840;   // 3h – 14h
+function renderSleepSub(view) {
+  const meta = SLEEP_SUBVIEWS[view];
+  if (!meta) { App.sleepView = 'home'; return renderSleepHome(); }
+  let body = '';
+  switch (view) {
+    case 'nights': body = renderRecentNights(); break;
+    case 'trend': body = renderSleepTrend(); break;
+    case 'training': body = renderSleepTrainingLink() || emptyNote('Log a few sessions with the night before them and this compares your scores.'); break;
+    case 'consistency': body = renderConsistencyDetail(); break;
+  }
+  return navHeader(meta.title, meta.sub, 'sleep-back') + body;
+}
 
-function renderQuickLog(key, isToday) {
+/* The earliest night worth paging back to. Without a floor the ‹ arrow walked
+   backwards forever through empty dates, with no way home but leaving the tab. */
+function earliestNightKey() {
+  const keys = Object.keys(getSleep()).sort();
+  return keys.length ? keys[0] : todayKey(-30);
+}
+
+function renderSleepHome() {
+  const key = App.sleepDay || todayKey();
+  const wk = sleepAvgDays(7);
+  const score = sleepScore(key);
+  const c = sleepConsistency(todayKey());
+  const logged14 = Object.keys(getSleep()).filter(k => k <= todayKey() && daysBetween(k, todayKey()) < 14).length;
+
+  return `
+  ${renderSleepHero(key, score)}
+
+  ${tileStrip([
+    tile({
+      action: 'sleep-nav', data: { view: 'trend' }, ico: 'chart', label: '7-day',
+      ...(wk.avgMin
+        ? { valueHtml: `${Math.floor(wk.avgMin / 60)}<small>h </small>${String(wk.avgMin % 60).padStart(2, '0')}<small>m</small>`,
+            sub: `${wk.nights} of 7 nights`,
+            ariaLabel: `Seven-day average ${fmtDur(wk.avgMin)} across ${wk.nights} nights. Open the trend` }
+        : { empty: true, value: 'No nights', sub: 'log one to start', ariaLabel: 'No nights logged this week. Open the trend' })
+    }),
+    tile({
+      action: 'sleep-nav', data: { view: 'nights' }, ico: 'moon', label: 'Score',
+      ...(score != null
+        ? { value: score, unit: '/ 100', sub: key === todayKey() ? 'last night' : 'this night',
+            ariaLabel: `Sleep score ${score} out of 100. Open the last 14 nights` }
+        : { empty: true, value: 'Not logged', sub: `${logged14} of 14 nights`, ariaLabel: 'This night is not logged. Open the last 14 nights' })
+    }),
+    tile({
+      action: 'sleep-nav', data: { view: 'consistency' }, ico: 'clock', label: 'Regularity',
+      ...(c.bedSd == null
+        ? { empty: true, value: 'Collecting', sub: `${c.nights} of 3 nights`, ariaLabel: 'Not enough nights to judge regularity yet. Open bed and wake times' }
+        : { value: `±${Math.max(c.bedSd, c.wakeSd)}`, unit: 'min',
+            sub: c.wakeSd > c.bedSd ? 'wake time' : 'bedtime',
+            ariaLabel: `Your ${c.wakeSd > c.bedSd ? 'wake time' : 'bedtime'} varies by about ${Math.max(c.bedSd, c.wakeSd)} minutes. Open bed and wake times` })
+    })
+  ])}
+
+  ${renderSleepInsight(wk)}
+
+  <div class="card">
+    <h2>Explore</h2>
+    ${navRow('sleep-nav', 'nights', '🌙', 'Last 14 nights', `${logged14} logged`)}
+    ${navRow('sleep-nav', 'trend', '📈', 'Hours slept', wk.avgMin ? `7-day avg ${fmtDur(wk.avgMin)}` : 'needs a night or two')}
+    ${navRow('sleep-nav', 'training', '🏋', 'Sleep vs training', sleepLinkNavValue())}
+    ${navRow('sleep-nav', 'consistency', '⏰', 'Bed & wake times', c.bedSd == null ? `${c.nights} of 3 nights` : `±${Math.max(c.bedSd, c.wakeSd)} min`)}
+  </div>`;
+}
+
+function sleepLinkNavValue() {
+  const l = sleepTrainingLink();
+  if (l.ready) return `${l.delta > 0 ? '+' : ''}${l.delta} points after a full night`;
+  return l.covered ? `${l.covered} session${l.covered === 1 ? '' : 's'} so far` : 'needs sessions and nights';
+}
+
+/* The night in front of you: what it was, or the cheapest way to log it. */
+function renderSleepHero(key, score) {
+  const entry = getSleep()[key];
+  const isToday = key === todayKey();
+  const atFloor = key <= earliestNightKey();
+  /* The night stepper IS the hero's top line: which night you are looking at
+     and how to change it are the same question. */
+  const nav = `
+    <div class="day-nav">
+      <button class="dn-btn" data-action="sleep-day" data-dir="-1" ${atFloor ? 'disabled' : ''} aria-label="Previous night">‹</button>
+      <div class="dn-label"><b>${isToday ? 'Last night' : esc(prettyDate(key))}</b></div>
+      <button class="dn-btn" data-action="sleep-day" data-dir="1" ${isToday ? 'disabled' : ''} aria-label="Next night">›</button>
+    </div>
+    ${isToday ? '' : '<div class="center"><button class="link-btn" data-action="sleep-today">Back to last night</button></div>'}`;
+
+  if (entry) {
+    return heroCard({
+      id: 'sleep-hero', state: 'done',
+      eyebrowHtml: nav,
+      title: fmtDur(entry.durationMin),
+      meta: `${fmtTime(entry.bed)} → ${fmtTime(entry.wake)} · ${SLEEP_QUALITY[entry.quality] || 'OK'}`,
+      bodyHtml: heroStats([
+        { v: score ?? '—', l: 'score' },
+        { v: `${entry.quality}/5`, l: 'how rested' }
+      ]),
+      actions: [
+        { label: 'Edit this night', icon: 'sliders', action: 'open-sleep-log' },
+        { label: 'Delete', icon: 'trash', action: 'del-sleep', data: { key }, cls: 'ghost danger' }
+      ]
+    });
+  }
+
   const u = usualNight();
   const mins = sleepDurationMin(u.bed, nowTime());
   const plausible = mins >= IMUP_MIN && mins <= IMUP_MAX;
-  return `
-    <div class="muted mt">Not logged${isToday ? ' yet' : ` for ${prettyDate(key)}`}.</div>
-    ${isToday && u.learned && plausible ? `
-      <button class="btn accent mt" data-action="sleep-imup">☀ I'm up — ${esc(fmtDur(mins))} since ${esc(fmtTime(u.bed))}</button>
-      <div class="chart-note center">Wake time from the clock, bedtime from your usual ${esc(fmtTime(u.bed))}. One more tap for how you slept.</div>
-      <button class="btn mt" data-action="open-sleep-log">Enter times myself</button>`
-    : `
-      <button class="btn primary mt" data-action="open-sleep-log">☾ Log this night</button>
-      ${u.learned
-        ? '<div class="chart-note center">Pre-filled with your usual times — nudge whatever was different.</div>'
-        : `<div class="chart-note center">After ${USUAL_MIN_NIGHTS} nights Peak learns your usual times and pre-fills them, so this becomes two taps.</div>`}
-      ${isToday ? '' : '<div class="chart-note center">Missed a night? Log it here — the averages need it.</div>'}`}`;
+  if (isToday && u.learned && plausible) {
+    return heroCard({
+      id: 'sleep-hero', eyebrowHtml: nav, title: 'How did you sleep?',
+      meta: `Not logged yet. Wake time from the clock, bedtime from your usual ${fmtTime(u.bed)} — one more tap for how you slept.`,
+      actions: [
+        { label: `I'm up — ${fmtDur(mins)} since ${fmtTime(u.bed)}`, icon: 'sun', action: 'sleep-imup', cls: 'accent big' },
+        { label: 'Enter times myself', action: 'open-sleep-log', cls: 'ghost' }
+      ]
+    });
+  }
+  return heroCard({
+    id: 'sleep-hero', eyebrowHtml: nav,
+    title: isToday ? 'How did you sleep?' : 'Not logged',
+    meta: u.learned
+      ? 'Pre-filled with your usual times — nudge whatever was different.'
+      : `After ${USUAL_MIN_NIGHTS} nights Peak learns your usual times and pre-fills them, so this becomes two taps.`,
+    actions: [{ label: isToday ? 'Log this night' : `Log ${prettyDate(key)}`, icon: 'moon', action: 'open-sleep-log', cls: 'accent big' }]
+  });
 }
+
+/* The chart, plus the same fourteen numbers as text. The dots carry an SVG
+   <title>, which is a hover tooltip and nothing at all on a phone — the note
+   under the chart used to promise "tap a dot for details" to people who had no
+   way to do it. */
+function renderSleepTrend() {
+  const s = getSleep();
+  const points = [];
+  const rows = [];
+  for (let i = 13; i >= 0; i--) {
+    const k = todayKey(-i);
+    if (!s[k]) continue;
+    points.push({ label: prettyDate(k).replace(/^\w+, /, ''), value: Math.round(s[k].durationMin / 6) / 10, x: 13 - i });
+    rows.unshift({ k, e: s[k] });
+  }
+  const wk = sleepAvgDays(7);
+  return `
+  <div class="card">
+    <h2>Hours slept${wk.avgMin ? ` <span class="h2-right">7-day avg ${fmtDur(wk.avgMin)}</span>` : ''}</h2>
+    ${lineChart(points, { color: CHART.violet, goal: 8, unit: 'h', ySuffix: 'h' })}
+    <div class="chart-note">Dashed line = ${SLEEP_BANDS.target / 60}h target. ${points.length} of the last 14 nights logged.</div>
+  </div>
+  <div class="card">
+    <h2>Night by night</h2>
+    ${rows.length ? rows.map(({ k, e }) => `
+      <div class="list-item">
+        <div class="li-main">
+          <div class="li-title">${esc(prettyDate(k))}</div>
+          <div class="li-sub">${esc(fmtTime(e.bed))} → ${esc(fmtTime(e.wake))}</div>
+        </div>
+        <div class="li-val">${esc(fmtDur(e.durationMin))}</div>
+      </div>`).join('')
+    : '<div class="muted small">Nothing logged in the last fortnight.</div>'}
+  </div>`;
+}
+
+/* The consistency note used to hang off the "your sleep is on point" branch of
+   the weekly verdict, so the person whose wake time swings by two hours — the
+   one it is written for — could never reach it. */
+function renderConsistencyDetail() {
+  const c = sleepConsistency(todayKey());
+  if (c.bedSd == null) {
+    return emptyNote(`Regularity needs at least ${3 - c.nights} more night${3 - c.nights === 1 ? '' : 's'} before it says anything. It is worth 15 of the 100 points.`);
+  }
+  return `
+  <div class="card">
+    <h2>Across your last ${c.nights} nights</h2>
+    <div class="grid-2">
+      <div class="stat"><div class="sv">±${esc(c.bedSd)}<span class="unit"> min</span></div><div class="sl">bedtime swing</div></div>
+      <div class="stat"><div class="sv">±${esc(c.wakeSd)}<span class="unit"> min</span></div><div class="sl">wake-time swing</div></div>
+    </div>
+    <div class="chart-note">Worth ${esc(Math.round(c.points * 10) / 10)} of the 15 consistency points in your sleep score. Under ±30 min scores full marks; over ±90 scores none.</div>
+  </div>
+  ${renderConsistencyNote()}`;
+}
+
+/* "I just woke up" only means anything if the clock agrees. Tapped at 6pm it
+   would offer a 19-hour night from this morning's usual bedtime — so the button
+   is shown only when now-minus-your-usual-bedtime is a duration a person could
+   actually have slept. Outside that window the hero offers the ordinary form. */
+const IMUP_MIN = 180, IMUP_MAX = 840;   // 3h – 14h
 
 /* Coverage-aware: a verdict off two logged nights is not a verdict. */
 function renderSleepInsight(wk) {
@@ -295,7 +432,7 @@ function renderSleepInsight(wk) {
       <b>Only ${wk.nights} of the last 7 nights logged (averaging ${fmtDur(wk.avgMin)}).</b>
       That's too thin to read a trend from — log a few more and this turns into real feedback. You can backfill missed nights with the ‹ arrow above.</div></div>`;
   }
-  const deficit = 480 - wk.avgMin;
+  const deficit = SLEEP_BANDS.target - wk.avgMin;
   if (deficit >= 60) {
     return `<div class="alert crit"><span class="a-ico">☾</span><div class="a-body">
       <b>You're averaging ${fmtDur(wk.avgMin)} across ${wk.nights} nights — about ${Math.round(deficit / 60 * 10) / 10}h short.</b>
@@ -341,16 +478,17 @@ function renderRecentNights() {
     const e = s[k];
     const sc = e ? sleepScore(k) : null;
     rows.push(`
-      <div class="list-item" data-action="open-night" data-key="${k}" style="cursor:pointer">
+      <button class="list-item li-tap" data-action="open-night" data-key="${k}"
+        aria-label="${i === 0 ? 'Last night' : esc(prettyDate(k))}: ${e ? `${esc(fmtDur(e.durationMin))}, score ${esc(sc)}. Edit it` : 'not logged. Log it'}">
         <div class="li-main">
-          <div class="li-title">${i === 0 ? 'Last night' : prettyDate(k)}</div>
+          <div class="li-title">${i === 0 ? 'Last night' : esc(prettyDate(k))}</div>
           <div class="li-sub">${e ? `${esc(fmtTime(e.bed))} → ${esc(fmtTime(e.wake))} · quality ${esc(e.quality)}/5` : 'not logged'}</div>
         </div>
         ${e ? `<div class="li-val">${esc(fmtDur(e.durationMin))}</div>
                <span class="pill ${sc >= 75 ? 'good' : sc >= 50 ? 'warn' : 'crit'}">${esc(sc)}</span>`
             : '<span class="pill">＋</span>'}
-        <span class="nr-chev">›</span>
-      </div>`);
+        <span class="nr-chev" aria-hidden="true">›</span>
+      </button>`);
   }
   return `
   <div class="card">
@@ -376,13 +514,14 @@ function openSleepLog(prefill) {
     ${timeField('bed', 'Went to bed', e.bed)}
     ${timeField('wake', 'Woke up', e.wake)}
 
-    <div class="sl-dur-line">That's <b id="sl-dur">${fmtDur(sleepDurationMin(e.bed, e.wake))}</b> in bed</div>
+    <div class="sl-dur-line" aria-live="polite">That's <b id="sl-dur">${fmtDur(sleepDurationMin(e.bed, e.wake))}</b> in bed</div>
 
-    <label>How rested do you feel?</label>
-    <div class="q-grid" id="sl-quality">
+    <label id="sl-q-label">How rested do you feel?</label>
+    <div class="q-grid" id="sl-quality" role="radiogroup" aria-labelledby="sl-q-label">
       ${[1, 2, 3, 4, 5].map(q => `
-        <button type="button" data-q="${q}" class="${q === e.quality ? 'on' : ''}">
-          <span class="q-face">${SLEEP_FACE[q]}</span>
+        <button type="button" data-q="${q}" role="radio" aria-checked="${q === e.quality}"
+          aria-label="${esc(SLEEP_QUALITY[q])}, ${q} of 5" class="${q === e.quality ? 'on' : ''}">
+          <span class="q-face" aria-hidden="true">${SLEEP_FACE[q]}</span>
           <span class="q-lab">${esc(SLEEP_QUALITY[q])}</span>
         </button>`).join('')}
     </div>
@@ -428,8 +567,12 @@ function wireSleepModal() {
   }));
 
   document.querySelectorAll('#sl-quality button').forEach(btn => btn.addEventListener('click', () => {
-    document.querySelectorAll('#sl-quality button').forEach(b => b.classList.remove('on'));
+    document.querySelectorAll('#sl-quality button').forEach(b => {
+      b.classList.remove('on');
+      b.setAttribute('aria-checked', 'false');
+    });
     btn.classList.add('on');
+    btn.setAttribute('aria-checked', 'true');
   }));
 }
 
@@ -456,5 +599,9 @@ function saveSleepEntry() {
   App.sleepDay = date;
   closeModal();
   toast(`${fmtDur(durationMin)} logged · score ${sleepScore(date)}`);
+  announce(`${fmtDur(durationMin)} logged for ${date === todayKey() ? 'last night' : prettyDate(date)}, score ${sleepScore(date)}`);
   App.render();
 }
+
+/* Restore for a deleted night — undoLast() in ui.js dispatches here. */
+registerUndo('sleep', u => setSleepEntry(u.key, u.entry));

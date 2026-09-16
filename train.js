@@ -974,7 +974,10 @@ function renderTrainSub(view) {
    over many sessions. This only needs last night. */
 function renderLowSleepNudge() {
   const last = sleepAvgDays(1);
-  if (last.nights === 0 || last.avgMin >= 360) return '';
+  /* The threshold lives in sleep.js's SLEEP_BANDS with every other definition
+     of a bad night. sleep.js loads after this file; the reference resolves at
+     call time, same as sleepAvgDays right above it. */
+  if (last.nights === 0 || last.avgMin >= SLEEP_BANDS.severe) return '';
   const hrs = (last.avgMin / 60).toFixed(1);
   return `<div class="alert" style="border-left-color:var(--warning)"><span class="a-ico">☾</span><div class="a-body">
     <b>${hrs}h of sleep last night.</b>

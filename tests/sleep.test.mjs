@@ -121,3 +121,58 @@ test('cardio and unscored sessions stay out of the sleep split', () => {
   }
   assert.equal(P.sleepTrainingLink().good, 0);
 });
+
+/* ---- v40 ---- */
+
+test('the usual night comes from the last fortnight, not the last fourteen entries', () => {
+  // three nights from the spring, logged, then nothing for months
+  night(80, '03:00', '11:00'); night(81, '03:15', '11:10'); night(82, '02:45', '10:50');
+  const stale = P.usualNight();
+  assert.equal(stale.learned, false, 'nights that old say nothing about tonight');
+  assert.equal(stale.bed, '23:30', 'so the form opens on the neutral default');
+
+  night(1, '23:00', '07:00'); night(2, '23:10', '07:05'); night(3, '22:55', '06:55');
+  const now = P.usualNight();
+  assert.equal(now.learned, true);
+  assert.equal(now.nights, 3, 'the old nights are outside the window and are not counted');
+  assert.ok(P.minutesOf(now.bed, 720) > P.minutesOf('22:00', 720) && now.bed < '23:30',
+    `the default should come from this fortnight, not from the spring (got ${now.bed})`);
+});
+
+test('one table defines a bad night, and every threshold reads it', () => {
+  assert.deepEqual({ ...P.SLEEP_BANDS }, { severe: 360, short: 420, good: 450, target: 480 });
+  assert.ok(P.SLEEP_BANDS.severe < P.SLEEP_BANDS.short, 'Train warns earlier than the weekly split bands');
+  assert.ok(P.SLEEP_BANDS.short < P.SLEEP_BANDS.good, 'and the two populations do not touch');
+});
+
+test('the training split counts every session it covers, not only the ones it can band', () => {
+  // 7h10 every night: inside the gap, so neither side gets it
+  for (let i = 1; i <= 6; i++) {
+    night(i, '23:00', '06:10');
+    P.saveWorkout({ id: 'm' + i, date: day(i), dayName: 'Push', score: 70, exercises: [] });
+  }
+  const l = P.sleepTrainingLink();
+  assert.equal(l.ready, false);
+  assert.equal(l.good, 0);
+  assert.equal(l.short, 0);
+  assert.equal(l.covered, 6, 'six sessions with a logged night is not "0 sessions so far"');
+});
+
+test('a deleted night can be put back exactly as it was', () => {
+  night(1, '23:20', '07:05', 4);
+  const key = day(1);
+  const entry = { ...P.getSleep()[key] };
+
+  P.removeSleepEntry(key);
+  assert.equal(P.getSleep()[key], undefined);
+
+  P.destructive('sleep', { key, entry }, 'removed');
+  P.undoLast();
+  assert.deepEqual({ ...P.getSleep()[key] }, entry, 'same times, same quality, same duration');
+});
+
+test('sleepDebt is gone, and nothing else lost its meaning with it', () => {
+  assert.equal(typeof ctx.sleepDebt, 'undefined', 'it was computed, commented, and never rendered');
+  night(1, '23:00', '04:00');
+  assert.equal(P.sleepAvgDays(7).avgMin, 300, 'the average is what the verdict actually reads');
+});

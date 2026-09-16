@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v38';
+const APP_VERSION = 'v40';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -112,6 +112,7 @@ const App = {
   tab: 'today',
   foodDay: todayKey(),
   sleepDay: todayKey(),
+  sleepView: 'home',
   activeSession: null,
   scanImage: null,
   scanResult: null,
@@ -1632,11 +1633,27 @@ document.addEventListener('click', e => {
     case 'open-sleep-log': openSleepLog(); break;
     case 'sleep-imup': logImUp(); break;
     case 'save-sleep': saveSleepEntry(); break;
-    case 'sleep-day': App.sleepDay = shiftDay(App.sleepDay, Number(el.dataset.dir)); App.render(); break;
-    case 'open-night': App.sleepDay = el.dataset.key; App.render(); openSleepLog(); break;
-    case 'del-sleep':
-      if (confirm('Delete this night?')) { removeSleepEntry(el.dataset.key); App.render(); }
+    case 'sleep-day':
+      /* Floored at the earliest night on record: paging back through empty
+         dates forever, with no way home but leaving the tab, is not history. */
+      App.sleepDay = shiftDay(App.sleepDay, Number(el.dataset.dir), earliestNightKey());
+      App.render();
+      announce(App.sleepDay === todayKey() ? 'Last night' : prettyDate(App.sleepDay));
       break;
+    case 'sleep-today': App.sleepDay = todayKey(); App.render(); break;
+    case 'sleep-nav': App.sleepView = el.dataset.view; App._renderedTab = null; App.render(); break;
+    case 'sleep-back': App.sleepView = 'home'; App._renderedTab = null; App.render(); break;
+    case 'open-night': App.sleepDay = el.dataset.key; App.render(); openSleepLog(); break;
+    case 'del-sleep': {
+      const key = el.dataset.key;
+      const entry = getSleep()[key];
+      if (!entry) break;
+      removeSleepEntry(key);
+      App.render();
+      destructive('sleep', { key, entry },
+        `${key === todayKey() ? 'Last night' : prettyDate(key)} removed`);
+      break;
+    }
 
     /* grocery */
     case 'g-add': addTypedGrocery(); break;
@@ -1747,7 +1764,7 @@ document.getElementById('tabbar').addEventListener('click', e => {
   if (App.tab === 'food') { App.foodDay = todayKey(); App.foodView = 'home'; }
   if (App.tab === 'train') App.trainView = 'home';
   if (App.tab === 'today') App.todayView = 'home';
-  if (App.tab === 'sleep') App.sleepDay = todayKey();
+  if (App.tab === 'sleep') { App.sleepDay = todayKey(); App.sleepView = 'home'; }
   if (App.tab === 'grocery') App.grocView = 'home';
   App.render();
 });
@@ -1764,9 +1781,11 @@ function addTypedGrocery(keepFocus) {
   if (keepFocus) document.getElementById('g-new')?.focus();
 }
 
-function shiftDay(key, dir) {
+function shiftDay(key, dir, min) {
   const nk = shiftKey(key, dir);
-  return nk > todayKey() ? todayKey() : nk;
+  if (nk > todayKey()) return todayKey();
+  if (min && nk < min) return key;
+  return nk;
 }
 
 /* Average tokens per scan, so real usage can replace the estimates behind the

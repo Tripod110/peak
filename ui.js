@@ -74,13 +74,15 @@ function navRow(action, view, ico, label, value, tone) {
    Every tab's home screen opens with one card that answers "what now?" — see
    DECISIONS.md D-19. Structure only; each tab decides what goes in it.
 
-   o = { id, state:'live'|'done'|'', eyebrow, eyebrowIcon, eyebrowTone:'good'|'live',
+   o = { id, state:'live'|'done'|'', eyebrow, eyebrowHtml, eyebrowIcon, eyebrowTone:'good'|'live',
          title, meta, metaHtml, bodyHtml,
          actions:[{label, icon, action, data:{}, cls, disabled}] } */
 function heroCard(o) {
   const dot = o.eyebrowTone === 'live' ? '<span class="live-dot" aria-hidden="true"></span> ' : '';
-  const eyebrow = o.eyebrow || o.eyebrowIcon ? `
-    <div class="eyebrow${o.eyebrowTone === 'good' ? ' good' : ''}">${dot}${o.eyebrowIcon ? icon(o.eyebrowIcon) + ' ' : ''}${esc(o.eyebrow || '')}</div>` : '';
+  /* eyebrowHtml replaces the eyebrow line outright, for a hero whose top row is
+     a control rather than a label — a date stepper, say. */
+  const eyebrow = o.eyebrowHtml || (o.eyebrow || o.eyebrowIcon ? `
+    <div class="eyebrow${o.eyebrowTone === 'good' ? ' good' : ''}">${dot}${o.eyebrowIcon ? icon(o.eyebrowIcon) + ' ' : ''}${esc(o.eyebrow || '')}</div>` : '');
   return `
   <section class="card hero-card${o.state ? ' ' + o.state : ''}"${o.id ? ` aria-labelledby="${o.id}-title"` : ''}>
     ${eyebrow}

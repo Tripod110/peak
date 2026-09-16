@@ -71,7 +71,7 @@ export function makeContext() {
       nutritionScore, computeTargets, rememberRecentFood, getGroceryFoodCache,
       loggedDayCount, lastLoggedDay,
       sleepDurationMin, sleepDurationPoints, sleepConsistency, sleepScore, usualNight, sleepAvgDays,
-      sleepTrainingLink, setSleepEntry, getSleep, minutesOf, timeOf, median,
+      sleepTrainingLink, setSleepEntry, removeSleepEntry, getSleep, minutesOf, timeOf, median, SLEEP_BANDS,
       parseQty, aisleFor, groupByAisle, yourUsuals, groceryAdd, groceryQty, groceryAddFromSection,
       getGrocery, setGrocery, AISLES, STAPLES, SNACKS, EASY_MEALS, grocKey, groceryMatch, grocGrouped, rememberGroceryFood };
   `, ctx);
