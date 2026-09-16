@@ -1544,7 +1544,9 @@ document.addEventListener('click', e => {
     case 'select-set': selectSet(uid, si); break;
     case 'ex-menu': openExerciseMenu(uid); break;
     case 'set-menu': openSetMenu(uid, si); break;
-    case 'move-ex': closeModal(); moveExercise(uid, Number(el.dataset.dir)); break;
+    case 'open-reorder': openReorderSheet(); break;
+    case 'ro-move': moveExercise(uid, Number(el.dataset.dir)); refreshReorderSheet(); break;
+    case 'ro-next': moveExerciseNext(uid); refreshReorderSheet(); break;
     case 'add-set': addSet(uid); break;
     case 'add-warmup': addWarmup(uid); break;
     case 'complete-set': completeSet(uid, si); break;

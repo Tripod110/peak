@@ -1033,3 +1033,17 @@ details.why[open] summary::after { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- reorder sheet (v40) ---------- */
+.ro-row { display:grid; grid-template-columns:26px minmax(0,1fr) 44px 44px auto; align-items:center;
+  gap:6px; padding:8px 2px; border-bottom:1px solid var(--grid); }
+.ro-row:last-of-type { border-bottom:0; }
+.ro-row.complete .ro-name { color:var(--muted); }
+.ro-pos { color:var(--muted); font-weight:700; font-size:13px; text-align:center; }
+.ro-name { display:flex; flex-direction:column; min-width:0; font-weight:600; }
+.ro-name small { color:var(--muted); font-weight:500; font-size:12px; }
+.ro-btn { width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:10px; color:var(--ink-2); }
+.ro-btn:disabled { opacity:.3; }
+.ro-btn:active:not(:disabled) { border-color:var(--baseline); }
+.ro-spacer { display:block; width:74px; }

@@ -1862,6 +1862,7 @@ function renderActiveSession() {
   </div>`}
   <div class="wk-foot">
     ${s.exercises.length ? `<button class="btn" data-action="add-exercise">${icon('plus')} Add exercise</button>` : ''}
+    ${s.exercises.length > 1 ? `<button class="btn" data-action="open-reorder">${icon('reorder')} Reorder</button>` : ''}
     <button class="btn" data-action="review-finish">${allDone ? 'Review &amp; finish' : 'Review &amp; finish early'}</button>
     <button class="btn ghost danger" data-action="discard-workout">Discard workout</button>
   </div>`;
@@ -2183,15 +2184,36 @@ function deleteExercise(uid) {
   App.render();
   destructive('exercise', { xi, exercise: removed }, `${removed.name} removed`);
 }
-function moveExercise(uid, dir) {
+/* Move a lift to an absolute position. Everything that reorders goes through
+   here, so there is one splice to get right. Focus is held by uid, so the open
+   exercise stays open wherever it lands. */
+function moveExerciseTo(uid, to) {
   const s = App.activeSession;
   const xi = exerciseIndex(uid);
-  const to = xi + dir;
-  if (!s || xi < 0 || to < 0 || to >= s.exercises.length) return;
-  [s.exercises[xi], s.exercises[to]] = [s.exercises[to], s.exercises[xi]];
+  if (!s || xi < 0 || to < 0 || to >= s.exercises.length || to === xi) return false;
+  const [ex] = s.exercises.splice(xi, 1);
+  s.exercises.splice(to, 0, ex);
   persistSession();
   App.render();
-  announce(`${s.exercises[to].name} moved ${dir < 0 ? 'up' : 'down'} to position ${to + 1}`);
+  return true;
+}
+function moveExercise(uid, dir) {
+  const s = App.activeSession;
+  const from = exerciseIndex(uid);
+  if (!moveExerciseTo(uid, from + dir)) return;
+  announce(`${sessionExercise(uid).name} moved ${dir < 0 ? 'up' : 'down'} to position ${exerciseIndex(uid) + 1}`);
+}
+
+/* "Do next" puts a lift directly after the one that is open — the rack is
+   busy, the bench is taken, so do this instead and come back. Moving the open
+   lift itself means "start here", so it goes to the front. */
+function moveExerciseNext(uid) {
+  const s = App.activeSession;
+  if (!s) return;
+  const focus = exerciseIndex(s.focusUid);
+  const to = uid === s.focusUid || focus < 0 ? 0 : (exerciseIndex(uid) < focus ? focus : focus + 1);
+  if (!moveExerciseTo(uid, to)) return;
+  announce(`${sessionExercise(uid).name} is next`);
 }
 /* Restores for what this file deletes — undoLast() in ui.js dispatches here. */
 registerUndo('set', u => {
@@ -2255,8 +2277,7 @@ function openExerciseMenu(uid) {
     <div class="sheet-list">
       ${typeof openProgressionSheet === 'function' ? `<button class="sheet-item" data-action="open-progression" data-name="${esc(ex.name)}">${icon('sliders')} Progression settings</button>` : ''}
       <button class="sheet-item" data-action="edit-load" data-name="${esc(ex.name)}">${icon('dumbbell')} How this lift is loaded</button>
-      <button class="sheet-item" data-action="move-ex" data-uid="${uid}" data-dir="-1" ${xi === 0 ? 'disabled' : ''}>${icon('up')} Move up</button>
-      <button class="sheet-item" data-action="move-ex" data-uid="${uid}" data-dir="1" ${xi === s.exercises.length - 1 ? 'disabled' : ''}>${icon('down')} Move down</button>
+      ${s.exercises.length > 1 ? `<button class="sheet-item" data-action="open-reorder">${icon('reorder')} Reorder exercises</button>` : ''}
       <button class="sheet-item danger" data-action="del-exercise" data-uid="${uid}">${icon('trash')} Remove ${esc(ex.name)} from this workout</button>
     </div>
     <button class="btn mt" data-action="close-modal">Cancel</button>
@@ -2267,6 +2288,52 @@ const SET_TYPE_LABEL = {
   normal: 'Working set', warmup: 'Warmup — not counted',
   failure: 'Taken to failure', drop: 'Drop set'
 };
+/* Reordering used to be two one-step items inside a per-exercise menu that only
+   existed on the OPEN exercise — so moving a lift three places meant opening
+   the sheet three times, and touching a lift you were not already doing meant
+   focusing it first, mid-set. One sheet, every exercise in it, and it stays
+   open while you work: refreshModal keeps the scroll position and the focused
+   button, which is the whole reason that helper exists.
+
+   Not drag-and-drop. The document is the scroll container, a touch-drag inside
+   a sheet that scrolls fights it, and a sweaty one-handed drag between sets is
+   the worst possible input for this. Two arrows and "Do next" cover both real
+   motions: nudge one place, or jump a lift forward because the rack is busy. */
+function reorderSheetHtml() {
+  const s = App.activeSession;
+  if (!s) return '';
+  const focus = exerciseIndex(s.focusUid);
+  return `
+    <h3>Reorder exercises</h3>
+    <div class="modal-sub">${s.dayName ? esc(s.dayName) + ' · ' : ''}arrows move one place, “Do next” jumps a lift to right after the one you are on.</div>
+    <div class="sheet-list">
+      ${s.exercises.map((ex, i) => {
+        const done = ex.sets.filter(st => st.done).length;
+        const complete = exComplete(ex);
+        return `
+        <div class="ro-row${complete ? ' complete' : ''}" role="group"
+          aria-label="Position ${i + 1} of ${s.exercises.length}: ${esc(ex.name)}, ${done} of ${ex.sets.length} sets done">
+          <span class="ro-pos" aria-hidden="true">${complete ? icon('check') : i + 1}</span>
+          <span class="ro-name">${esc(ex.name)}<small>${done}/${ex.sets.length} sets${i === focus ? ' · open' : ''}</small></span>
+          <button class="ro-btn" data-action="ro-move" data-uid="${ex.uid}" data-dir="-1" ${i === 0 ? 'disabled' : ''}
+            aria-label="Move ${esc(ex.name)} up">${icon('up')}</button>
+          <button class="ro-btn" data-action="ro-move" data-uid="${ex.uid}" data-dir="1" ${i === s.exercises.length - 1 ? 'disabled' : ''}
+            aria-label="Move ${esc(ex.name)} down">${icon('down')}</button>
+          ${i === focus || i === focus + 1 ? '<span class="ro-spacer" aria-hidden="true"></span>'
+            : `<button class="btn small" data-action="ro-next" data-uid="${ex.uid}">Do next</button>`}
+        </div>`;
+      }).join('')}
+    </div>
+    <button class="btn mt" data-action="close-modal">Done</button>`;
+}
+function openReorderSheet() {
+  if (!App.activeSession || App.activeSession.exercises.length < 2) return;
+  openModal(reorderSheetHtml());
+}
+/* Re-render in place: closing the sheet after every single move is what made
+   the old two-item version useless. */
+function refreshReorderSheet() { refreshModal(reorderSheetHtml()); }
+
 function openSetMenu(uid, si) {
   const ex = sessionExercise(uid);
   const st = ex?.sets[si];

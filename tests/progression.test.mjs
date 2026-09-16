@@ -230,3 +230,65 @@ test('malformed preferences read as no preference', () => {
   assert.deepEqual({ ...P.progressionPref('Bench Press') }, {});
   assert.equal(P.nextTarget('Bench Press', '4×5').w, 190);
 });
+
+/* ---- v40: reordering mid-session ---- */
+
+test('a lift can be moved several places in one operation, and focus follows it', () => {
+  seed();
+  P.startWorkout(0);
+  const s = P.App.activeSession;
+  const names = s.exercises.map(e => e.name);
+  assert.ok(names.length >= 4, 'this template needs a few exercises to be worth reordering');
+
+  const last = s.exercises[s.exercises.length - 1];
+  P.App.activeSession.focusUid = last.uid;
+
+  assert.equal(P.moveExerciseTo(last.uid, 0), true);
+  assert.equal(P.App.activeSession.exercises[0].uid, last.uid, 'one splice, not three swaps');
+  assert.equal(P.focusedExercise().uid, last.uid, 'the open exercise is still the open exercise');
+  assert.deepEqual([...P.App.activeSession.exercises.map(e => e.name)],
+    [last.name, ...names.slice(0, -1)], 'everything else keeps its order');
+});
+
+test('moving to where it already is, or off either end, does nothing', () => {
+  seed();
+  P.startWorkout(0);
+  const s = P.App.activeSession;
+  const first = s.exercises[0].uid;
+  const before = s.exercises.map(e => e.uid);
+
+  assert.equal(P.moveExerciseTo(first, 0), false, 'already there');
+  assert.equal(P.moveExerciseTo(first, -1), false, 'off the top');
+  assert.equal(P.moveExerciseTo(first, s.exercises.length), false, 'off the bottom');
+  assert.deepEqual([...P.App.activeSession.exercises.map(e => e.uid)], [...before]);
+});
+
+test('"do next" puts a lift straight after the one you are on', () => {
+  seed();
+  P.startWorkout(0);
+  const s = P.App.activeSession;
+  const focusUid = s.exercises[0].uid;
+  s.focusUid = focusUid;
+  const target = s.exercises[3].uid;
+
+  P.moveExerciseNext(target);
+  assert.equal(P.App.activeSession.exercises[1].uid, target, 'right behind the open lift');
+  assert.equal(P.App.activeSession.exercises[0].uid, focusUid, 'which has not moved');
+
+  // asking for the open lift itself means "start here"
+  const other = P.App.activeSession.exercises[2].uid;
+  P.App.activeSession.focusUid = other;
+  P.moveExerciseNext(other);
+  assert.equal(P.App.activeSession.exercises[0].uid, other);
+});
+
+test('one-step moves still work, and still survive a reorder of the set they sit in', () => {
+  seed();
+  P.startWorkout(0);
+  const s = P.App.activeSession;
+  const second = s.exercises[1];
+  P.moveExercise(second.uid, -1);
+  assert.equal(P.App.activeSession.exercises[0].uid, second.uid);
+  P.moveExercise(second.uid, 1);
+  assert.equal(P.App.activeSession.exercises[1].uid, second.uid, 'and back again');
+});

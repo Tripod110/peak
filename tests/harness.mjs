@@ -64,7 +64,7 @@ export function makeContext() {
     ;globalThis.__api = { Store, App, getSettings, setSettings, setProfile, saveWorkout, getWorkouts,
       nextTarget, progressionPref, setProgressionPref, getProgressionPrefs, exerciseHasLoad,
       plannedSetsFor, startWorkout, restoreSession, persistSession, ensureSessionIds, focusedExercise,
-      completeSet, deleteExercise, undoLast, moveExercise, finishWorkout, applyHoldToSession,
+      completeSet, deleteExercise, undoLast, moveExercise, moveExerciseTo, moveExerciseNext, finishWorkout, applyHoldToSession,
       prevSetsText, lastSessionSets, todayKey, lbToKg, kgToLb, fromW, toW, registerUndo, destructive,
       sanitizeStored, normTime, getProfile, AISLE_IDS,
       addFoodEntry, updateFoodEntry, removeFoodEntry, restoreFoodEntry, findFoodEntry, foodForDay, dayTotals,
