@@ -1,9 +1,17 @@
 /* Shared test context for Peak's node:test suites.
  *
- * Peak has no build step and no module system, so this loads the real
- * store.js / train.js / routines.js into one VM context with just enough of a
- * browser stubbed in to run them — the same globals the page sees. Rendering is
- * stubbed out; what's under test is the data the UI reads and writes.
+ * Peak has no build step and no module system, so this loads the real tab
+ * files into one VM context with just enough of a browser stubbed in to run
+ * them — the same globals the page sees, in the same order index.html loads
+ * them. Rendering is stubbed out; what's under test is the data the UI reads
+ * and writes.
+ *
+ * charts.js is loaded rather than stubbed: it is pure string-building over
+ * numbers, it needs nothing but esc, and loading it gives the tests the real
+ * CHART palette instead of a hand-maintained fake that drifts.
+ *
+ * app.js is deliberately NOT loaded — it owns the DOM, the event dispatcher
+ * and the boot sequence. Its handful of pure helpers are stubbed below.
  *
  * Note `esc()` is the identity here. Escaping is verified by reading the render
  * sinks, not by these tests; what these cover is the other half of the defence,
@@ -38,16 +46,20 @@ export function makeContext() {
   };
   vm.createContext(ctx);
   // Object.keys(localStorage) is how wipeAll enumerates — mirror the browser
-  const src = ['store.js', 'ui.js', 'train.js', 'routines.js'].map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n;\n');
+  const src = ['store.js', 'ui.js', 'charts.js', 'food.js', 'train.js', 'routines.js', 'sleep.js', 'grocery.js']
+    .map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n;\n');
   vm.runInContext(`
-    var App = { activeSession: null, rest: null, undo: null, setSel: null, tab: 'train', render() {} };
+    var App = { activeSession: null, rest: null, undo: null, setSel: null, tab: 'train', render() {},
+      foodDay: null, foodView: 'home', sleepDay: null, sleepView: 'home', grocView: 'home',
+      scanImage: null, scanResult: null, _renderedTab: null };
     function esc(s) { return String(s ?? ''); }
     function toast(m) { toasts.push(m); }
     function announce() {}
     function openModal() {}
     function closeModal() {}
     function paintRest() {}
-    const CHART = { good: 'g', warning: 'w', critical: 'c', orange: 'o', blue: 'b', aqua: 'a', muted: 'm' };
+    function navHeader() { return ''; }
+    function prepareImage() {}
     ${src}
     ;globalThis.__api = { Store, App, getSettings, setSettings, setProfile, saveWorkout, getWorkouts,
       nextTarget, progressionPref, setProgressionPref, getProgressionPrefs, exerciseHasLoad,
@@ -55,7 +67,13 @@ export function makeContext() {
       completeSet, deleteExercise, undoLast, moveExercise, finishWorkout, applyHoldToSession,
       prevSetsText, lastSessionSets, todayKey, lbToKg, kgToLb, fromW, toW, registerUndo, destructive,
       sanitizeStored, normTime, getProfile, AISLE_IDS,
-      addFoodEntry, updateFoodEntry, removeFoodEntry, restoreFoodEntry, findFoodEntry, foodForDay, dayTotals };
+      addFoodEntry, updateFoodEntry, removeFoodEntry, restoreFoodEntry, findFoodEntry, foodForDay, dayTotals,
+      nutritionScore, computeTargets, rememberRecentFood, rememberGroceryFood, getGroceryFoodCache,
+      loggedDayCount, lastLoggedDay,
+      sleepDurationMin, sleepDurationPoints, sleepConsistency, sleepScore, usualNight, sleepAvgDays,
+      sleepTrainingLink, setSleepEntry, getSleep, minutesOf, timeOf, median,
+      parseQty, aisleFor, groupByAisle, yourUsuals, groceryAdd, groceryQty, groceryAddFromSection,
+      getGrocery, setGrocery, AISLES, STAPLES, SNACKS, EASY_MEALS };
   `, ctx);
   // wipeAll uses Object.keys(localStorage); give it the real key list
   vm.runInContext(`Store.wipeAll = function () { localStorage.keys().filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k)); _cache.clear(); };`, ctx);
