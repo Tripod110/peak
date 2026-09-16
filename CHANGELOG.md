@@ -25,7 +25,7 @@ See [SHIPPING.md](SHIPPING.md).
 ---
 
 ## v40 — the rest of the app catches up
-`pending` · 2026-09-15 · **pending push**
+`60d53af` · 2026-09-15 · **live**
 
 v37 rebuilt Today and Train and left the other three tabs alone, so Peak had two design
 languages: a hero card with a glance strip and drill-ins on two tabs, and a long scroll of
@@ -126,7 +126,7 @@ a number would fail rather than pass.
 ---
 
 ## v38 — restored backups are no longer trusted
-`pending` · 2026-09-15 · **pending push**
+`01a7a92` · 2026-09-15 · **live** (pushed with v40)
 
 **This is v33's work, landing three releases late.** v33 was committed on 2026-08-12 but never
 pushed, and v34–v37 were built from v32, so every fix below was absent from the live app the
