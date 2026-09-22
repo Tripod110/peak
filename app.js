@@ -675,7 +675,7 @@ function renderGoalWeight(p, lastDisp, weekly) {
   <div class="card">
     <div class="spread">
       <div>
-        <div class="hero-num" style="font-size:26px;color:${done ? CHART.good : 'var(--ink)'}">
+        <div class="hero-num" style="font-size:26px;color:${done ? 'var(--good)' : 'var(--ink)'}">
           ${done ? 'At goal 🎉' : `${Math.abs(remaining)} ${u}`}</div>
         <div class="muted small">${done ? `Goal ${goal} ${u}` : `${remaining < 0 ? 'to lose' : 'to gain'} · goal ${goal} ${u}`}</div>
       </div>
@@ -686,9 +686,9 @@ function renderGoalWeight(p, lastDisp, weekly) {
 
 function goalDirectionColor(p, weekly) {
   const cutting = p.goal === 'cut' || p.goal === 'slowcut';
-  if (cutting) return weekly < 0 ? CHART.good : 'var(--warning)';
-  if (p.goal === 'bulk') return weekly > 0 ? CHART.good : 'var(--warning)';
-  return Math.abs(weekly) < 0.7 ? CHART.good : 'var(--warning)';
+  if (cutting) return weekly < 0 ? 'var(--good)' : 'var(--warning)';
+  if (p.goal === 'bulk') return weekly > 0 ? 'var(--good)' : 'var(--warning)';
+  return Math.abs(weekly) < 0.7 ? 'var(--good)' : 'var(--warning)';
 }
 function weeklyWeightVerdict(p, weekly) {
   // thresholds are in the user's unit, so scale the lb-derived bands for kg
@@ -1088,7 +1088,7 @@ async function testApiKey() {
       const keep = list.some(m => m.id === current) ? current : list[0].id;
       sel.innerHTML = list.map(m => `<option value="${esc(m.id)}" ${m.id === keep ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
     }
-    if (out) { out.style.color = CHART.good; out.textContent = `✓ Key works · ${list.length} models`; }
+    if (out) { out.style.color = 'var(--good)'; out.textContent = `✓ Key works · ${list.length} models`; }
   } catch (e) {
     if (out) { out.style.color = 'var(--critical)'; out.textContent = e.message; }
   }
@@ -1227,7 +1227,7 @@ function openSettingsModal() {
       <summary>Backup & data${bk.due ? ' <span class="pill warn">due</span>' : ''}</summary>
       <div class="spread" style="margin-top:8px">
         <span class="muted small">Last backup</span>
-        <b class="small" style="color:${bk.last ? (bk.staleDays >= BACKUP_STALE_DAYS ? 'var(--warning)' : CHART.good) : 'var(--warning)'}">
+        <b class="small" style="color:${bk.last ? (bk.staleDays >= BACKUP_STALE_DAYS ? 'var(--warning)' : 'var(--good)') : 'var(--warning)'}">
           ${bk.last ? `${prettyDate(bk.last)}${bk.staleDays > 0 ? ` · ${bk.staleDays}d ago` : ' · today'}` : 'never'}</b>
       </div>
       <button class="btn mt" data-action="export-data">⬇ Export data (JSON)</button>

@@ -60,7 +60,7 @@ function emptyNote(t) { return `<div class="card"><div class="muted small">${esc
    sheet items and buttons. Picking one per slot stops every release turning
    into an icon-churn diff. */
 function navRow(action, view, ico, label, value, tone) {
-  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
+  const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? 'var(--good)' : 'var(--muted)';
   return `
   <button class="nav-row" data-action="${action}"${view ? ` data-view="${view}"` : ''}>
     <span class="nr-ico" aria-hidden="true">${ico}</span>

@@ -195,14 +195,14 @@ function renderSleepTrainingLink() {
     </div>`;
   }
   const better = l.delta > 0;
-  const color = better ? CHART.good : l.delta < 0 ? CHART.warning : CHART.muted;
+  const color = better ? 'var(--good)' : l.delta < 0 ? 'var(--warning)' : 'var(--muted)';
   return `
   <div class="card">
     <h2>Sleep vs training <span class="h2-right">your sessions, your nights</span></h2>
     <div class="grid-2">
-      <div class="stat"><div class="sv" style="color:${CHART.good}">${l.goodAvg}</div>
+      <div class="stat"><div class="sv" style="color:var(--good)">${l.goodAvg}</div>
         <div class="sl">after 7h30+<br>${l.goodN} sessions</div></div>
-      <div class="stat"><div class="sv" style="color:${CHART.warning}">${l.shortAvg}</div>
+      <div class="stat"><div class="sv" style="color:var(--warning)">${l.shortAvg}</div>
         <div class="sl">after under 7h<br>${l.shortN} sessions</div></div>
     </div>
     <div class="focus mt">

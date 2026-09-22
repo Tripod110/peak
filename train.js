@@ -1231,7 +1231,7 @@ function renderMuscleVolumeCard(all) {
   const headline = under.length
     ? `<span style="color:var(--warning)">${under.length} muscle${under.length > 1 ? 's' : ''} below effective volume</span>`
     : over.length ? `<span style="color:var(--critical)">${over.length} above recoverable volume</span>`
-    : `<span style="color:${CHART.good}">Every muscle in range</span>`;
+    : `<span style="color:var(--good)">Every muscle in range</span>`;
 
   return `
   ${unclassified.length ? `
@@ -1248,7 +1248,7 @@ function renderMuscleVolumeCard(all) {
     <h2>Weekly sets per muscle <span class="h2-right">last 7 days</span></h2>
     <div class="small" style="margin-bottom:12px">${headline}</div>
     ${order.map(r => {
-      const color = r.state === 'under' ? CHART.warning : r.state === 'over' ? CHART.critical : CHART.aqua;
+      const color = r.state === 'under' ? 'var(--warning)' : r.state === 'over' ? 'var(--critical)' : CHART.aqua;
       const pct = Math.min(r.v / r.mrv * 100, 100);
       return `
       <div class="mv-row">
@@ -1329,7 +1329,7 @@ function renderRecordsCard(limit) {
         <div class="li-main">
           <div class="li-title">${esc(r.name)}${perHandLift(r.name) ? ' <span class="muted small">per hand</span>' : ''}</div>
           <div class="li-sub">${r.sessions} session${r.sessions !== 1 ? 's' : ''}${
-            r.deltaDisp != null ? ` · <span style="color:${r.deltaDisp > 0 ? CHART.good : 'var(--muted)'}">${r.deltaDisp > 0 ? '+' + r.deltaDisp + ' ' + u : 'holding'}</span>` : ''}</div>
+            r.deltaDisp != null ? ` · <span style="color:${r.deltaDisp > 0 ? 'var(--good)' : 'var(--muted)'}">${r.deltaDisp > 0 ? '+' + r.deltaDisp + ' ' + u : 'holding'}</span>` : ''}</div>
         </div>
         ${r.hist.length >= 2 ? sparkline(r.hist.map(h => toW(h.bestE1rm)), { markers: prIndexes(r.hist), color: CHART.blue, w: 108, h: 34 }) : ''}
         <div class="li-val">${r.bestDisp}<span class="unit"> ${u}</span></div>
