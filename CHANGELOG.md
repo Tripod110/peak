@@ -24,6 +24,35 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v41 — the device id stops travelling in backups
+2026-09-22 · **pending push**
+
+`forge:deviceId` is the only thing the Worker checks on `/subscribe` and `/unsubscribe`, so
+whoever holds it can delete a device's reminders or repoint its push subscription. Backups are
+made to be shared, so it was the wrong thing to put in one.
+
+- **Export** leaves `deviceId` out, alongside the Gemini key, and the file's note says so.
+- **Restore** keeps this device's own id rather than inheriting one from the file. Older
+  backups that still carry it restore normally, and it isn't counted in "ignored N entries" —
+  Peak wrote it, so the file isn't misdescribing itself.
+- Test: `tests/untrusted-backup.test.mjs` covers export, restore and the skipped count.
+
+**Worker** (ships with `wrangler deploy`, separately from the Pages push):
+
+- Push endpoints must be `https` on a real push-service host (exact or subdomain match, never a
+  substring). They're checked at `/subscribe` and again before each send, and records saved
+  before this check are deleted. Without it, the reminder cron would POST to any URL anyone
+  registered.
+- `p256dh` / `auth` are shape-checked, so junk can't throw on every cron run.
+- New subscriptions are capped per UTC day (`NEW_SUBS_PER_DAY`, default 500). Updating an
+  existing one is never capped.
+- The global scan cap reserves its slot **before** the Gemini call and never refunds it.
+  Counting after the response meant concurrent requests all read the same value and got past
+  a cap that was already reached.
+- Requests without an `Origin` header are rejected. `/unsubscribe` shape-checks `deviceId`.
+
+---
+
 ## v40 — the rest of the app catches up
 `60d53af` · 2026-09-15 · **live**
 
