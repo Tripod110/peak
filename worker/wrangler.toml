@@ -8,6 +8,11 @@ FREE_SCANS_PER_DAY = "3"
 GLOBAL_DAILY_CAP   = "5000"   # ~$6/day worst case on 2.5 Flash. Set it to what you'd tolerate losing.
 MODEL              = "gemini-2.5-flash"
 ALLOWED_ORIGIN     = "https://tripod110.github.io"
+# New push subscriptions accepted per day, across everyone. Each one is a
+# permanent KV record the cron walks on every run, and deviceId is client-chosen,
+# so this is what stops a loop over random ids from filling KV and starving
+# runReminders. Re-subscribing from a known device doesn't count against it.
+NEW_SUBS_PER_DAY   = "500"
 
 # Public half of the VAPID keypair for Web Push — not secret, it's shipped to
 # every subscribing browser as the applicationServerKey. Generate both halves

@@ -177,3 +177,16 @@ test('editing a food entry refreshes its macros without counting it as eaten aga
   P.addFoodEntry(P.todayKey(), { name: 'Chicken burrito bowl', kcal: 700, protein: 56, carbs: 70, fat: 20 });
   assert.equal(P.Store.get('recentFoods', []).find(r => r.name === 'Chicken burrito bowl').count, 2);
 });
+
+/* deviceId is the only thing the Worker checks on /subscribe and /unsubscribe,
+   so it must never leave in a backup or arrive from one. */
+test('deviceId is never exported, and a backup cannot overwrite this device\'s', () => {
+  ctx.localStorage.setItem('forge:deviceId', JSON.stringify('mine'));
+  const out = JSON.parse(P.Store.exportAll());
+  assert.equal(out.data['forge:deviceId'], undefined, 'not in the exported file');
+
+  const { skipped } = P.Store.importAll(backup({ deviceId: 'someone-elses', settings: { units: 'metric' } }));
+  assert.equal(P.Store.get('deviceId', null), 'mine', 'this device keeps its own id');
+  assert.equal(skipped, 0, 'an older backup carrying one is not reported as foreign');
+  assert.equal(P.getSettings().units, 'metric');
+});

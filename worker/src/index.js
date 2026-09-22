@@ -49,6 +49,35 @@ const SCAN_PROMPT = `Analyze this meal and estimate its nutrition. Identify each
 const MAX_IMAGE_BYTES = 1_500_000;   // the app downscales to ~1024px; this is slack, not a target
 const MAX_DESC_CHARS = 400;
 
+/* New `sub:` records created per UTC day, across everyone. A subscription is a
+   permanent (no-TTL) KV record that the cron then walks on every run, so an
+   unbounded number of them is both a storage bill and a way to starve the cron
+   before it reaches real subscribers. Re-subscribing from a device that already
+   has a record doesn't count — only genuinely new ones do. */
+const NEW_SUBS_PER_DAY = 500;
+
+/* A push endpoint is a URL this Worker will POST to, unattended, every time the
+   cron fires. Without an allowlist that makes /subscribe an open request relay:
+   anyone can register any URL and have Cloudflare hit it on a schedule. These
+   are the only hosts a real browser's pushManager can ever hand us.
+   Checked as an exact host or a subdomain — never a substring, which would let
+   `fcm.googleapis.com.evil.example` through. */
+const PUSH_HOSTS = [
+  'fcm.googleapis.com',              // Chrome / Chromium
+  'updates.push.services.mozilla.com', // Firefox
+  'web.push.apple.com',              // Safari / iOS
+  'notify.windows.com',              // Edge (legacy WNS)
+  'push.services.mozilla.com'
+];
+function isAllowedPushEndpoint(endpoint) {
+  if (typeof endpoint !== 'string' || endpoint.length > 1000) return false;
+  let u;
+  try { u = new URL(endpoint); } catch { return false; }
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  return PUSH_HOSTS.some(h => host === h || host.endsWith('.' + h));
+}
+
 function utcDay() { return new Date().toISOString().slice(0, 10); }
 
 function cors(env) {
@@ -67,10 +96,13 @@ function json(body, status, env) {
   });
 }
 
-/* KV counters are eventually consistent, so under heavy concurrency these can
-   undercount slightly. That's fine for a courtesy limit — the global cap below
-   is the thing protecting the bill, and it's set well under budget for exactly
-   this reason. Swap to a Durable Object if you ever need exactness. */
+/* Read-modify-write on an eventually-consistent store: two requests that land
+   together read the same value and one increment is lost. That is tolerable for
+   the per-device courtesy limit, and it is NOT tolerable for the global cap —
+   Gemini has no hard spend cap, so that counter is the actual spend control.
+   The global cap compensates by reserving its slot *before* the paid call and
+   never refunding (see below), which makes the failure direction overcounting
+   rather than undercounting. Swap to a Durable Object if you need exactness. */
 async function bump(kv, key, ttlSeconds) {
   const n = Number(await kv.get(key)) || 0;
   await kv.put(key, String(n + 1), { expirationTtl: ttlSeconds });
@@ -81,10 +113,14 @@ export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env) });
 
-    // Weak, but it filters casual abuse. Real protection is the caps below /
-    // the fact that a subscription is useless without a valid endpoint.
+    /* Not a security boundary — a header is trivially forged by anything that
+       isn't a browser, so it stops casual abuse and nothing more. The real
+       protection is the caps below and the endpoint allowlist in
+       handleSubscribe. Missing Origin is rejected too: every legitimate caller
+       is the page on ALLOWED_ORIGIN making a cross-origin JSON POST, which the
+       browser always labels. */
     const origin = request.headers.get('origin');
-    if (env.ALLOWED_ORIGIN && origin && origin !== env.ALLOWED_ORIGIN) {
+    if (env.ALLOWED_ORIGIN && origin !== env.ALLOWED_ORIGIN) {
       return json({ error: 'Forbidden' }, 403, env);
     }
     if (request.method !== 'POST') return json({ error: 'POST only' }, 405, env);
@@ -128,6 +164,16 @@ export default {
         resetsAt: `${day}T24:00:00Z`
       }, 429, env);
     }
+
+    /* Reserve the global slot BEFORE spending money, not after the response comes
+       back. Incrementing afterwards left the whole Gemini round-trip as a window
+       in which every concurrent request read the same pre-increment value and
+       sailed past a cap that was already met — the one counter that is supposed
+       to bound the bill was the one that failed open under exactly the load it
+       exists for. Deliberately not refunded when the call fails: a refund path
+       reopens the same race in the direction that costs money, and a failing
+       scan has usually still been billed for its input tokens. */
+    await bump(env.PEAK_KV, `global:${day}`, 172800);
 
     const parts = [];
     if (image) parts.push({ inline_data: { mime_type: mediaType, data: image } });
@@ -175,9 +221,9 @@ export default {
       return json({ error: "Couldn't identify any food. Try a clearer photo or add a description." }, 422, env);
     }
 
-    // Only count scans that actually produced something.
+    /* Only charge the *user's* free allowance for a scan that produced something
+       — the global counter was already reserved above and stays spent either way. */
     await bump(env.PEAK_KV, deviceKey, 172800);
-    await bump(env.PEAK_KV, `global:${day}`, 172800);
 
     const u = data.usageMetadata || {};
     console.log(JSON.stringify({
@@ -213,6 +259,19 @@ async function handleSubscribe(request, env) {
   if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
     return json({ error: 'Invalid subscription' }, 400, env);
   }
+  /* The endpoint is a URL the cron will POST to unattended — it has to be a real
+     push service, or this route is an open relay. See PUSH_HOSTS. */
+  if (!isAllowedPushEndpoint(subscription.endpoint)) {
+    return json({ error: 'Invalid subscription' }, 400, env);
+  }
+  /* Shape-check the crypto material too. Junk here doesn't reach a browser, it
+     just throws inside sendWebPush on every cron run, forever. p256dh is a
+     65-byte EC point and auth is 16 bytes, both base64url. */
+  const { p256dh, auth } = subscription.keys;
+  if (typeof p256dh !== 'string' || !/^[A-Za-z0-9_-]{86,88}$/.test(p256dh) ||
+      typeof auth !== 'string' || !/^[A-Za-z0-9_-]{22,24}$/.test(auth)) {
+    return json({ error: 'Invalid subscription' }, 400, env);
+  }
   if (typeof tzOffsetMin !== 'number' || tzOffsetMin < -720 || tzOffsetMin > 840) {
     return json({ error: 'Invalid timezone offset' }, 400, env);
   }
@@ -220,9 +279,27 @@ async function handleSubscribe(request, env) {
     sleep: /^\d{2}:\d{2}$/.test(reminders?.sleep) ? reminders.sleep : null,
     food: /^\d{2}:\d{2}$/.test(reminders?.food) ? reminders.food : null
   };
+
   // no TTL: a subscription lives until the user turns reminders off, unlike
   // the 48h rate-limit counters (`dev:`/`global:`) elsewhere in this file
   const existing = await env.PEAK_KV.get(subKey(deviceId), 'json');
+
+  /* Creating a record is the expensive direction — it's permanent and the cron
+     walks it on every run — and deviceId is client-chosen, so without this a
+     loop over random ids grows KV without bound and starves runReminders before
+     it reaches anyone real. Updating an existing record is free by comparison
+     and stays uncapped, so a user toggling their own reminder times is never
+     told to come back tomorrow. */
+  if (!existing) {
+    const day = utcDay();
+    const cap = Number(env.NEW_SUBS_PER_DAY) || NEW_SUBS_PER_DAY;
+    const madeToday = Number(await env.PEAK_KV.get(`newsub:${day}`)) || 0;
+    if (madeToday >= cap) {
+      return json({ error: 'Reminder sign-ups are at capacity today — try again tomorrow.' }, 503, env);
+    }
+    await bump(env.PEAK_KV, `newsub:${day}`, 172800);
+  }
+
   await env.PEAK_KV.put(subKey(deviceId), JSON.stringify({
     subscription, tzOffsetMin, reminders: clean,
     lastSent: existing?.lastSent || {}
@@ -234,7 +311,11 @@ async function handleUnsubscribe(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Bad request' }, 400, env); }
   const { deviceId } = body || {};
-  if (!deviceId) return json({ error: 'Bad request' }, 400, env);
+  // same shape check as /subscribe — a non-string here builds a key like
+  // `sub:[object Object]` and silently deletes nothing
+  if (!deviceId || typeof deviceId !== 'string' || deviceId.length > 64) {
+    return json({ error: 'Bad request' }, 400, env);
+  }
   await env.PEAK_KV.delete(subKey(deviceId));
   return json({ ok: true }, 200, env);
 }
@@ -264,6 +345,14 @@ async function runReminders(env) {
     for (const k of page.keys) {
       const rec = await env.PEAK_KV.get(k.name, 'json');
       if (!rec) continue;
+      /* Re-checked at send time, not just at /subscribe: records written before
+         the endpoint allowlist existed are still in KV, and this is the line
+         that actually makes the outbound request. Drop them rather than keep
+         POSTing to whatever they name. */
+      if (!isAllowedPushEndpoint(rec.subscription?.endpoint)) {
+        await env.PEAK_KV.delete(k.name);
+        continue;
+      }
       let changed = false;
       for (const kind of ['sleep', 'food']) {
         const time = rec.reminders?.[kind];

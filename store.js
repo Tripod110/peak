@@ -92,12 +92,20 @@ const Store = {
      data that deliberately leaves the device — emailed to yourself, dropped in
      cloud storage, attached to a bug report. None of those are places a working
      API key should end up, so it is stripped on the way out. Everything else in
-     settings is preferences and travels normally. */
+     settings is preferences and travels normally.
+
+     deviceId is stripped for the same reason. It reads like a harmless opaque
+     id, but it is the ONLY thing the Worker checks on /subscribe and
+     /unsubscribe — whoever holds it can delete your reminders or repoint your
+     push subscription. A value that authorises something must not ride along in
+     a file whose whole purpose is to be shared. It is device identity, not
+     history, so losing it on restore is correct: getDeviceId() mints a new one. */
   exportAll() {
     const out = {};
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k.startsWith('forge:')) continue;
+      if (k === 'forge:deviceId') continue;
       let v = localStorage.getItem(k);
       if (k === 'forge:settings') {
         try {
@@ -109,14 +117,19 @@ const Store = {
     }
     return JSON.stringify({
       app: 'peak', version: 2, exported: new Date().toISOString(),
-      note: 'Your Gemini API key is deliberately not included in this file.',
+      note: 'Your Gemini API key and this device\'s id are deliberately not included in this file.',
       data: out
     }, null, 2);
   },
   /* A restore is a replacement, not a merge — otherwise keys absent from an older
-     backup survive and you end up with a hybrid of two states. The one exception
-     is the API key: backups no longer carry it, so replacing settings wholesale
-     would silently switch scanning off on a device that was working.
+     backup survive and you end up with a hybrid of two states. Two exceptions,
+     both things that belong to the device rather than to the history:
+       - the API key, because backups no longer carry it and replacing settings
+         wholesale would silently switch scanning off on a device that was working
+       - deviceId, which addresses this device's push subscription on the Worker;
+         inheriting one from a file would point two installs at the same record.
+         Older backups do carry it, so it is dropped silently rather than counted
+         in {skipped} — Peak did write it, the file isn't lying about itself.
 
      This is also the ONLY place untrusted data enters Peak. A backup is a file
      someone can be handed — the app nags them to make one, so receiving one
@@ -135,14 +148,16 @@ const Store = {
     if (!parsed || (parsed.app !== 'peak' && parsed.app !== 'forge') || !parsed.data) throw new Error('Not a Peak backup file');
     if (typeof parsed.data !== 'object' || Array.isArray(parsed.data)) throw new Error('Not a Peak backup file');
     const keepKey = getSettings().apiKey;
+    const keepDeviceId = Store.get('deviceId', null);
 
     const all = Object.entries(parsed.data).filter(([, v]) => typeof v === 'string');
     const mine = all.filter(([k]) => k.startsWith('forge:'));
     const skipped = Object.keys(parsed.data).length - mine.length;
 
     Store.wipeAll();
-    mine.forEach(([k, v]) => localStorage.setItem(k, v));
+    mine.forEach(([k, v]) => { if (k !== 'forge:deviceId') localStorage.setItem(k, v); });
     _cache.clear();
+    if (keepDeviceId) Store.set('deviceId', keepDeviceId);
     sanitizeStored();
 
     if (keepKey) {
