@@ -268,6 +268,7 @@ function sanitizeStored() {
     grocGroup: ['auto', 'aisle', 'flat'].includes(s.grocGroup) ? s.grocGroup : 'auto',
     // same ids as COACH_VOICE_IDS in coach.js, which loads after this file
     coachVoice: ['encouraging', 'straight', 'drill'].includes(s.coachVoice) ? s.coachVoice : 'straight',
+    coachAi: s.coachAi === true,
     dietary: { restrictions: szArr(szObj(s.dietary).restrictions)
       .filter(id => DIETARY_RESTRICTIONS.some(d => d.id === id)) },
     /* reminder times land in a value="" attribute in Settings — normTime is
@@ -424,6 +425,12 @@ function sanitizeStored() {
   });
   Store.set('liftGoals', JSON.parse(JSON.stringify(cleanGoals)));
 
+  /* the AI-worded check-in cache: two short strings for one week, or nothing */
+  const cw = szObj(Store.get('coachWeekly', {}));
+  if (szDate(cw.week) && typeof cw.headline === 'string' && typeof cw.body === 'string') {
+    Store.set('coachWeekly', { week: cw.week, hash: szStr(cw.hash, 20), headline: szStr(cw.headline, 90), body: szStr(cw.body, 520) });
+  } else Store.remove('coachWeekly');
+
   /* coach memory — only the user's own answers ("not now" until a date) */
   const mem = szObj(Store.get('coachMemory', {}));
   const snooze = {};
@@ -434,6 +441,7 @@ function sanitizeStored() {
   Store.set('coachMemory', {
     snooze,
     ...(szDate(mem.deloadUntil) ? { deloadUntil: mem.deloadUntil } : {}),
+    ...(szDate(mem.checkinSeen) ? { checkinSeen: mem.checkinSeen } : {}),
     ...(szDate(sw.date) && ['swap', 'reps'].includes(sw.kind) ? { lastSwitch: { date: sw.date, kind: sw.kind } } : {})
   });
 

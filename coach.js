@@ -687,3 +687,180 @@ function coachVoicePickerHtml() {
       </button>`).join('')}
     </div>`;
 }
+
+/* ---------- the weekly check-in ----------
+   Once a week the coach steps back and talks about the week as a whole: what
+   you did against the plan, what moved, what to focus on. It replaces the
+   day-to-day coach card while it's up, so the two never say the same thing
+   twice, and "Got it" puts it away until next week. */
+
+/* Monday of the week containing `key` (defaults to today), as YYYY-MM-DD */
+function weekKeyOf(key = todayKey()) {
+  const [y, m, d] = key.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+  return dateKey(dt);
+}
+
+function checkinDue() {
+  const sessions = liftingSessions();
+  if (sessions.length < 3) return false;                       // nothing to review yet
+  if (daysBetween(sessions[sessions.length - 1].date, todayKey()) > 14) return false;
+  return getCoachMemory().checkinSeen !== weekKeyOf();
+}
+
+/* The week in numbers, plus the words. Everything the AI version is allowed to
+   mention is in `facts` — see coachAiGuard. */
+function weeklyCheckin() {
+  const sig = coachSignals();
+  const state = coachState(sig);
+  const f = coachFacts(sig, state);
+  const words = pickVariant(COACH_COPY[state === 'empty' ? 'steady' : state][coachVoice()])(f);
+  let prs7 = 0;
+  sig.lifts.forEach(l => {
+    const full = exerciseHistory(l.name).filter(h => !h.deload);
+    for (let i = 1; i < full.length; i++) {
+      if (daysBetween(full[i].date, todayKey()) < 7 && beats(full[i], full.slice(0, i), 1.0001)) prs7++;
+    }
+  });
+  const weak = typeof weeklyWeakLink === 'function' && getProfile()
+    ? weeklyWeakLink(getProfile(), computeTargets(getProfile())) : null;
+  const goals = sig.lifts.map(l => liftOutlook(l.name)).filter(o => o.status === 'ok')
+    .map(o => ({ name: o.name, goal: fmtGoal(o.goal), eta: shortDate(o.eta), weeksVsTarget: o.vsTargetDays == null ? null : Math.round(o.vsTargetDays / 7) }));
+  const facts = {
+    state, voice: coachVoice(),
+    sessions7: sig.weeks[0], planned: sig.planned, prs7, prs28: sig.prs28,
+    progressing: sig.progressing.map(l => l.name), flat: sig.flatOrStalled.map(l => l.name),
+    sleepAvg: sig.sleep7.avgMin ? `${Math.floor(sig.sleep7.avgMin / 60)}h${String(sig.sleep7.avgMin % 60).padStart(2, '0')}` : null,
+    proteinHitDays: sig.proteinLogged ? `${sig.proteinHit} of ${sig.proteinLogged}` : null,
+    focus: weak && !['ok', 'none'].includes(weak.key) ? weak.full : null,
+    goals
+  };
+  const rule = { headline: words.h, body: words.b + (facts.focus ? ` This week's focus: ${facts.focus}` : '') };
+  const ai = coachAiCached(facts);
+  return { week: weekKeyOf(), facts, ...(ai || rule), aiWorded: !!ai, rule, action: COACH_ACTIONS[state] ? COACH_ACTIONS[state]() : null };
+}
+
+function renderWeeklyCheckin() {
+  if (!checkinDue()) return '';
+  const c = weeklyCheckin();
+  if (coachAiEnabled() && !c.aiWorded) requestCoachAi(c.facts, c.rule);
+  const f = c.facts;
+  const stat = (v, label) => `<div class="ck-stat"><b>${esc(v)}</b><span>${esc(label)}</span></div>`;
+  return `
+  <section class="card coach-card checkin" aria-label="Weekly check-in">
+    <div class="coach-eyebrow">Your week · from ${esc(shortDate(c.week))}</div>
+    <div class="ck-stats">
+      ${stat(`${f.sessions7}/${f.planned}`, 'sessions')}
+      ${stat(String(f.prs7), f.prs7 === 1 ? 'PR' : 'PRs')}
+      ${f.sleepAvg ? stat(f.sleepAvg, 'avg sleep') : ''}
+      ${f.proteinHitDays ? stat(f.proteinHitDays, 'protein days') : ''}
+    </div>
+    <b class="coach-h">${esc(c.headline)}</b>
+    <p class="coach-b">${esc(c.body)}</p>
+    ${f.goals.map(g => `<div class="coach-sub">🎯 ${esc(g.name)} ${esc(g.goal)} ~${esc(g.eta)}${g.weeksVsTarget == null ? '' : g.weeksVsTarget <= 0 ? ' · on pace' : ` · ${g.weeksVsTarget} wk behind target`}</div>`).join('')}
+    <div class="row coach-actions">
+      ${c.action && c.action.action ? `<button class="btn small primary" data-action="${c.action.action}">${esc(c.action.label)}</button>` : ''}
+      <button class="btn small ${c.action ? 'ghost' : 'primary'}" data-action="checkin-done">Got it</button>
+    </div>
+    ${c.aiWorded ? '<div class="coach-sub">Worded by Gemini from the numbers above</div>' : ''}
+  </section>`;
+}
+function dismissCheckin() { setCoachMemory({ checkinSeen: weekKeyOf() }); }
+
+/* ---------- optional: Gemini words the check-in ----------
+   Off by default, and only with your own key (the same key scans use). What
+   is sent is `facts` — the handful of numbers and lift names on the card —
+   never your log. The reply is only accepted if every number and every lift
+   name in it came from those facts; otherwise the rule-written version stays.
+   The rules decide what's true; the model only gets to say it nicer. */
+const COACH_AI_SCHEMA = {
+  type: 'OBJECT',
+  properties: { headline: { type: 'STRING' }, body: { type: 'STRING' } },
+  required: ['headline', 'body']
+};
+function coachAiEnabled() { return !!getSettings().coachAi && !!getSettings().apiKey; }
+function factsHash(facts) {
+  const s = JSON.stringify(facts);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; }
+  return String(h);
+}
+function coachAiCached(facts) {
+  if (!coachAiEnabled()) return null;
+  const c = Store.get('coachWeekly', null);
+  if (!c || c.week !== weekKeyOf() || c.hash !== factsHash(facts)) return null;
+  return typeof c.headline === 'string' && typeof c.body === 'string' ? { headline: c.headline, body: c.body } : null;
+}
+
+/* every number and lift name the model used must be one we gave it */
+function coachAiGuard(reply, facts) {
+  if (!reply || typeof reply.headline !== 'string' || typeof reply.body !== 'string') return false;
+  const text = `${reply.headline} ${reply.body}`;
+  if (reply.headline.length > 90 || reply.body.length > 520) return false;
+  const factText = JSON.stringify(facts);
+  const allowedNums = new Set((factText.match(/\d+(\.\d+)?/g) || []));
+  const nums = text.match(/\d+(\.\d+)?/g) || [];
+  if (nums.some(n => !allowedNums.has(n))) return false;
+  const known = new Set();
+  getWorkouts().forEach(s => (s.exercises || []).forEach(ex => known.add(ex.name.toLowerCase())));
+  const lower = text.toLowerCase();
+  const allowedNames = factText.toLowerCase();
+  for (const n of known) if (n.length > 3 && lower.includes(n) && !allowedNames.includes(n)) return false;
+  return true;
+}
+
+let _coachAiInFlight = null;
+async function requestCoachAi(facts, rule) {
+  const week = weekKeyOf(), hash = factsHash(facts);
+  if (_coachAiInFlight === hash) return;
+  _coachAiInFlight = hash;
+  try {
+    const { apiKey, model } = getSettings();
+    const voiceLine = { encouraging: 'warm and encouraging', straight: 'direct and honest, like a good gym coach', drill: 'a tough-love drill sergeant, blunt but never insulting' }[facts.voice] || 'direct';
+    const prompt = `You are a strength coach writing a short weekly check-in for one lifter. Voice: ${voiceLine}.
+Use ONLY the facts below. Do not add numbers, lifts or advice that are not in them. Do not give medical advice.
+headline: at most 8 words. body: 2-3 sentences, under 60 words, speaking to the lifter as "you".
+The coach's verdict (keep its meaning and its advice): "${rule.headline} — ${rule.body}"
+Facts: ${JSON.stringify(facts)}`;
+    const res = await fetch(`${GEMINI}/models/${encodeURIComponent(model || DEFAULT_MODEL)}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: COACH_AI_SCHEMA, maxOutputTokens: 400, thinkingConfig: { thinkingBudget: 0 } }
+      })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const txt = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+    let reply;
+    try { reply = JSON.parse(txt); } catch { return; }
+    if (!coachAiGuard(reply, facts)) return;     // the rule-written version stays
+    Store.set('coachWeekly', { week, hash, headline: reply.headline.trim(), body: reply.body.trim() });
+    if (App.tab === 'today') App.render();
+  } catch { /* offline, quota, anything: the rule-written check-in is already showing */ }
+  finally { if (_coachAiInFlight === hash) _coachAiInFlight = null; }
+}
+
+function coachAiToggleHtml() {
+  const s = getSettings();
+  return `
+    <label class="check-row"><input type="checkbox" id="set-coach-ai" data-action="toggle-coach-ai" ${s.coachAi ? 'checked' : ''} ${s.apiKey ? '' : 'disabled'}>
+      <span>Let Gemini word the weekly check-in</span></label>
+    <div class="chart-note">${s.apiKey
+      ? 'Uses your key. Sends only the check-in’s numbers and lift names — never your log — and the reply is thrown out if it mentions anything that wasn’t in them.'
+      : 'Needs a Gemini key (the same one scanning uses). Without it, the coach writes the check-in itself.'}</div>`;
+}
+
+/* ---------- Train: the coach, one line ---------- */
+function renderCoachTrainLine() {
+  const i = coachInsight();
+  if (!i || !['grinding', 'drifting', 'rundown', 'comeback', 'roll'].includes(i.state)) return '';
+  return `
+  <div class="focus-line coach-line ${i.tone}">
+    <span class="fc-ico" aria-hidden="true">${i.tone === 'good' ? '▲' : '●'}</span>
+    <span class="fc-text"><b>${esc(i.headline)}</b></span>
+    ${i.action ? `<button class="btn small" data-action="${i.action.action}">${esc(i.action.label)}</button>` : ''}
+  </div>`;
+}

@@ -1102,6 +1102,7 @@ function renderTrainHome() {
   ${renderLowSleepNudge()}
   ${renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames, plateaus)}
 
+  ${typeof renderCoachTrainLine === 'function' ? renderCoachTrainLine() : ''}
   ${renderCoachCard()}
 
   <div class="grid-2">

@@ -397,7 +397,7 @@ function renderTodayHome() {
   return `
   ${renderTodayHero()}
 
-  ${renderCoachLine()}
+  ${renderWeeklyCheckin() || renderCoachLine()}
 
   ${tileStrip([
     tile({ action: 'today-nav', data: { view: 'nutrition' }, ico: 'egg', label: 'Protein',
@@ -1156,6 +1156,7 @@ function openSettingsModal() {
     </div>
 
     ${coachVoicePickerHtml()}
+    ${coachAiToggleHtml()}
 
     <label>Theme</label>
     <div class="theme-picker" id="set-theme">
@@ -1551,6 +1552,13 @@ document.addEventListener('click', e => {
       snoozeCoach(el.dataset.state, Number(el.dataset.days) || 7);
       toast('Got it — the coach will check back later');
       App.render(); break;
+    case 'checkin-done': dismissCheckin(); App.render(); break;
+    case 'toggle-coach-ai': {
+      const s = getSettings();
+      s.coachAi = !!el.checked;
+      setSettings(s);
+      break;
+    }
     case 'goal-edit': openGoalSheet(el.dataset.name); break;
     case 'goal-save': saveGoalFromSheet(el.dataset.name); break;
     case 'goal-clear': setLiftGoal(el.dataset.name, null); openWhyTarget(el.dataset.name); break;

@@ -1093,3 +1093,9 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .chart-table table { width: 100%; border-collapse: collapse; }
 .chart-table th, .chart-table td { text-align: left; padding: 5px 0; border-top: 1px solid var(--grid); color: var(--ink-2); font-weight: 400; }
 .chart-table th { color: var(--muted); }
+.ck-stats { display: flex; gap: 8px; margin: 6px 0 12px; flex-wrap: wrap; }
+.ck-stat { flex: 1 1 64px; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.ck-stat b { display: block; font-size: 17px; color: var(--ink); }
+.ck-stat span { font-size: 12px; color: var(--muted); }
+.coach-line.warn { border-left: 3px solid var(--warning); }
+.coach-line.good { border-left: 3px solid var(--good); }

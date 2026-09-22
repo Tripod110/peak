@@ -68,11 +68,21 @@ lighter week, so it never reads as a stall or a regression.
 Stored: `coachVoice` (settings), `coachMemory` (only your own answers), `liftGoals`. All three
 are sanitised on restore.
 
-Tests: `tests/coach.test.mjs` covers 20 persona and maths cases; 105 pass. Checked in the
+Tests: `tests/coach.test.mjs` covers 23 persona, maths and guard cases; 108 pass. Checked in the
 browser at 375×812 in the dark and light themes: the coach card, the switch-it-up sheet, undo,
 the debrief and the outlook chart.
 
-> **Not yet:** the weekly check-in, the optional AI wording, and the coach on the Train tab.
+**Weekly check-in.** Once a week the Today card becomes a check-in: the week's sessions against
+plan, PRs, average sleep and protein days, the coach's read, this week's focus, and the pace of
+each goal. "Got it" puts it away until Monday.
+
+**Optional: Gemini words the check-in** (Settings → Coach, off by default). It only works with
+your own key and sends only the check-in's numbers and lift names, never your log. The reply is
+discarded if it contains any number or lift name that wasn't in those facts, too-long replies
+are discarded too, and the rule-written version stays whenever the request fails.
+
+**Train tab:** one coach line under today's session when there's something to act on.
+
 > Known: the toast and + button can overlap the coach card's buttons (mobile review item).
 
 ---

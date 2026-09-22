@@ -233,3 +233,34 @@ test('the drifting lifter\'s short session is the next day, first three lifts on
   P.startShortSession();
   assert.equal(P.App.activeSession.exercises.length, 3);
 });
+
+/* ---------- weekly check-in ---------- */
+
+test('weeks start on Monday', () => {
+  assert.equal(P.weekKeyOf('2026-09-22'), '2026-09-21');   // a Tuesday
+  assert.equal(P.weekKeyOf('2026-09-27'), '2026-09-21');   // the Sunday after
+  assert.equal(P.weekKeyOf('2026-09-28'), '2026-09-28');
+});
+
+test('the check-in appears once there is a week to review, and "Got it" puts it away until next week', () => {
+  session(9); session(5);
+  assert.equal(P.checkinDue(), false, 'two sessions is not a week to review');
+  session(2);
+  assert.equal(P.checkinDue(), true);
+  const c = P.weeklyCheckin();
+  assert.ok(c.headline && c.body);
+  assert.equal(c.facts.planned, 3);
+  P.dismissCheckin();
+  assert.equal(P.checkinDue(), false);
+});
+
+test('an AI rewording is only accepted if every number and lift in it came from the facts', () => {
+  block(6, { reps: [5, 5, 4] });
+  const f = P.weeklyCheckin().facts;
+  const n = f.sessions7;
+  assert.equal(P.coachAiGuard({ headline: 'Time to shake things up', body: `You made ${n} sessions but Squat has gone quiet.` }, f), true);
+  assert.equal(P.coachAiGuard({ headline: 'Shake it up', body: 'Add 20 lb to your squat next week.' }, f), false, 'invented number');
+  P.saveWorkout({ id: 'x', date: localDay(60), dayName: 'Old', exercises: [{ name: 'Leg Press', target: '3×10', sets: [{ weight: lb(300), reps: 10, type: 'normal' }] }] });
+  assert.equal(P.coachAiGuard({ headline: 'Nice week', body: 'Your leg press is flying.' }, P.weeklyCheckin().facts), false, 'a lift the facts never mentioned');
+  assert.equal(P.coachAiGuard({ headline: 'x', body: 'y'.repeat(600) }, f), false, 'too long');
+});

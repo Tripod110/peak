@@ -76,7 +76,8 @@ export function makeContext() {
       getGrocery, setGrocery, AISLES, STAPLES, SNACKS, EASY_MEALS, grocKey, groceryMatch, grocGrouped, rememberGroceryFood,
       coachSignals, coachState, coachInsight, coachFacts, sessionDebrief, debriefLift, snoozeCoach, getCoachMemory,
       liftGoal, setLiftGoal, liftOutlook, theilSen, COACH_VOICE_IDS, addFoodEntry, setSleepEntry,
-      coachDeloadActive, startDeloadWeek, switchPlan, applyCoachSwitch, startShortSession, activeRoutine, renderCoachLine };
+      coachDeloadActive, startDeloadWeek, switchPlan, applyCoachSwitch, startShortSession, activeRoutine, renderCoachLine,
+      weekKeyOf, checkinDue, weeklyCheckin, dismissCheckin, coachAiGuard };
   `, ctx);
   // wipeAll uses Object.keys(localStorage); give it the real key list
   vm.runInContext(`Store.wipeAll = function () { localStorage.keys().filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k)); _cache.clear(); };`, ctx);
