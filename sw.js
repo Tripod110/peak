@@ -17,7 +17,7 @@ const SHELL = [
   './', 'index.html',
   'style.css?v=41',
   'store.js?v=41', 'ui.js?v=41', 'charts.js?v=41', 'quips.js?v=41', 'api.js?v=41',
-  'food.js?v=41', 'train.js?v=41', 'routines.js?v=41', 'sleep.js?v=41', 'grocery.js?v=41', 'app.js?v=41',
+  'food.js?v=41', 'train.js?v=41', 'routines.js?v=41', 'sleep.js?v=41', 'grocery.js?v=41', 'coach.js?v=41', 'app.js?v=41',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 

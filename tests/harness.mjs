@@ -46,7 +46,7 @@ export function makeContext() {
   };
   vm.createContext(ctx);
   // Object.keys(localStorage) is how wipeAll enumerates — mirror the browser
-  const src = ['store.js', 'ui.js', 'charts.js', 'food.js', 'train.js', 'routines.js', 'sleep.js', 'grocery.js']
+  const src = ['store.js', 'ui.js', 'charts.js', 'food.js', 'train.js', 'routines.js', 'sleep.js', 'grocery.js', 'coach.js']
     .map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n;\n');
   vm.runInContext(`
     var App = { activeSession: null, rest: null, undo: null, setSel: null, tab: 'train', render() {},
@@ -73,7 +73,9 @@ export function makeContext() {
       sleepDurationMin, sleepDurationPoints, sleepConsistency, sleepScore, usualNight, sleepAvgDays,
       sleepTrainingLink, setSleepEntry, removeSleepEntry, getSleep, minutesOf, timeOf, median, SLEEP_BANDS,
       parseQty, aisleFor, groupByAisle, yourUsuals, groceryAdd, groceryQty, groceryAddFromSection,
-      getGrocery, setGrocery, AISLES, STAPLES, SNACKS, EASY_MEALS, grocKey, groceryMatch, grocGrouped, rememberGroceryFood };
+      getGrocery, setGrocery, AISLES, STAPLES, SNACKS, EASY_MEALS, grocKey, groceryMatch, grocGrouped, rememberGroceryFood,
+      coachSignals, coachState, coachInsight, coachFacts, sessionDebrief, debriefLift, snoozeCoach, getCoachMemory,
+      liftGoal, setLiftGoal, liftOutlook, theilSen, COACH_VOICE_IDS, addFoodEntry, setSleepEntry };
   `, ctx);
   // wipeAll uses Object.keys(localStorage); give it the real key list
   vm.runInContext(`Store.wipeAll = function () { localStorage.keys().filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k)); _cache.clear(); };`, ctx);

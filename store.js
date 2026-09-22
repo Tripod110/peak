@@ -265,6 +265,8 @@ function sanitizeStored() {
        trade against a hostile value reaching the render path. */
     theme: THEME_IDS.includes(s.theme) ? s.theme : 'dark',
     grocGroup: ['auto', 'aisle', 'flat'].includes(s.grocGroup) ? s.grocGroup : 'auto',
+    // same ids as COACH_VOICE_IDS in coach.js, which loads after this file
+    coachVoice: ['encouraging', 'straight', 'drill'].includes(s.coachVoice) ? s.coachVoice : 'straight',
     dietary: { restrictions: szArr(szObj(s.dietary).restrictions)
       .filter(id => DIETARY_RESTRICTIONS.some(d => d.id === id)) },
     /* reminder times land in a value="" attribute in Settings — normTime is
@@ -406,6 +408,28 @@ function sanitizeStored() {
     if (Object.keys(out).length) cleanProg[szStr(k, 80)] = out;
   });
   Store.set('progressionPrefs', JSON.parse(JSON.stringify(cleanProg)));
+
+  /* lift goals — a weight × reps per lift name, an optional target date */
+  const goals = szObj(Store.get('liftGoals', {}));
+  const cleanGoals = Object.create(null);
+  Object.keys(goals).forEach(k => {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+    const o = szObj(goals[k]);
+    if (!(Number(o.kg) > 0) || !(Number(o.reps) >= 1)) return;
+    cleanGoals[szStr(k, 80)] = {
+      kg: szNum(o.kg, 0.1, 2000, 0), reps: szInt(o.reps, 1, 100, 1),
+      by: szDate(o.by) ? o.by : null, set: szDate(o.set) ? o.set : null
+    };
+  });
+  Store.set('liftGoals', JSON.parse(JSON.stringify(cleanGoals)));
+
+  /* coach memory — only the user's own answers ("not now" until a date) */
+  const mem = szObj(Store.get('coachMemory', {}));
+  const snooze = {};
+  Object.entries(szObj(mem.snooze)).forEach(([k, v]) => {
+    if (/^[a-z]{1,20}$/.test(k) && szDate(v)) snooze[k] = v;
+  });
+  Store.set('coachMemory', { snooze, ...(szDate(mem.deloadUntil) ? { deloadUntil: mem.deloadUntil } : {}) });
 
   /* Reviewed and deliberately not re-shaped, so the next reader doesn't redo
      the audit: quips, weakLink, coachDismissed, modelList, deviceId,

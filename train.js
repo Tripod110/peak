@@ -286,7 +286,7 @@ function exerciseHistory(name) {
       if (!top) { // bodyweight-only (abs etc.): track the best rep set instead
         work.forEach(st => { if (st.reps > 0 && (!top || st.reps > top.reps)) top = st; });
       }
-      if (top) out.push({ date: s.date, bestE1rm: best, topSet: top, sets: work });
+      if (top) out.push({ date: s.date, bestE1rm: best, topSet: top, sets: work, target: ex.target });
     });
   });
   out.sort((a, b) => a.date < b.date ? -1 : 1);

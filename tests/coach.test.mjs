@@ -1,0 +1,197 @@
+/* The Coach: signals → state → words, tested against whole training lives
+ * rather than single lifts. Each persona is a month or two of realistic
+ * history; the assertion is what a good coach would say about it. See
+ * DECISIONS.md D-22.
+ *
+ *   node --test tests/*.test.mjs
+ */
+
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { makeContext } from './harness.mjs';
+
+let ctx, P;
+const localDay = n => { const d = new Date(); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const lb = v => v / 2.20462;
+
+function seed(goal = 'recomp', gymDays = 3) {
+  P.setProfile({ sex: 'male', age: 30, weightKg: 80, heightCm: 180, activity: 'light', goal, gymDays, template: 'fb3' });
+  P.setSettings({ units: 'imperial', restSec: 90 });
+}
+beforeEach(() => { ctx = makeContext(); P = ctx.__api; seed(); });
+
+/* a full-body session: each lift at `w(lift)` lb for 3×5, all reps hit */
+const LIFTS = { 'Squat': 225, 'Bench Press': 185, 'Barbell Row': 155, 'Overhead Press': 115 };
+function session(daysBack, bump = 0, { score = 80, reps = [5, 5, 5] } = {}) {
+  P.saveWorkout({
+    id: `s${daysBack}${Math.random()}`, date: localDay(daysBack), dayName: 'Full Body A', score,
+    exercises: Object.entries(LIFTS).map(([name, w]) => ({
+      name, target: '3×5', sets: reps.map(r => ({ weight: lb(w + bump), reps: r, type: 'normal' }))
+    }))
+  });
+}
+/* three sessions a week for `weeks` weeks ending `endBack` days ago */
+function block(weeks, { endBack = 1, progress = 0, score = 80, reps } = {}) {
+  let n = 0;
+  for (let d = endBack + weeks * 7 - 1; d >= endBack; d--) {
+    if (d % 7 === 0 || d % 7 === 2 || d % 7 === 4) session(d, progress * n++, { score, reps });
+  }
+}
+const state = () => P.coachState(P.coachSignals());
+
+/* ---------- states ---------- */
+
+test('a new lifter is "getting started", and told how far off plateau watch is', () => {
+  session(9); session(5); session(2);
+  assert.equal(state(), 'starting');
+  const i = P.coachInsight('straight');
+  assert.equal(i.facts.watchNeed, 1);
+  assert.equal(i.action, null, 'nothing to fix yet');
+});
+
+test('steady gains across the board read as "on a roll"', () => {
+  block(6, { progress: 5 });
+  assert.equal(state(), 'roll');
+  assert.ok(P.coachInsight('straight').facts.prs >= 2);
+});
+
+test('six flat weeks with good attendance is "grinding", and the coach says switch it up', () => {
+  block(6, { reps: [5, 5, 4] });
+  assert.equal(state(), 'grinding');
+  const i = P.coachInsight('straight');
+  assert.equal(i.action.action, 'coach-switch');
+  assert.match(i.body, /Squat|Bench|Row|Press/, 'names the lifts it means');
+});
+
+test('the same flat weeks on a cut are "holding" — a win, not a problem', () => {
+  seed('cut');
+  block(6, { reps: [5, 5, 4] });
+  assert.equal(state(), 'holding');
+  assert.equal(P.coachInsight('straight').action, null, 'never tells a cutter to change a working plan');
+});
+
+test('a lifter who stopped turning up is "drifting", and gets a smaller ask', () => {
+  block(4, { endBack: 10, progress: 5 });
+  assert.equal(state(), 'drifting');
+  const i = P.coachInsight('straight');
+  assert.equal(i.action.action, 'coach-short');
+  assert.ok(i.facts.daysSince >= 10, 'says how long it has been');
+});
+
+test('sessions falling off without a full stop still reads as drifting', () => {
+  block(2, { endBack: 15, progress: 5 });   // 3/week, then…
+  session(4, 30);                             // one session in the last two weeks
+  assert.equal(state(), 'drifting');
+});
+
+test('back from a layoff is "comeback" — no stall talk while rebuilding', () => {
+  block(4, { endBack: 50, reps: [5, 5, 4] });   // would read as grinding…
+  session(8); session(4); session(1);           // …but there was a 40-day break
+  assert.equal(state(), 'comeback');
+});
+
+test('falling scores with short sleep is "run down", and points at recovery', () => {
+  block(5, { endBack: 8, progress: 5, score: 85 });
+  session(6, 125, { score: 60 }); session(4, 125, { score: 58 }); session(2, 125, { score: 55 });
+  for (let d = 0; d < 7; d++) P.setSleepEntry(localDay(d), { bed: '01:00', wake: '06:30', durationMin: 330, quality: 2 });
+  assert.equal(state(), 'rundown');
+  const i = P.coachInsight('straight');
+  assert.ok(i.facts.lowSleep);
+  assert.equal(i.action.action, 'coach-deload');
+});
+
+/* ---------- voice and memory ---------- */
+
+test('every voice gets the same facts and the same action — only the words change', () => {
+  block(6, { reps: [5, 5, 4] });
+  const [a, b, c] = P.COACH_VOICE_IDS.map(v => P.coachInsight(v));
+  assert.deepEqual({ ...a.facts }, { ...b.facts });
+  assert.deepEqual({ ...b.facts }, { ...c.facts });
+  assert.equal(a.action.action, c.action.action);
+  assert.notEqual(a.headline, c.headline);
+});
+
+test('"keep my routine" silences that message until the snooze runs out', () => {
+  block(6, { reps: [5, 5, 4] });
+  assert.ok(P.coachInsight());
+  P.snoozeCoach('grinding', 28);
+  assert.equal(P.coachInsight(), null);
+});
+
+test('coach memory and voice survive a backup round trip, and junk in them does not', () => {
+  P.setSettings({ ...P.getSettings(), coachVoice: 'drill' });
+  P.snoozeCoach('grinding', 28);
+  const json = JSON.parse(P.Store.exportAll());
+  json.data['forge:coachMemory'] = JSON.stringify({ snooze: { grinding: localDay(-28), '<img>': 'x' } });
+  P.Store.importAll(JSON.stringify(json));
+  assert.equal(P.getSettings().coachVoice, 'drill');
+  assert.deepEqual(Object.keys(P.getCoachMemory().snooze), ['grinding']);
+});
+
+/* ---------- the post-workout debrief ---------- */
+
+function bench(daysBack, w, reps, target = '3×5') {
+  const date = localDay(daysBack);
+  P.saveWorkout({ id: `b${daysBack}`, date, dayName: 'Full Body A', exercises: [
+    { name: 'Bench Press', target, sets: reps.map(r => ({ weight: lb(w), reps: r, type: 'normal' })) }] });
+  return date;
+}
+
+test('the debrief calls added reps progress, even with the weight unchanged', () => {
+  bench(7, 185, [5, 5, 4]);
+  const d = P.debriefLift('Bench Press', bench(0, 185, [5, 5, 5]));
+  assert.equal(d.kind, 'pr');
+  assert.match(d.text, /\+1 rep at 185 lb/);
+});
+
+test('the debrief names a new best, a match, a light day, and a first time', () => {
+  assert.equal(P.debriefLift('Bench Press', bench(21, 185, [5, 5, 5])).kind, 'baseline');
+  assert.equal(P.debriefLift('Bench Press', bench(14, 190, [5, 5, 5])).kind, 'pr');
+  assert.equal(P.debriefLift('Bench Press', bench(7, 190, [5, 5, 5])).kind, 'matched');
+  const light = P.debriefLift('Bench Press', bench(3, 155, [10, 10, 10], '3×10'));
+  assert.equal(light.kind, 'light');
+  assert.match(P.debriefLift('Bench Press', localDay(21)).watch, /3 more sessions/);
+});
+
+/* ---------- lift goals and outlook ---------- */
+
+test('a steady climb projects a date to the goal, with a range', () => {
+  // +5 lb a week on 3×5, from 185 to 210 over six weeks
+  [42, 35, 28, 21, 14, 7, 0].forEach((d, i) => bench(d, 180 + i * 5, [5, 5, 5]));
+  P.setLiftGoal('Bench Press', { kg: lb(225), reps: 5 });
+  const o = P.liftOutlook('Bench Press');
+  assert.equal(o.status, 'ok');
+  // 210 → 225 at 5 lb/week is ~3 weeks; allow for the e1RM conversion
+  assert.ok(o.days >= 14 && o.days <= 35, `projected ${o.days} days`);
+  assert.ok(o.etaEarly <= o.eta && (!o.etaLate || o.etaLate >= o.eta));
+});
+
+test('no projection is invented when the lift is flat, too new, or already there', () => {
+  P.setLiftGoal('Bench Press', { kg: lb(225), reps: 5 });
+  bench(14, 185, [5, 5, 5]); bench(7, 185, [5, 5, 5]);
+  assert.equal(P.liftOutlook('Bench Press').status, 'short');
+  bench(28, 185, [5, 5, 5]); bench(21, 185, [5, 5, 5]); bench(0, 185, [5, 5, 5]);
+  assert.equal(P.liftOutlook('Bench Press').status, 'flat');
+  bench(1, 230, [5, 5, 5]);
+  assert.equal(P.liftOutlook('Bench Press').status, 'reached');
+  P.setLiftGoal('Bench Press', null);
+  assert.equal(P.liftOutlook('Bench Press').status, 'nogoal');
+});
+
+test('Theil–Sen ignores one freak session', () => {
+  const pts = [0, 7, 14, 21, 28, 35].map((x, i) => ({ x, y: 100 + i * 2 }));
+  pts[3].y = 160;   // one absurd day
+  const fit = P.theilSen(pts);
+  assert.ok(Math.abs(fit.slope * 7 - 2) < 0.5, `slope ${fit.slope * 7}/week`);
+});
+
+test('lift goals are sanitised on restore', () => {
+  P.setLiftGoal('Bench Press', { kg: lb(225), reps: 5, by: localDay(-60) });
+  const json = JSON.parse(P.Store.exportAll());
+  const g = JSON.parse(json.data['forge:liftGoals']);
+  g['squat'] = { kg: '<b>', reps: 5 };
+  json.data['forge:liftGoals'] = JSON.stringify(g);
+  P.Store.importAll(JSON.stringify(json));
+  assert.ok(P.liftGoal('Bench Press'));
+  assert.equal(P.liftGoal('Squat'), null);
+});
