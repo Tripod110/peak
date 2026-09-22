@@ -172,6 +172,8 @@ function libAll() { return [...LIB_INDEX.values()]; }
 
 /* the default prescription for a lift, wherever we can find one */
 function defaultTargetFor(name) {
+  const c = typeof customExercise === 'function' ? customExercise(name) : null;
+  if (c) return c.t;
   const e = libEntry(name);
   if (e) return e.t;
   return findTargetFor(name) || '3×10';
@@ -202,6 +204,7 @@ function editableRoutine() {
   return {
     name: base.name,
     base: key,
+    createdAt: todayKey(),
     days: base.days.map(d => ({ name: d.name, ex: d.ex.map(e => [e[0], e[1]]) }))
   };
 }
@@ -278,6 +281,8 @@ function renderRoutineEditor() {
     </div>
   </div>
 
+  ${typeof routineSwitcherHtml === 'function' ? routineSwitcherHtml() : ''}
+
   ${custom ? '' : `<div class="alert" style="border-left-color:var(--blue)"><span class="a-ico">✎</span>
     <div class="a-body"><b>This is one of Peak's standard splits.</b>
     Change anything below — add a lift, drop one, change the sets — and it becomes yours.
@@ -335,6 +340,8 @@ function renderRoutineEditor() {
 function pickerCandidates() {
   const seen = new Map();
   libAll().forEach(e => seen.set(e.n.toLowerCase(), { n: e.n, group: e.group, lib: true }));
+  if (typeof customExerciseList === 'function') customExerciseList().forEach(c =>
+    seen.set(c.n.toLowerCase(), { n: c.n, group: musclesFor(c.n).p[0] || 'other', mine: true }));
   // anything you've actually logged outranks the library — it is proof of use
   getWorkouts().forEach(s => (s.exercises || []).forEach(ex => {
     const k = ex.name.toLowerCase();
@@ -369,6 +376,7 @@ function renderPickerModal() {
     <h3>Add an exercise</h3>
     <div class="modal-sub">${list.length} match${list.length === 1 ? '' : 'es'}. Lifts you've logged before are listed first.</div>
     <input id="pk-q" placeholder="Search…" value="${esc(q)}" autocomplete="off" enterkeyhint="done">
+    <button class="btn small mt" data-action="ce-new">＋ Create your own exercise</button>
     <div class="pk-groups">
       ${groups.map(g => `<button class="pk-g ${g === group ? 'on' : ''}" data-action="pk-group" data-g="${g}">${
         g === 'all' ? 'All' : MUSCLE_LABEL[g]}</button>`).join('')}
@@ -377,7 +385,7 @@ function renderPickerModal() {
       ${shown.length ? shown.map(e => `
         <button class="pk-item" data-action="pk-choose" data-name="${esc(e.n)}">
           <span class="pk-n">${esc(e.n)}</span>
-          <span class="pk-m">${e.logged ? '<span class="pk-tag">logged</span> ' : ''}${
+          <span class="pk-m">${e.mine ? '<span class="pk-tag">mine</span> ' : ''}${e.logged ? '<span class="pk-tag">logged</span> ' : ''}${
             e.group && MUSCLE_LABEL[e.group] ? esc(MUSCLE_LABEL[e.group]) : ''}</span>
         </button>`).join('')
       : `<div class="muted small" style="padding:10px 0">Nothing matches "${esc(q)}".</div>`}

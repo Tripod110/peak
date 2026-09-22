@@ -222,6 +222,8 @@ function workingSets(sets) { return (sets || []).filter(st => !isWarmup(st)); }
    only way the number means anything a month later; volume doubles it so
    "weight moved" stays comparable with barbell work. */
 function perHandLift(name) {
+  const c = typeof customExercise === 'function' ? customExercise(name) : null;   // your definition beats the name (D-23)
+  if (c) return !!c.perHand;
   return /dumbbell|\bdb\b|hammer curl|lateral raise|goblet|single.?arm|one.?arm|kettlebell/i.test(name);
 }
 function setLoadKg(exName, st) {
@@ -608,6 +610,8 @@ function setProgressionPref(name, patch) {
    a "Weighted Pull-up" does. */
 const BODYWEIGHT_RE = /\(seconds?\)|plank|hollow hold|push.?up|pull.?up|chin.?up|\bdips?\b|crunch|sit.?up|leg raise|knee raise|toes.?to.?bar|\bv.?up\b|dead bug|russian twist|inverted row|nordic|sissy squat|ab wheel|rollout|bench dip|burpee/i;
 function exerciseHasLoad(name) {
+  const c = typeof customExercise === 'function' ? customExercise(name) : null;
+  if (c) return c.kind === 'weighted';
   if (bestWorkingWeightKg(name) > 0) return true;
   if (progressionPref(name).hold) return true;
   return /weighted/i.test(name) || !BODYWEIGHT_RE.test(name);
@@ -1107,7 +1111,7 @@ function renderTrainHome() {
 
   <div class="grid-2">
     <button class="btn" data-action="start-freestyle">✎ Freestyle session</button>
-    <button class="btn" data-action="open-cardio">🏃 Log cardio</button>
+    <button class="btn" data-action="open-cardio">🏃 Log activity</button>
   </div>
   <div class="chart-note center" style="margin-bottom:14px">Freestyle logs anything off-plan. Cardio is tracked separately and never fills a lifting slot.</div>
 
@@ -1877,7 +1881,11 @@ function workingNumber(ex, si) {
 function setLabel(ex, si) {
   return isWarmup(ex.sets[si]) ? 'Warmup' : `Set ${workingNumber(ex, si)}`;
 }
-function isTimedLift(name) { return /\(seconds?\)/i.test(name || ''); }
+function isTimedLift(name) {
+  const c = typeof customExercise === 'function' ? customExercise(name) : null;
+  if (c) return c.kind === 'timed';
+  return /\(seconds?\)/i.test(name || '');
+}
 function fmtW1(disp) { return String(Math.round((disp || 0) * 10) / 10); }
 
 /* one set as it was actually lifted: "185 lb × 5", "12 reps", "45s" */
@@ -2365,6 +2373,7 @@ function openExerciseMenu(uid) {
     <div class="modal-sub">Exercise ${xi + 1} of ${s.exercises.length} · ${ex.sets.filter(st => st.done).length} of ${ex.sets.length} sets done</div>
     <div class="sheet-list">
       ${typeof openProgressionSheet === 'function' ? `<button class="sheet-item" data-action="open-progression" data-name="${esc(ex.name)}">${icon('sliders')} Progression settings</button>` : ''}
+      <button class="sheet-item" data-action="ce-edit" data-name="${esc(ex.name)}">${icon('sliders')} Edit exercise — name, type, muscles</button>
       <button class="sheet-item" data-action="edit-load" data-name="${esc(ex.name)}">${icon('dumbbell')} How this lift is loaded</button>
       ${s.exercises.length > 1 ? `<button class="sheet-item" data-action="open-reorder">${icon('reorder')} Reorder exercises</button>` : ''}
       <button class="sheet-item danger" data-action="del-exercise" data-uid="${uid}">${icon('trash')} Remove ${esc(ex.name)} from this workout</button>
@@ -2569,7 +2578,7 @@ function viewWorkoutModal(id) {
     <h3>${esc(s.dayName)}</h3>
     <div class="modal-sub">${prettyDate(s.date)}${s.score != null ? ` · score ${s.score}/100` : ''}</div>
     ${s.cardio
-      ? `<div class="muted small">${esc(s.durationMin)} min · ${esc(s.intensity)} intensity · ~${esc(s.kcalEst)} kcal burned</div>`
+      ? `<div class="muted small">${esc(s.durationMin)} min · ${esc(s.intensity)} intensity · ~${esc(s.kcalEst)} kcal burned${s.distanceKm ? ` · ${esc(Math.round((isMetric() ? s.distanceKm : s.distanceKm / 1.609344) * 10) / 10)} ${isMetric() ? 'km' : 'mi'}` : ''}</div>${s.notes ? `<p class="sheet-p">${esc(s.notes)}</p>` : ''}`
       : (s.exercises || []).map(ex => `
       <div class="exercise-block">
         <div class="ex-head"><span class="ex-name">${esc(ex.name)}${perHandLift(ex.name) ? ' <span class="muted small">per hand</span>' : ''}</span></div>
@@ -2581,19 +2590,42 @@ function viewWorkoutModal(id) {
         }).join('')}
       </div>`).join('')}
     ${s.score != null && !s.cardio ? `<div class="chart-note mt">Score = intensity vs your bests (50) + sets vs plan (35) + PR bonus (15).</div>` : ''}
+    ${!s.cardio && (s.exercises || []).length ? `<button class="btn mt" data-action="save-as-day-open" data-id="${esc(s.id)}">＋ Save as a routine day</button>` : ''}
     <button class="btn ghost danger mt" data-action="delete-workout" data-id="${s.id}">Delete session</button>
   `);
 }
 
 /* ---------- cardio ---------- */
+/* Any activity, not a list of eight. The built-ins stay as one-tap chips, and
+   anything you name — climbing, a spin class, five-a-side — is remembered as a
+   chip of its own next time (custom.js, D-23). Still stored as a cardio
+   session, so it never fills a lifting slot (D-09). */
+function getActivities() {
+  const a = Store.get('activities', []);
+  return Array.isArray(a) ? a.filter(x => typeof x === 'string' && x.trim()).slice(0, 30) : [];
+}
+function rememberActivity(name) {
+  const list = getActivities().filter(x => x.toLowerCase() !== name.toLowerCase());
+  if (CARDIO_TYPES.some(t => t.toLowerCase() === name.toLowerCase())) return;
+  list.unshift(name);
+  Store.set('activities', list.slice(0, 30));
+}
 function openCardioModal() {
+  const recent = getWorkouts().filter(w => w.cardio && w.type).sort((x, y) => x.date < y.date ? 1 : -1)[0]?.type;
+  const all = [...getActivities(), ...CARDIO_TYPES.filter(t => !getActivities().some(x => x.toLowerCase() === t.toLowerCase()))];
+  const on = recent && all.includes(recent) ? recent : all[0];
+  const u = isMetric() ? 'km' : 'mi';
   openModal(`
-    <h3>Log cardio</h3>
-    <label>Type</label>
-    <select id="cd-type">${CARDIO_TYPES.map(t => `<option>${esc(t)}</option>`).join('')}</select>
+    <h3>Log activity</h3>
+    <div class="modal-sub">Anything that isn't a lifting session — pick one, or name your own.</div>
+    <div class="seg seg-wrap" id="cd-type" role="radiogroup" aria-label="Activity">
+      ${all.map(t => `<button data-v="${esc(t)}" class="${t === on ? 'on' : ''}">${esc(t)}</button>`).join('')}
+    </div>
+    <label for="cd-new">Or a new one</label>
+    <input id="cd-new" maxlength="40" placeholder="e.g. Climbing, Yoga, Pickleball" autocomplete="off">
     <div class="grid-2">
-      <div><label>Duration (minutes)</label><input id="cd-min" type="number" inputmode="numeric" placeholder="e.g. 25"></div>
-      <div><label>Date</label><input id="cd-date" type="date" value="${todayKey()}" max="${todayKey()}"></div>
+      <div><label for="cd-min">Duration (minutes)</label><input id="cd-min" type="number" inputmode="numeric" placeholder="e.g. 45"></div>
+      <div><label for="cd-date">Date</label><input id="cd-date" type="date" value="${todayKey()}" max="${todayKey()}"></div>
     </div>
     <label>Intensity</label>
     <div class="seg" id="cd-int">
@@ -2601,25 +2633,36 @@ function openCardioModal() {
       <button data-v="moderate" class="on">Moderate</button>
       <button data-v="hard">Hard</button>
     </div>
+    <div class="grid-2">
+      <div><label for="cd-dist">Distance (${u}, optional)</label><input id="cd-dist" type="number" inputmode="decimal" step="0.1"></div>
+      <div><label for="cd-notes">Notes (optional)</label><input id="cd-notes" maxlength="120"></div>
+    </div>
     <button class="btn primary mt" data-action="save-cardio">Save</button>
-    <div class="chart-note center">Cardio is tracked on its own — it never counts toward your lifting sessions.</div>
-  `);
+    <div class="chart-note center">Tracked on its own — it never counts toward your lifting sessions.</div>
+  `, { label: 'Log activity' });
 }
 
 function saveCardio() {
   const min = Number(document.getElementById('cd-min').value);
   if (!min || min < 1) { toast('Enter the duration'); return; }
+  if (min > 1440) { toast('That’s longer than a day'); return; }
   const date = document.getElementById('cd-date').value || todayKey();
-  const type = document.getElementById('cd-type').value;
+  const typed = (document.getElementById('cd-new')?.value || '').trim().replace(/s+/g, ' ').slice(0, 40);
+  const type = typed || document.querySelector('#cd-type button.on')?.dataset.v || 'Sports / other';
   const intensity = document.querySelector('#cd-int button.on')?.dataset.v || 'moderate';
+  const distIn = Number(document.getElementById('cd-dist')?.value);
+  const distanceKm = distIn > 0 ? Math.round((isMetric() ? distIn : distIn * 1.609344) * 100) / 100 : null;
+  const notes = (document.getElementById('cd-notes')?.value || '').trim().slice(0, 120);
   const kg = getProfile().weightKg;
   const kcalEst = Math.round(CARDIO_MET[intensity] * 3.5 * kg / 200 * min);
   const score = scoreCardio(min, intensity);
+  if (typed) rememberActivity(typed);
   saveWorkout({
     id: 'c' + Date.now(), date, cardio: true, freestyle: true,
-    dayName: 'Cardio · ' + type, type, durationMin: min, intensity, kcalEst, score, exercises: []
+    dayName: type, type, durationMin: min, intensity, kcalEst, score, exercises: [],
+    ...(distanceKm ? { distanceKm } : {}), ...(notes ? { notes } : {})
   });
   closeModal();
-  toast(`Cardio logged — score ${score} 🏃 (~${kcalEst} kcal)`);
+  toast(`${type} logged — score ${score} (~${kcalEst} kcal)`);
   App.render();
 }

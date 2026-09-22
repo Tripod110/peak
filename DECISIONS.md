@@ -29,6 +29,8 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-20](#d-20) | Destructive actions are undoable, not confirmed | 🟢 Decided · v40 |
 | [D-21](#d-21) | Progress is reps at a load, not only the top set | 🟢 Decided · v41 |
 | [D-22](#d-22) | The coach: rules decide, voice words it, you can always say no | 🟢 Decided · v42 |
+| [D-23](#d-23) | Your definition of an exercise beats the name-based guess | 🟢 Decided · v43 |
+| [D-24](#d-24) | Several routines: the active one keeps its key, the rest wait in a library | 🟢 Decided · v43 |
 
 ---
 
@@ -520,3 +522,33 @@ end date). The coach never writes down a verdict about you.
 three weeks, because a new block needs time before it can be judged.
 
 **Rejected:** a chat coach. It's still a non-goal, for the same reasons as before.
+
+## <a name="d-23"></a>D-23 · Your definition of an exercise beats the name-based guess
+**🟢 Decided.** v43 · `custom.js`, `train.js` (`perHandLift`, `isTimedLift`, `exerciseHasLoad`), `routines.js` (`defaultTargetFor`)
+
+Peak decided what a lift was from its name: a regex for per-hand, another for bodyweight, "(seconds)"
+for timed holds, a table for plate loading. That's a fine default and a bad master. "Hammer Curl"
+on a cable rope isn't per hand, and a "Dead Hang" isn't anything the patterns know.
+
+**Decided:** a user-defined exercise (`customExercises`) is consulted first by every one of those
+readers, and the name-based guess is only the fallback. Muscles and loading are **not** duplicated
+into the definition. They're written to the existing `muscleMap` / `loadMap` overrides, which
+every reader already checks first, so each question still has one source of truth.
+
+**Renaming is one operation across every name-keyed store.** A partial rename would quietly split
+one lift into two histories. A rename onto a name that already has history is refused, because
+merging two lifts is a different operation with different consequences.
+
+## <a name="d-24"></a>D-24 · Several routines: the active one keeps its key, the rest wait in a library
+**🟢 Decided.** v43 · `custom.js`
+
+**Decided:** `routine` stays exactly what it was, the active custom routine, and every other
+routine waits in `routineLibrary`. Switching parks the active one and swaps the chosen one in.
+
+**Why not one `routines` list with an active id:** about fifteen readers across four files read
+`routine` directly, including the coach's undo. Moving them all behind a new accessor is a
+migration with a lot of ways to go wrong and nothing for the user to see. With this layout there's
+nothing to migrate: an existing routine simply becomes the active one of a library of one.
+
+**Nothing is ever discarded by a switch or a new routine,** and every such change registers an undo
+(D-20).

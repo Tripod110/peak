@@ -245,6 +245,8 @@ function cleanSession(s) {
     ...(o.intensity ? { intensity: szStr(o.intensity, 20) } : {}),
     ...(o.type ? { type: szStr(o.type, 40) } : {}),
     ...(o.deloadWeek === true ? { deloadWeek: true } : {}),
+    ...(Number(o.distanceKm) > 0 ? { distanceKm: szNum(o.distanceKm, 0.01, 1000, 0) } : {}),
+    ...(o.notes ? { notes: szStr(o.notes, 120) } : {}),
     ...(szUid(o.focusUid) ? { focusUid: o.focusUid } : {}),
     exercises: cleanExercises(o.exercises)
   };
@@ -379,18 +381,48 @@ function sanitizeStored() {
   });
 
   // routine — days of [name, "NxM"] pairs, nothing else
-  const r = Store.get('routine', null);
-  if (r) {
-    const o = szObj(r);
+  // …the same shape for the active routine and every parked one (custom.js)
+  const cleanRoutine = rt => {
+    const o = szObj(rt);
     const days = szArr(o.days).map(d => ({
       name: szStr(szObj(d).name, 60) || 'Day',
       ex: szArr(szObj(d).ex).map(e => szArr(e)).filter(e => e.length >= 2)
         .map(([n, t]) => [szStr(n, 80), /^\d{1,2}[×x]\d{1,3}$/.test(String(t)) ? String(t) : '3×10'])
         .filter(([n]) => n)
     })).filter(d => d.name);
-    if (days.length) Store.set('routine', { name: szStr(o.name, 60) || 'My routine', base: szStr(o.base, 20), days });
-    else Store.remove('routine');
+    if (!days.length) return null;
+    return {
+      name: szStr(o.name, 60) || 'My routine', base: szStr(o.base, 20), days,
+      ...(/^r[a-z0-9]{1,24}$/.test(o.id || '') ? { id: o.id } : {}),
+      ...(szDate(o.createdAt) ? { createdAt: o.createdAt } : {})
+    };
+  };
+  const r = Store.get('routine', null);
+  if (r) {
+    const clean = cleanRoutine(r);
+    if (clean) Store.set('routine', clean); else Store.remove('routine');
   }
+  Store.set('routineLibrary', szArr(Store.get('routineLibrary', [])).slice(0, 20).map(cleanRoutine).filter(Boolean)
+    .map(x => (x.id ? x : { ...x, id: 'r' + Math.random().toString(36).slice(2, 10) })));
+
+  /* custom exercises — a kind from the list, a bounded name, a sane default */
+  const cex = szObj(Store.get('customExercises', {}));
+  const cleanCex = Object.create(null);
+  Object.keys(cex).forEach(k => {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+    const o = szObj(cex[k]);
+    const n = szStr(o.n, 60).trim();
+    if (!n || !['weighted', 'bodyweight', 'timed'].includes(o.kind)) return;
+    cleanCex[n.toLowerCase()] = {
+      n, kind: o.kind, perHand: o.perHand === true && o.kind === 'weighted',
+      t: /^\d{1,2}×\d{1,3}$/.test(String(o.t)) ? String(o.t) : '3×10'
+    };
+  });
+  Store.set('customExercises', JSON.parse(JSON.stringify(cleanCex)));
+
+  // activity names you've created — plain bounded strings
+  Store.set('activities', szArr(Store.get('activities', [])).filter(x => typeof x === 'string')
+    .map(x => szStr(x, 40).trim()).filter(Boolean).slice(0, 30));
 
   /* progression preferences (v37) — keyed by lift name, holding a custom
      increment and a "keep my weight" pause. progressionPref() re-checks the

@@ -24,6 +24,40 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v43 — log anything
+2026-09-22 · **pending push**
+
+Anything you train, defined the way you train it ([D-23](DECISIONS.md#d-23), [D-24](DECISIONS.md#d-24)).
+
+- **Custom exercises.** "＋ Create your own exercise" is always in the picker. Set a name, a type
+  (weights, bodyweight or timed hold), whether the weight is per hand, how it's loaded, default
+  sets × reps, and the primary and secondary muscles. Peak uses what you set everywhere it used to
+  guess from the name: plate math, per-hand volume, timed holds, weekly muscle volume and
+  progression. Custom lifts are tagged *mine* in the picker. **Edit exercise** is in every lift's ⋯
+  menu.
+- **Rename everywhere.** Renaming a lift rewrites every place its name is a key: sessions,
+  routines, goals, progression settings, taught muscles and loading. Undo restores all of them in
+  one step. A rename onto a name that already has history is refused rather than merging two lifts.
+- **Any activity.** "Log cardio" is now **Log activity**. The built-in activities are chips, and
+  anything you name (climbing, yoga, pickleball) becomes a chip of its own next time. Optional
+  distance (km/mi) and notes. It still never counts as a lifting session (D-09).
+- **Several routines, and routines from scratch.** The routine editor has a *Your routines* list
+  where you can use, rename or delete a routine, plus **＋ New routine**, either blank with N empty
+  days or copied from a built-in split. The current routine is always kept; nothing is discarded,
+  and every change can be undone. Onboarding's split picker has **Build my own**, which opens the
+  editor on empty days.
+- **Save a session as a routine day.** From any logged workout. Each lift's target is the number of
+  working sets you did × the rep count you did most often.
+
+Stored: `customExercises`, `routineLibrary`, `activities`, and `distanceKm` / `notes` on
+activity sessions. All of them are sanitised on restore.
+
+Tests: `tests/custom.test.mjs` covers 9 cases; 117 pass. Checked in the browser at 375×812: create
+an exercise from the picker (it lands in the live workout), the editor layout, logging a new
+activity (it's remembered), and a blank routine.
+
+---
+
 ## v42 — Peak starts coaching
 2026-09-22 · **pending push**
 

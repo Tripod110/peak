@@ -1099,3 +1099,11 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .ck-stat span { font-size: 12px; color: var(--muted); }
 .coach-line.warn { border-left: 3px solid var(--warning); }
 .coach-line.good { border-left: 3px solid var(--good); }
+
+/* ---------- log anything (custom.js) ---------- */
+.seg.seg-wrap { flex-wrap: wrap; }
+.seg.seg-wrap button { flex: 1 1 auto; min-height: 40px; padding: 9px 10px; }
+.rt-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--grid); }
+.rt-row:first-of-type { border-top: 0; }
+.rt-row.on b { color: var(--ink); }
+.pk-tag + .pk-tag { margin-left: 2px; }

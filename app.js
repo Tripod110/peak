@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v42';
+const APP_VERSION = 'v43';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -998,6 +998,7 @@ function openOnboarding(step = 1) {
       <label>Training split (${days} days/week)</label>
       <select id="ob-template">
         ${Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}" ${k === ob.template ? 'selected' : ''}>${v.name}</option>`).join('')}
+        <option value="custom" ${ob.template === 'custom' ? 'selected' : ''}>Build my own — start with ${days} empty days</option>
       </select>
       <button class="btn accent mt" data-action="ob-finish">Start the climb ⛰️</button>
     `, { dismissible: false });
@@ -1440,12 +1441,22 @@ document.addEventListener('click', e => {
     }
     case 'ob-back': openOnboarding(Number(el.dataset.step)); break;
     case 'ob-finish': {
-      App.ob.template = document.getElementById('ob-template').value;
+      const picked = document.getElementById('ob-template').value;
+      /* "Build my own": the profile still names a real split (the fallback if the
+         routine is ever reset), and the routine starts as empty named days that
+         open straight in the editor. */
+      App.ob.template = picked === 'custom' ? (TEMPLATE_FOR_DAYS[App.ob.gymDays] || 'ppl6') : picked;
       const st = getSettings();
       st.units = App.ob.units || 'imperial';
       setSettings(st);
       setProfile(buildProfileFromOb());
-      closeModal(); toast('Locked in. Welcome to Peak ⛰️');
+      if (picked === 'custom') {
+        const n = Math.min(Math.max(App.ob.gymDays || 3, 1), 7);
+        Store.set('routine', { id: newRoutineId(), name: 'My routine', createdAt: todayKey(),
+          days: Array.from({ length: n }, (_, i) => ({ name: `Day ${i + 1}`, ex: [] })) });
+        App.tab = 'train'; App.trainView = 'routine'; App.routineDay = 0; App._renderedTab = null;
+      }
+      closeModal(); toast(picked === 'custom' ? 'Locked in — now add your lifts to each day' : 'Locked in. Welcome to Peak ⛰️');
       App.render();
       break;
     }
@@ -1619,6 +1630,30 @@ document.addEventListener('click', e => {
       if (!(sets >= 1 && sets <= 12) || !(reps >= 1 && reps <= 100)) { toast('1–12 sets, 1–100 reps'); return; }
       routineSetTarget(Number(el.dataset.day), Number(el.dataset.ex), `${sets}×${reps}`);
       closeModal(); App.render(); break;
+    }
+    /* log anything (custom.js) */
+    case 'ce-new': {
+      const pk = App.picker;
+      closeModal();
+      openExerciseEditor(null, { q: pk?.q || '', pick: pk?.action, pickCtx: pk?.ctx });
+      break;
+    }
+    case 'ce-edit': openExerciseEditor(el.dataset.name); break;
+    case 'ce-save': saveExerciseEditor(); break;
+    case 'routine-new': openNewRoutineSheet(); break;
+    case 'routine-new-save': saveNewRoutineSheet(); break;
+    case 'routine-switch': switchRoutine(el.dataset.id); App.routineDay = null; App.render(); break;
+    case 'routine-lib-del': deleteLibraryRoutine(el.dataset.id); App.render(); break;
+    case 'routine-rename-all': {
+      const name = prompt('Name this routine', activeRoutine().name);
+      if (name && name.trim()) { renameActiveRoutine(name.trim().slice(0, 60)); App.render(); }
+      break;
+    }
+    case 'save-as-day-open': openSaveAsDay(el.dataset.id); break;
+    case 'save-as-day': {
+      const name = (document.getElementById('sd-name')?.value || '').trim().slice(0, 60);
+      if (saveSessionAsDay(el.dataset.id, name)) { closeModal(); App.render(); }
+      break;
     }
     case 'routine-rename': {
       const d = Number(el.dataset.day);
