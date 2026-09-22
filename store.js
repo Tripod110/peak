@@ -244,6 +244,7 @@ function cleanSession(s) {
     ...(o.kcalEst != null ? { kcalEst: szInt(o.kcalEst, 0, 20000) } : {}),
     ...(o.intensity ? { intensity: szStr(o.intensity, 20) } : {}),
     ...(o.type ? { type: szStr(o.type, 40) } : {}),
+    ...(o.deloadWeek === true ? { deloadWeek: true } : {}),
     ...(szUid(o.focusUid) ? { focusUid: o.focusUid } : {}),
     exercises: cleanExercises(o.exercises)
   };
@@ -429,7 +430,12 @@ function sanitizeStored() {
   Object.entries(szObj(mem.snooze)).forEach(([k, v]) => {
     if (/^[a-z]{1,20}$/.test(k) && szDate(v)) snooze[k] = v;
   });
-  Store.set('coachMemory', { snooze, ...(szDate(mem.deloadUntil) ? { deloadUntil: mem.deloadUntil } : {}) });
+  const sw = szObj(mem.lastSwitch);
+  Store.set('coachMemory', {
+    snooze,
+    ...(szDate(mem.deloadUntil) ? { deloadUntil: mem.deloadUntil } : {}),
+    ...(szDate(sw.date) && ['swap', 'reps'].includes(sw.kind) ? { lastSwitch: { date: sw.date, kind: sw.kind } } : {})
+  });
 
   /* Reviewed and deliberately not re-shaped, so the next reader doesn't redo
      the audit: quips, weakLink, coachDismissed, modelList, deviceId,

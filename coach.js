@@ -68,7 +68,7 @@ function sessionsPerWeek(weeks) {
 /* Where one lift stands right now. `stalled` is detectPlateaus' answer, passed
    in so the whole picture is built from one run of it. */
 function liftStatus(name, stalled) {
-  const full = exerciseHistory(name);
+  const full = exerciseHistory(name).filter(h => !h.deload);
   if (!full.length) return null;
   const idle = daysBetween(full[full.length - 1].date, todayKey());
   const hist = historySinceLayoff(full);
@@ -304,7 +304,9 @@ function debriefLift(name, date) {
   for (let i = hist.length - 1; i >= 0; i--) if (hist[i].date === date) { idx = i; break; }
   if (idx < 0) return null;
   const h = hist[idx];
-  const prior = hist.slice(0, idx);
+  // a planned lighter week is judged as what it is, and never used as the bar to beat
+  if (h.deload) return { name, kind: 'light', text: 'Lighter week, as planned.' };
+  const prior = hist.slice(0, idx).filter(p => !p.deload);
   const u = wUnit();
   const w = kg => `${Math.round(toW(kg) * 10) / 10} ${u}`;
   const since = historySinceLayoff(hist.slice(0, idx + 1));
@@ -350,6 +352,8 @@ function debriefLift(name, date) {
     if (diff === 0) return { name, kind: 'matched', text: `Matched last time at ${w(topKg)}.${stallNote}`, watch };
     return { name, kind: 'below', text: `${plural(-diff, 'rep')} short of last time at ${w(topKg)}.${stallNote}`, watch };
   }
+  // lighter because Peak prescribed a deload: that's the plan working, not a bad day
+  if (stalled) return { name, kind: 'light', text: 'Deload, as planned — build back up from here.', watch };
   // lighter, and there's no earlier session at this prescription: it's the other day's scheme
   if (!sameFound && tgt && parseTarget(same.target)?.reps !== tgt.reps) {
     return { name, kind: 'light', text: 'Lighter day, as planned.', watch };
@@ -409,7 +413,7 @@ function theilSen(pts) {
    | 'flat' (no upward trend) | 'far' | 'ok'. Everything in kg of est. max. */
 function liftOutlook(name) {
   const goal = liftGoal(name);
-  const full = exerciseHistory(name).filter(h => h.bestE1rm > 0);
+  const full = exerciseHistory(name).filter(h => h.bestE1rm > 0 && !h.deload);
   const today = todayKey();
   const hist = historySinceLayoff(full).filter(h => daysBetween(h.date, today) <= OUTLOOK_WINDOW);
   const points = hist.map(h => ({ x: -daysBetween(h.date, today), y: h.bestE1rm, date: h.date }));
@@ -440,4 +444,246 @@ function liftOutlook(name) {
   };
   if (goal.by) out.vsTargetDays = daysBetween(goal.by, out.eta);   // + = late, − = early
   return out;
+}
+
+/* ======================================================================
+   UI. Everything above is data; everything below renders it. Strings from
+   history (lift names) are user data, so every interpolation goes through
+   esc() — see D-17.
+   ====================================================================== */
+
+/* ---------- deload week ----------
+   The one coach action that changes prescriptions. It lives in coachMemory as
+   an end date, nextTarget reads it, and sessions trained during it are marked
+   so progression and plateau watch step over them afterwards — a planned
+   lighter week must not read as "you got weaker" or "you've stalled". */
+function coachDeloadActive() {
+  const until = getCoachMemory().deloadUntil;
+  return typeof until === 'string' && until >= todayKey();
+}
+function startDeloadWeek() {
+  const prev = getCoachMemory().deloadUntil || null;
+  setCoachMemory({ deloadUntil: todayKey(6) });
+  snoozeCoach('rundown', 10);
+  destructive('coach-deload', { prev }, 'Lighter week on — every lift ~10% down with a set less, for 7 days');
+}
+function endDeloadWeek() {
+  const m = { ...getCoachMemory() };
+  delete m.deloadUntil;
+  Store.set('coachMemory', m);
+}
+registerUndo('coach-deload', u => {
+  const m = { ...getCoachMemory() };
+  if (u.prev) m.deloadUntil = u.prev; else delete m.deloadUntil;
+  if (m.snooze) delete m.snooze.rundown;
+  Store.set('coachMemory', m);
+});
+
+/* ---------- Today: the coach line ---------- */
+function renderCoachLine() {
+  const i = coachInsight();
+  const deload = coachDeloadActive()
+    ? `<div class="coach-sub">Lighter week until ${esc(prettyDate(getCoachMemory().deloadUntil))} · <button class="link-btn" data-action="coach-deload-end">End it early</button></div>` : '';
+  if (!i) return deload ? `<section class="card coach-card" aria-label="Coach">${deload}</section>` : '';
+  return `
+  <section class="card coach-card ${i.tone}" aria-label="Coach">
+    <div class="coach-eyebrow">Coach</div>
+    <b class="coach-h">${esc(i.headline)}</b>
+    <p class="coach-b">${esc(i.body)}</p>
+    ${deload}
+    ${i.action ? `<div class="row coach-actions">
+      <button class="btn small primary" data-action="${i.action.action}">${esc(i.action.label)}</button>
+      ${i.action.dismiss ? `<button class="btn small ghost" data-action="coach-snooze" data-state="${i.state}" data-days="${i.action.dismiss.days}">${esc(i.action.dismiss.label)}</button>` : ''}
+    </div>` : ''}
+  </section>`;
+}
+
+/* ---------- post-workout debrief ---------- */
+const DEBRIEF_ICON = { pr: '▲', up: '▲', matched: '=', light: '·', below: '▽', baseline: '·' };
+function openDebrief(saved) {
+  const rows = sessionDebrief(saved);
+  const i = coachInsight();
+  const prs = rows.filter(r => r.kind === 'pr').length;
+  const goalRows = rows.map(r => {
+    const o = liftOutlook(r.name);
+    if (o.status === 'ok') return `<div class="db-goal">${esc(r.name)} → ${esc(fmtGoal(o.goal))} around <b>${esc(shortDate(o.eta))}</b> at this pace</div>`;
+    if (o.status === 'reached') return `<div class="db-goal good">🎯 ${esc(r.name)}: goal ${esc(fmtGoal(o.goal))} reached. Set the next one from “Why this target?”.</div>`;
+    return '';
+  }).join('');
+  openModal(`
+    <h3>${prs ? `${plural(prs, 'PR')} today 🎉` : 'Workout saved 💪'}</h3>
+    <div class="modal-sub">${esc(saved.dayName || 'Workout')} · score ${saved.score}/100${saved.durationMin ? ` · ${saved.durationMin} min` : ''}${saved.deloadWeek ? ' · lighter week' : ''}</div>
+    <ul class="debrief">
+      ${rows.map(r => `
+      <li class="db-${r.kind}">
+        <span class="db-ico" aria-hidden="true">${DEBRIEF_ICON[r.kind] || '·'}</span>
+        <span><b>${esc(r.name)}</b> ${esc(r.text)}${r.watch ? `<span class="db-watch"> ${esc(r.watch)}</span>` : ''}</span>
+      </li>`).join('')}
+    </ul>
+    ${goalRows}
+    ${i && i.state !== 'steady' ? `<div class="db-coach"><b>${esc(i.headline)}</b> ${esc(i.body)}</div>` : ''}
+    <button class="btn primary mt" data-action="close-modal">Done</button>
+  `, { label: 'Workout debrief' });
+}
+
+/* ---------- switch it up ----------
+   Concrete, one-tap changes to the routine, each undoable. Only offered for
+   lifts that are actually in the routine and actually flat. */
+const VARIATION_WORDS = ['bench', 'squat', 'deadlift', 'press', 'row', 'curl', 'pulldown', 'pull', 'raise', 'lunge', 'fly', 'extension', 'thrust'];
+function variationFor(name, inRoutine) {
+  const lib = libEntry(name);
+  const group = lib ? lib.group : musclesFor(name).p[0];
+  if (!group || !LIB[group]) return null;
+  const words = VARIATION_WORDS.filter(wd => name.toLowerCase().includes(wd));
+  const options = LIB[group].filter(e => e.n.toLowerCase() !== name.toLowerCase() && !inRoutine.has(e.n.toLowerCase()));
+  const pick = options.find(e => words.some(wd => e.n.toLowerCase().includes(wd))) || options[0];
+  return pick ? pick.n : null;
+}
+function switchPlan() {
+  const sig = coachSignals();
+  const r = activeRoutine();
+  const inRoutine = new Set(r.days.flatMap(d => d.ex.map(e => e[0].toLowerCase())));
+  const flat = new Set(sig.flatOrStalled.map(l => l.name.toLowerCase()));
+  const swaps = [], reps = [];
+  r.days.forEach((d, di) => d.ex.forEach(([n, t], ei) => {
+    if (!flat.has(n.toLowerCase())) return;
+    const alt = variationFor(n, inRoutine);
+    if (alt && swaps.length < 3) { swaps.push({ di, ei, from: n, to: alt }); inRoutine.add(alt.toLowerCase()); }
+    const tg = parseTarget(t);
+    if (tg && reps.length < 4) reps.push({ di, ei, name: n, day: d.name, from: t, to: `${tg.sets}×${tg.reps <= 6 ? 10 : 6}` });
+  }));
+  // a lift on two days needs its day named, or the sheet lists it twice with no way to tell them apart
+  const dup = new Set(reps.map(x => x.name.toLowerCase()).filter((n, i, a) => a.indexOf(n) !== i));
+  reps.forEach(x => { x.label = dup.has(x.name.toLowerCase()) ? `${x.name} (${x.day})` : x.name; });
+  return { swaps, reps };
+}
+function openCoachSwitch() {
+  const { swaps, reps } = switchPlan();
+  openModal(`
+    <h3>Switch it up</h3>
+    <div class="modal-sub">Pick one. Each is a change to your routine you can undo, and the coach checks back in a few weeks.</div>
+    ${swaps.length ? `
+    <button class="coach-opt" data-action="coach-apply" data-kind="swap">
+      <b>Swap in variations</b>
+      <span>${swaps.map(s => `${esc(s.from)} → ${esc(s.to)}`).join(' · ')}</span>
+      <em>New movements, same muscles. Usually unsticks a lift within a block.</em>
+    </button>` : ''}
+    ${reps.length ? `
+    <button class="coach-opt" data-action="coach-apply" data-kind="reps">
+      <b>Change the rep ranges</b>
+      <span>${reps.map(s => `${esc(s.label)} ${esc(s.from)} → ${esc(s.to)}`).join(' · ')}</span>
+      <em>Heavy lifts go lighter and longer, light ones heavier. A new stimulus without new exercises.</em>
+    </button>` : ''}
+    <button class="coach-opt" data-action="coach-apply" data-kind="deload">
+      <b>Take a lighter week first</b>
+      <span>Every lift ~10% down with a set less, for 7 days</span>
+      <em>Sometimes you're not stuck, you're tired. Then come back to the same plan fresher.</em>
+    </button>
+    <button class="coach-opt" data-action="coach-apply" data-kind="split">
+      <b>Try a different split</b>
+      <span>Open your routine and pick another</span>
+    </button>
+    <button class="btn ghost mt" data-action="close-modal">Not now</button>
+  `);
+}
+function applyCoachSwitch(kind) {
+  closeModal();
+  if (kind === 'deload') { startDeloadWeek(); App.render(); return; }
+  if (kind === 'split') {
+    snoozeCoach('grinding', 21);
+    App.tab = 'train'; App.trainView = 'routine'; App._renderedTab = null; App.render(); return;
+  }
+  const prev = Store.get('routine', null);
+  const { swaps, reps } = switchPlan();
+  if (kind === 'swap') swaps.forEach(s => routineSwapExercise(s.di, s.ei, s.to));
+  if (kind === 'reps') reps.forEach(s => routineSetTarget(s.di, s.ei, s.to));
+  setCoachMemory({ lastSwitch: { date: todayKey(), kind } });
+  snoozeCoach('grinding', 21);
+  destructive('coach-switch', { prev: prev ? JSON.parse(JSON.stringify(prev)) : null },
+    kind === 'swap' ? `Swapped in ${plural(swaps.length, 'variation')}` : `Changed ${plural(reps.length, 'rep range')}`);
+  App.render();
+}
+registerUndo('coach-switch', u => {
+  if (u.prev) Store.set('routine', u.prev); else Store.remove('routine');
+  const m = { ...getCoachMemory() };
+  delete m.lastSwitch;
+  if (m.snooze) delete m.snooze.grinding;
+  Store.set('coachMemory', m);
+});
+
+/* the drifting lifter's smaller ask: today's day, first three lifts only */
+function startShortSession() {
+  App.tab = 'train'; App.trainView = 'home';
+  startWorkout(nextDayIndex(), false, { maxEx: 3 });
+}
+
+/* ---------- lift goals: the sheet section and the editor ---------- */
+function goalSectionHtml(name) {
+  if (!exerciseHasLoad(name)) return '';
+  const o = liftOutlook(name);
+  const u = wUnit();
+  if (o.status === 'nogoal') {
+    return `<div class="sheet-h">Goal</div>
+      <p class="sheet-p muted">Set a target like ${esc(name)} 225×5 and Peak projects when you'll get there from your own trend.</p>
+      <button class="btn" data-action="goal-edit" data-name="${esc(name)}">🎯 Set a goal</button>`;
+  }
+  let say = '';
+  if (o.status === 'ok') {
+    const pace = `${Math.round(toW(o.perWeekKg) * 10) / 10} ${u}/week`;
+    const vs = o.vsTargetDays == null ? ''
+      : o.vsTargetDays <= 0 ? ` That's ${plural(Math.max(1, Math.round(-o.vsTargetDays / 7)), 'week')} ahead of your ${shortDate(o.goal.by)} target.`
+      : ` That's ${plural(Math.max(1, Math.round(o.vsTargetDays / 7)), 'week')} after your ${shortDate(o.goal.by)} target.`;
+    say = `At your current pace (+${pace} on est. max) you'll hit ${fmtGoal(o.goal)} around ${shortDate(o.eta)} — likely between ${shortDate(o.etaEarly)} and ${o.etaLate ? shortDate(o.etaLate) : 'later'}.${vs}`;
+  } else if (o.status === 'reached') say = `Goal reached — you've already done the equivalent of ${fmtGoal(o.goal)}. Time to set the next one.`;
+  else if (o.status === 'short') say = `Log this lift ${plural(Math.max(1, o.need), 'more time')} over a few weeks and the projection appears.`;
+  else if (o.status === 'flat') say = `Flat right now, so there's no honest date to give. The projection comes back as soon as you're climbing.`;
+  else if (o.status === 'far') say = `At this pace it's over two years out — a closer goal, or switching things up, would help.`;
+  return `<div class="sheet-h">Goal · ${esc(fmtGoal(o.goal))}${perHandLift(name) ? ' per hand' : ''}</div>
+    ${outlookChart(o)}
+    <p class="sheet-p">${esc(say)}</p>
+    <div class="row" style="gap:8px">
+      <button class="btn small" data-action="goal-edit" data-name="${esc(name)}">Edit goal</button>
+      <button class="btn small ghost" data-action="goal-clear" data-name="${esc(name)}">Remove</button>
+    </div>`;
+}
+function openGoalSheet(name) {
+  const g = liftGoal(name);
+  const u = wUnit();
+  openModal(`
+    <h3>Goal for ${esc(name)}</h3>
+    <div class="modal-sub">Any weight × reps — Peak compares it on estimated max, so progress at other rep ranges still counts.</div>
+    <div class="grid-2">
+      <div><label for="goal-w">Weight (${u}${perHandLift(name) ? ' per hand' : ''})</label>
+        <input id="goal-w" type="number" inputmode="decimal" value="${g ? Math.round(toW(g.kg) * 10) / 10 : ''}"></div>
+      <div><label for="goal-r">Reps</label>
+        <input id="goal-r" type="number" inputmode="numeric" value="${g ? g.reps : 5}"></div>
+    </div>
+    <label for="goal-by">By (optional)</label>
+    <input id="goal-by" type="date" min="${todayKey(1)}" value="${g && g.by ? g.by : ''}">
+    <button class="btn primary mt" data-action="goal-save" data-name="${esc(name)}">Save goal</button>
+    <button class="btn ghost mt" data-action="why-target" data-name="${esc(name)}">Back</button>
+  `);
+}
+function saveGoalFromSheet(name) {
+  const w = Number(document.getElementById('goal-w')?.value);
+  const reps = Math.round(Number(document.getElementById('goal-r')?.value));
+  const by = document.getElementById('goal-by')?.value || null;
+  if (!(w > 0)) { toast('Enter a goal weight'); return; }
+  if (!(reps >= 1 && reps <= 30)) { toast('Reps between 1 and 30'); return; }
+  setLiftGoal(name, { kg: fromW(w), reps, by: by && by > todayKey() ? by : null });
+  toast(`Goal set: ${name} ${w}×${reps}`);
+  openWhyTarget(name);
+}
+
+/* ---------- Settings: the voice picker ---------- */
+function coachVoicePickerHtml() {
+  const cur = coachVoice();
+  return `
+    <label>Coach voice</label>
+    <div class="voice-picker" id="set-voice" role="radiogroup" aria-label="Coach voice">
+      ${COACH_VOICES.map(v => `
+      <button role="radio" aria-checked="${v.id === cur}" class="voice-opt ${v.id === cur ? 'on' : ''}" data-action="pick-voice" data-v="${v.id}">
+        <b>${esc(v.label)}</b><span>“${esc(v.sample)}”</span>
+      </button>`).join('')}
+    </div>`;
 }

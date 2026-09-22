@@ -286,7 +286,7 @@ function exerciseHistory(name) {
       if (!top) { // bodyweight-only (abs etc.): track the best rep set instead
         work.forEach(st => { if (st.reps > 0 && (!top || st.reps > top.reps)) top = st; });
       }
-      if (top) out.push({ date: s.date, bestE1rm: best, topSet: top, sets: work, target: ex.target });
+      if (top) out.push({ date: s.date, bestE1rm: best, topSet: top, sets: work, target: ex.target, deload: !!s.deloadWeek });
     });
   });
   out.sort((a, b) => a.date < b.date ? -1 : 1);
@@ -416,7 +416,8 @@ function detectPlateaus() {
   getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
   const flags = [];
   names.forEach(name => {
-    const full = exerciseHistory(name);
+    // a planned lighter week (coach.js) is neither a stall nor a regression
+    const full = exerciseHistory(name).filter(h => !h.deload);
     if (!full.length) return;
 
     // 1. dormant lifts are not stalled — they're not being trained
@@ -459,7 +460,7 @@ function plateauWatchCount() {
   getWorkouts().forEach(s => (s.exercises || []).forEach(ex => names.add(ex.name)));
   let n = 0;
   names.forEach(name => {
-    const full = exerciseHistory(name);
+    const full = exerciseHistory(name).filter(h => !h.deload);
     if (!full.length) return;
     if (daysBetween(full[full.length - 1].date, todayKey()) > DORMANT_DAYS) return;
     const hist = historySinceLayoff(full);
@@ -514,9 +515,13 @@ function parseTarget(t) {
    so changing a lift's rep target doesn't resurrect a months-old weight. */
 function lastSessionSets(name, targetStr) {
   const key = name.toLowerCase();
-  const sessions = getWorkouts()
+  let sessions = getWorkouts()
     .filter(s => !s.cardio && (s.exercises || []).some(e => e.name.toLowerCase() === key))
     .sort((a, b) => a.date < b.date ? 1 : -1);
+  /* After a planned lighter week, build from the last real session — otherwise
+     "hit every set at 90%" would read as the new starting point. */
+  const real = sessions.filter(s => !s.deloadWeek);
+  if (real.length) sessions = real;
   if (!sessions.length) return null;
   const exOf = s => s.exercises.find(e => e.name.toLowerCase() === key);
   const want = parseTarget(targetStr);
@@ -662,6 +667,16 @@ function nextTarget(name, targetStr, stalledNames) {
 
   // a hold outranks everything below: no increase, no deload
   if (pref.hold) return holdResult(lastText);
+
+  /* A lighter week the coach set up (coach.js): ~10% down with a set less,
+     then progression picks up from the last real session. */
+  if (typeof coachDeloadActive === 'function' && coachDeloadActive()) {
+    const val = roundW(lastDisp * 0.9, name);
+    const sets = Math.max(2, tgt.sets - 1);
+    return { type: 'deload', w: val, sets, reps: tgt.reps, lastText, deloadWeek: true,
+      short: `lighter week — ${val} ${u}`,
+      text: `Lighter week — ${sets}×${tgt.reps} at ${val} ${u}, about 10% down with a set less. Recovery is the work this week; progression picks up where you left off.` };
+  }
 
   /* A custom increment is the user's own grid. Rounding its result back onto
      the automatic 5 lb / 2.5 kg steps would silently undo it (185 + 2.5 → 190),
@@ -1438,7 +1453,7 @@ function renderRecentCard(all, limit) {
 }
 
 /* ---------- active session ---------- */
-function startWorkout(dayIdx, freestyle = false) {
+function startWorkout(dayIdx, freestyle = false, { maxEx } = {}) {
   if (App.activeSession) { App.render(); return; }   // a double tap on Start must not replace a live session
   const p = getProfile();
   const tpl = activeRoutine();
@@ -1451,7 +1466,9 @@ function startWorkout(dayIdx, freestyle = false) {
     template: p.template,
     dayName: freestyle ? 'Freestyle' : day.name,
     freestyle,
-    exercises: freestyle ? [] : day.ex.map(([name, target]) => ({ uid: newExerciseUid(), name, target, sets: plannedSetsFor(name, target, stalled) }))
+    exercises: freestyle ? [] : day.ex.slice(0, maxEx || day.ex.length)
+      .map(([name, target]) => ({ uid: newExerciseUid(), name, target, sets: plannedSetsFor(name, target, stalled) })),
+    ...(typeof coachDeloadActive === 'function' && coachDeloadActive() ? { deloadWeek: true } : {})
   };
   ensureSessionIds(App.activeSession);
   App.setSel = null;
@@ -1467,7 +1484,7 @@ function plannedSetsFor(name, target, stalled) {
   const t = parseTarget(target) || { sets: 3, reps: 8 };
   const pr = nextTarget(name, target, stalled);
   const sets = [];
-  for (let i = 0; i < t.sets; i++) {
+  for (let i = 0; i < (pr.sets || t.sets); i++) {   // a lighter week plans a set less
     sets.push({
       weight: pr.w > 0 ? (pr.wKg ?? fromW(pr.w)) : null,
       reps: pr.reps ?? t.reps,
@@ -2449,6 +2466,7 @@ function openWhyTarget(name, targetStr) {
     ${last && last.sets.length ? `
       <div class="sheet-h">Last time · ${esc(prettyDate(last.date))}</div>
       <p class="sheet-p">${esc(prevSetsText(name, last.sets))}</p>` : ''}
+    ${typeof goalSectionHtml === 'function' ? goalSectionHtml(name) : ''}
     ${typeof openProgressionSheet === 'function' ? `<button class="btn mt" data-action="open-progression" data-name="${esc(name)}">${icon('sliders')} Progression settings</button>` : ''}
     <button class="btn ghost mt" data-action="close-modal">Close</button>
   `);
@@ -2528,9 +2546,10 @@ function finishWorkout() {
   App.todayView = 'home';
   if (typeof closeModal === 'function') closeModal();
   paintRest();
-  toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${saved.score}` : `Workout saved — score ${saved.score} 💪`);
   App.render();
-  announce(`Workout saved. Score ${saved.score}.`);
+  if (typeof openDebrief === 'function') openDebrief(saved);
+  else toast(prs.length ? `🎉 PR on ${prs.join(', ')}! Score ${saved.score}` : `Workout saved — score ${saved.score} 💪`);
+  announce(`Workout saved. Score ${saved.score}.${prs.length ? ` PR on ${prs.join(', ')}.` : ''}`);
 }
 
 /* The old add-exercise modal was a text box with a datalist behind it: on a

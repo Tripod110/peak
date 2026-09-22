@@ -119,6 +119,89 @@ function lineChart(points, { w = 320, h = 130, color = CHART.violet, goal = null
   ${gapCount ? `<div class="chart-note">Dashed stretches are days with nothing logged.</div>` : ''}`;
 }
 
+/* Lift outlook: logged est. max, the trend projected to a goal, and an honest
+   range. One series, so no legend — the heading names it. The only dashed line
+   is the projection (dashes mean "not happened yet"); the grid and the goal
+   are solid hairlines. Colours are theme variables, so it works in all five.
+   `o` is liftOutlook()'s result; values are kg of est. max. */
+function shortDate(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function outlookChart(o, { w = 320, h = 160 } = {}) {
+  if (!o.points.length) return '';
+  const u = wUnit();
+  const disp = kg => toW(kg);
+  const pts = o.points.map(p => ({ x: p.x, y: disp(p.y), date: p.date }));
+  const goal = o.goalE1rm != null ? disp(o.goalE1rm) : null;
+  const ok = o.status === 'ok';
+  const nowY = ok ? disp(o.now) : pts[pts.length - 1].y;
+  const fastD = ok ? daysBetween(todayKey(), o.etaEarly) : 0;
+  const slowD = ok && o.etaLate ? daysBetween(todayKey(), o.etaLate) : null;
+  const xEnd = ok ? Math.max(o.days, Math.min(slowD ?? o.days * 1.5, o.days * 2)) * 1.05 : 0;
+
+  const padL = 40, padR = 14, padT = 18, padB = 24;
+  const xMin = Math.min(...pts.map(p => p.x)), xMax = Math.max(xEnd, 1);
+  const ys = pts.map(p => p.y).concat(goal != null ? [goal] : [], [nowY]);
+  let yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const span = (yMax - yMin) || 10;
+  yMin -= span * 0.15; yMax += span * 0.15;
+  const X = x => padL + (x - xMin) / ((xMax - xMin) || 1) * (w - padL - padR);
+  const Y = v => padT + (1 - (v - yMin) / (yMax - yMin)) * (h - padT - padB);
+  const f = v => v.toFixed(1);
+
+  let grid = '';
+  for (let g = 1; g <= 3; g++) {
+    const gv = yMin + (yMax - yMin) * g / 4;
+    grid += `<line x1="${padL}" x2="${w - padR}" y1="${f(Y(gv))}" y2="${f(Y(gv))}" stroke="var(--grid)" stroke-width="1"/>
+      <text x="${padL - 6}" y="${f(Y(gv) + 3.5)}" text-anchor="end" fill="var(--muted)" font-size="10">${Math.round(gv)}</text>`;
+  }
+  const goalLine = goal != null ? `
+    <line x1="${padL}" x2="${w - padR}" y1="${f(Y(goal))}" y2="${f(Y(goal))}" stroke="var(--muted)" stroke-width="1"/>
+    <text x="${padL + 4}" y="${f(Y(goal) - 5)}" fill="var(--muted)" font-size="10">Goal ${esc(fmtGoal(o.goal))}</text>` : '';
+
+  let proj = '';
+  if (ok) {
+    // range: the fan between the fast and slow quartile slopes, as a faint wash
+    const slowEndX = slowD != null ? Math.min(slowD, xMax) : xMax;
+    const slowEndY = slowD != null && slowD <= xMax ? goal : nowY + (goal - nowY) * (xMax / (slowD ?? xMax * 4));
+    proj = `
+    <polygon points="${f(X(0))},${f(Y(nowY))} ${f(X(fastD))},${f(Y(goal))} ${f(X(slowEndX))},${f(Y(slowEndY))}"
+      fill="var(--blue)" opacity="0.12"/>
+    <line x1="${f(X(0))}" y1="${f(Y(nowY))}" x2="${f(X(o.days))}" y2="${f(Y(goal))}"
+      stroke="var(--blue)" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round"/>
+    <circle cx="${f(X(o.days))}" cy="${f(Y(goal))}" r="4.5" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>
+    <text x="${f(Math.min(X(o.days), w - padR))}" y="${f(Y(goal) - 9)}" text-anchor="${X(o.days) > w - 60 ? 'end' : 'middle'}"
+      fill="var(--ink)" font-size="11" font-weight="700">~${esc(shortDate(o.eta))}</text>`;
+  }
+
+  const line = pts.length > 1
+    ? `<polyline points="${pts.map(p => `${f(X(p.x))},${f(Y(p.y))}`).join(' ')}" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+  const dots = pts.map(p => `
+    <g><circle cx="${f(X(p.x))}" cy="${f(Y(p.y))}" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>
+    <circle cx="${f(X(p.x))}" cy="${f(Y(p.y))}" r="12" fill="transparent"><title>${esc(shortDate(p.date))}: est. max ${Math.round(p.y)} ${u}</title></circle></g>`).join('');
+
+  const todayTick = xMax > 0 ? `
+    <line x1="${f(X(0))}" x2="${f(X(0))}" y1="${padT}" y2="${h - padB}" stroke="var(--grid)" stroke-width="1"/>
+    <text x="${f(X(0))}" y="${h - 8}" text-anchor="middle" fill="var(--muted)" font-size="10">Today</text>` : '';
+  const aria = ok
+    ? `Estimated max ${Math.round(nowY)} ${u}, projected to reach the goal around ${shortDate(o.eta)}`
+    : `Estimated max over the last ${pts.length} sessions, latest ${Math.round(nowY)} ${u}`;
+  return `
+  <svg width="100%" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(aria)}">
+    <text x="4" y="11" fill="var(--muted)" font-size="10">est. max, ${u}</text>
+    ${grid}${goalLine}${todayTick}${proj}${line}${dots}
+    <text x="${padL}" y="${h - 8}" fill="var(--muted)" font-size="10">${esc(shortDate(pts[0].date))}</text>
+  </svg>
+  <details class="chart-table"><summary>Show the numbers</summary>
+    <table><tr><th>Session</th><th>Est. max</th></tr>
+    ${pts.map(p => `<tr><td>${esc(shortDate(p.date))}</td><td>${Math.round(p.y)} ${u}</td></tr>`).join('')}
+    ${ok ? `<tr><td>Projected</td><td>goal ~${esc(shortDate(o.eta))} (${esc(shortDate(o.etaEarly))}–${o.etaLate ? esc(shortDate(o.etaLate)) : 'later'})</td></tr>` : ''}
+    </table>
+  </details>`;
+}
+function fmtGoal(g) { return g ? `${Math.round(toW(g.kg) * 10) / 10}×${g.reps}` : ''; }
+
 /* Small horizontal macro bar (HTML) */
 function macroBar(name, value, target, color, unit = 'g') {
   const pct = target > 0 ? Math.min(value / target * 100, 100) : 0;

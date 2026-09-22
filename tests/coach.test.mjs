@@ -195,3 +195,41 @@ test('lift goals are sanitised on restore', () => {
   assert.ok(P.liftGoal('Bench Press'));
   assert.equal(P.liftGoal('Squat'), null);
 });
+
+/* ---------- coach actions ---------- */
+
+test('a lighter week drops every lift ~10% with a set less, and progression resumes from the real session', () => {
+  bench(7, 200, [5, 5, 5]);
+  P.startDeloadWeek();
+  assert.equal(P.coachDeloadActive(), true);
+  const t = P.nextTarget('Bench Press', '3×5');
+  assert.equal(t.type, 'deload');
+  assert.equal(t.w, 180);
+  assert.equal(t.sets, 2);
+  // a session trained during it is marked, and never becomes the new baseline
+  P.saveWorkout({ id: 'dl', date: localDay(0), dayName: 'Full Body A', deloadWeek: true, exercises: [
+    { name: 'Bench Press', target: '3×5', sets: [5, 5].map(r => ({ weight: lb(180), reps: r, type: 'normal' })) }] });
+  assert.equal(P.debriefLift('Bench Press', localDay(0)).kind, 'light');
+  P.undoLast();   // ends the lighter week
+  assert.equal(P.coachDeloadActive(), false);
+  assert.equal(P.nextTarget('Bench Press', '3×5').w, 205, 'builds from 200, not from the 180 week');
+});
+
+test('switch it up offers real variations for flat lifts, applies them, and undoes cleanly', () => {
+  block(6, { reps: [5, 5, 4] });
+  const before = JSON.stringify(P.activeRoutine());
+  const plan = P.switchPlan();
+  assert.ok(plan.swaps.length >= 1, 'at least one variation offered');
+  plan.swaps.forEach(s => assert.notEqual(s.from.toLowerCase(), s.to.toLowerCase()));
+  P.applyCoachSwitch('swap');
+  const after = P.activeRoutine();
+  assert.ok(after.days.some(d => d.ex.some(([n]) => n === plan.swaps[0].to)));
+  assert.equal(P.coachInsight(), null, 'the coach gives the new block time before judging it');
+  P.undoLast();
+  assert.equal(JSON.stringify(P.activeRoutine()), before);
+});
+
+test('the drifting lifter\'s short session is the next day, first three lifts only', () => {
+  P.startShortSession();
+  assert.equal(P.App.activeSession.exercises.length, 3);
+});

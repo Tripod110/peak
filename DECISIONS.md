@@ -28,6 +28,7 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-19](#d-19) | Every tab is hero, tiles, list, Explore — no flat tabs, no in-page switchers | 🟢 Decided · v40 |
 | [D-20](#d-20) | Destructive actions are undoable, not confirmed | 🟢 Decided · v40 |
 | [D-21](#d-21) | Progress is reps at a load, not only the top set | 🟢 Decided · v41 |
+| [D-22](#d-22) | The coach: rules decide, voice words it, you can always say no | 🟢 Decided · v42 |
 
 ---
 
@@ -485,3 +486,37 @@ engine has to be right about the reps people already log.
   type.
 - After a deload, coming back to the old top weight and missing once deloads again straight away
   (unchanged since D-06). That needs a short grace window.
+
+## <a name="d-22"></a>D-22 · The coach: rules decide, voice words it, you can always say no
+**🟢 Decided.** v42 · `coach.js`
+
+Peak had plenty of numbers and no opinion about them. The goal is that it feels like a coach who
+knows *you*: it notices when you haven't been progressing and tells you to change something.
+
+**Decided:** three layers, in this order.
+1. **Signals** are pure functions over logged history. Every claim the coach makes is one of them.
+2. **State** is one reading (starting, roll, grinding, holding, drifting, rundown, comeback,
+   steady), derived fresh on every render and never stored. It follows the same rule as D-12:
+   nothing to migrate, and old data is reinterpreted correctly.
+3. **Words** come in three user-chosen voices. The voice changes the wording, never the facts or
+   the action. A test enforces this.
+
+**Why rules and not a model:** the coach's advice changes your routine. It has to be the same
+advice for the same history, explainable, and testable against personas. An LLM can later
+*word* a weekly check-in from these facts, and it will be rejected if it names anything the facts
+don't contain. It never decides.
+
+**Order of readings:**
+- A comeback outranks everything, because stall talk during a rebuild is the worst possible
+  message.
+- Drifting outranks momentum, because you can't progress sessions you don't do.
+- On a cut, flat strength reads as *holding* (a win). The plateau engine still flags those lifts,
+  because it can't see the deficit; the coach can.
+
+**Only your answers are stored** (`coachMemory`: snoozes, the last switch-up, a lighter week's
+end date). The coach never writes down a verdict about you.
+
+**Every action is undoable** (D-20). After a switch-up, the "grinding" reading is snoozed for
+three weeks, because a new block needs time before it can be judged.
+
+**Rejected:** a chat coach. It's still a non-goal, for the same reasons as before.

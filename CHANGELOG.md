@@ -24,6 +24,59 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v42 — Peak starts coaching
+2026-09-22 · **pending push**
+
+Peak used to tell you what a number was. Now it tells you how you're doing and what to do about
+it, from your own last month rather than one lift on one day ([D-22](DECISIONS.md#d-22)).
+
+**The coach** ([coach.js](coach.js)) reads everything you log: each lift's status (using the same
+`beats` rule as the plateau engine), PRs in the last four weeks, sessions against your plan,
+score trend, breaks, and 7-day sleep and protein. It picks the one reading that fits:
+
+| Reading | What it does |
+|---|---|
+| Getting started | tells you how far off plateau watch is |
+| On a roll | names the wins, says don't change anything |
+| **Grinding** — most lifts flat, attendance fine | **Switch it up**: variations, new rep ranges, a lighter week, or a new split — all one tap, all undoable |
+| Holding — flat on a cut | calls it the win it is, and doesn't tell you to change a working plan |
+| Drifting — sessions falling off | a smaller ask: a 3-lift session today |
+| Run down — scores falling with short sleep or low protein | points at the cause, offers a lighter week |
+| Comeback — after a break | no stall talk while you rebuild |
+
+It shows up on **Today** under the next workout. "Not now" and "Keep my routine" are
+remembered, and after a switch-up the coach gives the new block three weeks before judging it.
+
+**Your coach, your voice.** Settings → Coach voice: *Encouraging*, *Straight-talking* or *Drill
+sergeant*. Same facts, same advice, different words.
+
+**After every workout, a debrief** replaces the toast. It gives one verdict per lift in plain words —
+"+1 rep at 185 lb, that's progress", "matched last time", "deload, as planned", "lighter day, as
+planned" — plus how many sessions until plateau watch starts, pace toward any goal, and the
+coach's read.
+
+**Lift goals and outlook.** "Why this target?" now has a Goal section. Set any weight × reps
+(optionally by a date), and Peak fits your trend since the last break with Theil–Sen (one freak
+day can't swing it). It projects when you'll get there as a date with a likely range, and says
+whether that's ahead of or behind your target. When a lift is flat or too new, it says so rather
+than inventing a date. The chart has a "show the numbers" table.
+
+**A lighter week** is a real mode. For 7 days every lift is ~10% down with a set less, then
+progression resumes from your last *real* session. Plateau watch and the coach step over the
+lighter week, so it never reads as a stall or a regression.
+
+Stored: `coachVoice` (settings), `coachMemory` (only your own answers), `liftGoals`. All three
+are sanitised on restore.
+
+Tests: `tests/coach.test.mjs` covers 20 persona and maths cases; 105 pass. Checked in the
+browser at 375×812 in the dark and light themes: the coach card, the switch-it-up sheet, undo,
+the debrief and the outlook chart.
+
+> **Not yet:** the weekly check-in, the optional AI wording, and the coach on the Train tab.
+> Known: the toast and + button can overlap the coach card's buttons (mobile review item).
+
+---
+
 ## v41 — the plateau engine reads reps, and the device id stays home
 2026-09-22 · **pending push**
 

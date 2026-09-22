@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v41';
+const APP_VERSION = 'v42';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -396,6 +396,8 @@ function renderTodayHome() {
 
   return `
   ${renderTodayHero()}
+
+  ${renderCoachLine()}
 
   ${tileStrip([
     tile({ action: 'today-nav', data: { view: 'nutrition' }, ico: 'egg', label: 'Protein',
@@ -1153,6 +1155,8 @@ function openSettingsModal() {
       <button data-v="24" class="${s.timeFmt === '24' ? 'on' : ''}">24-hour</button>
     </div>
 
+    ${coachVoicePickerHtml()}
+
     <label>Theme</label>
     <div class="theme-picker" id="set-theme">
       ${THEMES.map(th => `
@@ -1536,6 +1540,30 @@ document.addEventListener('click', e => {
       App._renderedTab = null; App.render(); break;
     case 'close-modal': closeModal(); break;
     case 'why-target': openWhyTarget(el.dataset.name, el.dataset.target); break;
+
+    /* coach (coach.js) */
+    case 'coach-switch': openCoachSwitch(); break;
+    case 'coach-apply': applyCoachSwitch(el.dataset.kind); break;
+    case 'coach-short': startShortSession(); break;
+    case 'coach-deload': startDeloadWeek(); App.render(); break;
+    case 'coach-deload-end': endDeloadWeek(); toast('Lighter week ended — back to your normal plan'); App.render(); break;
+    case 'coach-snooze':
+      snoozeCoach(el.dataset.state, Number(el.dataset.days) || 7);
+      toast('Got it — the coach will check back later');
+      App.render(); break;
+    case 'goal-edit': openGoalSheet(el.dataset.name); break;
+    case 'goal-save': saveGoalFromSheet(el.dataset.name); break;
+    case 'goal-clear': setLiftGoal(el.dataset.name, null); openWhyTarget(el.dataset.name); break;
+    case 'pick-voice': {
+      const s = getSettings();
+      s.coachVoice = el.dataset.v;
+      setSettings(s);
+      document.querySelectorAll('#set-voice .voice-opt').forEach(b => {
+        const on = b.dataset.v === el.dataset.v;
+        b.classList.toggle('on', on); b.setAttribute('aria-checked', on);
+      });
+      break;
+    }
     case 'edit-load': openLoadModal(el.dataset.name); break;
     case 'save-load-kind':
       setLoadOverride(el.dataset.name, el.dataset.kind);
