@@ -62,7 +62,7 @@ export function makeContext() {
     function prepareImage() {}
     ${src}
     ;globalThis.__api = { Store, App, getSettings, setSettings, setProfile, saveWorkout, getWorkouts,
-      nextTarget, progressionPref, setProgressionPref, getProgressionPrefs, exerciseHasLoad,
+      nextTarget, detectPlateaus, plateauVolumeNote, exerciseHistory, progressionPref, setProgressionPref, getProgressionPrefs, exerciseHasLoad,
       plannedSetsFor, startWorkout, restoreSession, persistSession, ensureSessionIds, focusedExercise,
       completeSet, deleteExercise, undoLast, moveExercise, moveExerciseTo, moveExerciseNext, finishWorkout, applyHoldToSession,
       prevSetsText, lastSessionSets, todayKey, lbToKg, kgToLb, fromW, toW, registerUndo, destructive,

@@ -27,6 +27,7 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-17](#d-17) | Restored backups are untrusted; escape at the sink and coerce at the boundary | 🟢 Decided · v33 |
 | [D-19](#d-19) | Every tab is hero, tiles, list, Explore — no flat tabs, no in-page switchers | 🟢 Decided · v40 |
 | [D-20](#d-20) | Destructive actions are undoable, not confirmed | 🟢 Decided · v40 |
+| [D-21](#d-21) | Progress is reps at a load, not only the top set | 🟢 Decided · v41 |
 
 ---
 
@@ -441,3 +442,46 @@ next release deletes them too:
 | `routine-del-day` | takes a day and everything in it out of the plan |
 
 The test is whether an undo could actually restore what was lost. Where it could, it does.
+
+## <a name="d-21"></a>D-21 · Progress is reps at a load, not only the top set
+**🟢 Decided.** v41 · `train.js` · `beats`, `repsAtOrAbove`, `isClimbing`, `lastSessionSets`, `bestComparableKg`
+
+An 18-scenario review of realistic intermediate histories found the v29 engine (D-12) still
+telling progressing lifters to deload. Every false positive had the same root: progress was
+measured as *the single best set's e1RM*, and that number cannot see most of the ways an
+intermediate actually progresses.
+
+**Decided:** a session counts as progress if it beats the earlier ones on e1RM, **or** does more
+total reps at-or-above some load it used than any earlier session did. Double progression
+(8/7/7 → 8/8/7) and high-rep work past the formula's 12-rep cap are now progress. The rep test
+only applies when the session's e1RM is within 3% of the prior best, so a heavy single at a new
+weight is not "more reps at 365 than ever".
+
+The same review drove four smaller rules, all derived from history, with no stored state:
+
+- **Climbing is judged locally.** Gate 4 now asks whether either of the last two sessions beat
+  the three before it. The v29 rule compared the best of each 3-session block, which kept a
+  pre-break PR in the "prior" block and deloaded a lifter rebuilding after ten days off.
+- **Prescriptions read the same rep scheme.** A lift on a heavy 4×5 day and a light 3×10 day has
+  two histories. `lastSessionSets(name, target)` prefers the most recent session at that rep
+  target, if it's within `LAYOFF_DAYS` of the latest session.
+- **The deload ceiling ignores heavy singles and the other scheme.** `bestComparableKg` only
+  counts sets with at least half the target reps, at the same rep target when there is one.
+- **An extra set doesn't block the increase.** "Hit everything" is judged on the best `sets` sets
+  at the top weight.
+
+Also: increments are ~2.5% for every lift (lower-body lifts had 5%, a novice-sized jump), and the
+plateau card's volume sentence follows D-16. It reads the routine rather than the trailing 7
+days, uses 80% of MEV, and no longer says "before dropping weight" beside a deload.
+
+**Accepted cost:** a stall whose reps happen to rise for two sessions in a row reads as climbing,
+which delays the flag by about a session. D-12 already accepts that trade.
+
+**Rejected:** an effort (RPE) input as the fix. Effort would help, but it's optional data. The
+engine has to be right about the reps people already log.
+
+**Known limits, still open:**
+- A top set followed by lighter back-off sets never earns an increase. That needs a back-off set
+  type.
+- After a deload, coming back to the old top weight and missing once deloads again straight away
+  (unchanged since D-06). That needs a short grace window.

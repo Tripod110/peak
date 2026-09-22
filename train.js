@@ -193,18 +193,24 @@ function muscleSetsInDays(days) {
   return { sets, unclassified: Object.entries(unknown).map(([name, n]) => ({ name, sets: n })) };
 }
 
-/* if a stalled lift's primary muscle is under-trained, say so — that's a
-   volume problem, not a programming problem. Stays quiet while unclassified
-   lifts exist, because the "deficit" may just be a lift we failed to map. */
+/* if a stalled lift's primary muscle is under-trained by the ROUTINE, say so.
+   Same rules as the coach's volume card (D-16): it reads what the plan
+   programs, not the trailing 7 days — a weekly bench session from eight days
+   ago is not a volume deficit — and only a real shortfall (under 80% of MEV)
+   earns the sentence. It sits beside the prescription, so it adds to it and
+   never argues with it: the old "before dropping weight" read as "ignore the
+   deload above". Quiet while any routine lift is unmapped, because the
+   "deficit" may just be a lift we failed to classify. */
 function plateauVolumeNote(exName) {
-  const { sets, unclassified } = muscleSetsInDays(7);
-  if (unclassified.length) return '';
-  const lacking = musclesFor(exName).p.filter(x => MUSCLE_LANDMARKS[x] && sets[x] < MUSCLE_LANDMARKS[x][0]);
+  const r = activeRoutine();
+  if (r.days.some(d => d.ex.some(([n]) => { const m = musclesFor(n); return !m.p.length && !m.s.length; }))) return '';
+  const sets = routineWeeklyMuscleSets();
+  const lacking = musclesFor(exName).p.filter(x => MUSCLE_LANDMARKS[x] && sets[x] < MUSCLE_LANDMARKS[x][0] * 0.8);
   if (!lacking.length) return '';
   const names = lacking.map(x => MUSCLE_LABEL[x].toLowerCase()).join(' and ');
   const got = lacking.map(x => Math.round(sets[x] * 2) / 2).join('/');
   const need = lacking.map(x => MUSCLE_LANDMARKS[x][0]).join('/');
-  return ` Also: your ${names} volume is only ${got} sets this week versus an effective minimum of ${need} — try adding a set or two there before dropping weight.`;
+  return ` Your routine also programs only ${got} ${names} sets a week, against an effective minimum of ${need} — adding a set or two there will help this lift climb.`;
 }
 
 /* Warmup sets are logged but must never count toward volume, PRs, est. 1RM,
@@ -263,14 +269,16 @@ function scoreCardio(min, intensity) {
   return Math.round(Math.min(100, durPts + ({ easy: 25, moderate: 35, hard: 45 }[intensity] || 30)));
 }
 
-/* Per-exercise history: [{date, bestE1rm, topSet}] oldest→newest */
+/* Per-exercise history: [{date, bestE1rm, topSet, sets}] oldest→newest.
+   `sets` is every working set with reps, which is what the plateau engine
+   judges progress on — the top set alone can't see added reps. */
 function exerciseHistory(name) {
   const out = [];
   getWorkouts().forEach(s => {
     (s.exercises || []).forEach(ex => {
       if (ex.name.toLowerCase() !== name.toLowerCase()) return;
       let best = 0, top = null;
-      const work = workingSets(ex.sets);
+      const work = workingSets(ex.sets).filter(st => st.reps > 0);
       work.forEach(st => {
         const v = e1rm(st.weight, st.reps);
         if (v > best) { best = v; top = st; }
@@ -278,11 +286,33 @@ function exerciseHistory(name) {
       if (!top) { // bodyweight-only (abs etc.): track the best rep set instead
         work.forEach(st => { if (st.reps > 0 && (!top || st.reps > top.reps)) top = st; });
       }
-      if (top) out.push({ date: s.date, bestE1rm: best, topSet: top });
+      if (top) out.push({ date: s.date, bestE1rm: best, topSet: top, sets: work });
     });
   });
   out.sort((a, b) => a.date < b.date ? -1 : 1);
   return out;
+}
+
+/* Heaviest weight you've done for real work at this prescription, in kg — the
+   ceiling a deload is measured against. Two things are not that ceiling:
+     · a heavy single or double — a 365×1 test doesn't mean 315×5 is "below your
+       best", so sets under half the target reps don't count
+     · the other day's scheme — a 3×10 light day is not "rebuilding" toward the
+       4×5 heavy day's weight, so sessions logged at the same rep target win
+       whenever there are any */
+function bestComparableKg(name, tgt) {
+  const key = name.toLowerCase();
+  const minReps = Math.max(1, Math.ceil(tgt.reps / 2));
+  const entries = [];
+  getWorkouts().forEach(s => (s.exercises || []).forEach(ex => {
+    if (ex.name.toLowerCase() === key) entries.push(ex);
+  }));
+  const same = entries.filter(ex => parseTarget(ex.target)?.reps === tgt.reps);
+  let best = 0;
+  (same.length ? same : entries).forEach(ex => workingSets(ex.sets).forEach(st => {
+    if ((st.reps || 0) >= minReps && (st.weight || 0) > best) best = st.weight;
+  }));
+  return best;
 }
 
 /* heaviest working set ever logged on a lift, in kg */
@@ -294,6 +324,27 @@ function bestWorkingWeightKg(name) {
     workingSets(ex.sets).forEach(st => { if ((st.weight || 0) > best) best = st.weight; });
   }));
   return best;
+}
+
+/* ---------- what counts as progress ----------
+   A session "beats" earlier ones if EITHER
+     · its best e1RM is higher (by `margin`), or
+     · at some load it used, it did more total reps at-or-above that load than
+       any earlier session did — 8/8/7 after 8/7/7, or 15 reps past the e1RM
+       formula's 12-rep cap.
+   The rep test is only allowed when the session's e1RM is within 3% of the
+   earlier best: otherwise a heavy single at a new weight would be "more reps at
+   that load than ever" and count as progress. */
+function repsAtOrAbove(h, kg) {
+  return h.sets.reduce((n, st) => n + ((st.weight || 0) >= kg - 0.01 ? st.reps : 0), 0);
+}
+function beats(h, before, margin) {
+  if (!before.length) return true;
+  const prevBest = Math.max(...before.map(b => b.bestE1rm));
+  if (h.bestE1rm > prevBest * margin) return true;
+  if (h.bestE1rm < prevBest * 0.97) return false;
+  return h.sets.some(st => (st.weight || 0) > 0 &&
+    repsAtOrAbove(h, st.weight) > Math.max(...before.map(b => repsAtOrAbove(b, st.weight))));
 }
 
 /* PR indexes within a history array */
@@ -319,8 +370,10 @@ const PLATEAU_TIPS = [
    A lift is plateaued when ALL of these hold:
      1. still in the program   — trained within DORMANT_DAYS
      2. enough evidence        — ≥4 sessions since the last training break
-     3. no PR                  — best e1RM first hit ≥3 sessions and ≥21 days ago
-     4. not currently climbing — recent sessions are no better than the ones before
+     3. no PR                  — no session has beaten all before it (see
+                                 `beats`) for ≥3 sessions and ≥21 days
+     4. not currently climbing — neither of the last two sessions beat the three
+                                 before it
 
    (2) and (4) exist because (3) alone is fooled in three common ways:
      · an abandoned lift stays flagged forever, since the old rule compared the
@@ -343,14 +396,19 @@ function historySinceLayoff(hist) {
   return hist.slice(start);
 }
 
-/* is the lift's recent best better than the block before it? */
+/* Is the lift moving up right now? Judged locally — does either of the last two
+   sessions beat the three before it — not against the all-time best. Comparing
+   the best of each 3-session block (the v29 rule) kept a pre-break PR in the
+   "prior" block, so a lifter back from ten days off and adding weight every
+   session read as flat and got deloaded mid-rebuild. A stall wobbling around
+   its best never beats its own recent sessions; at worst noise that happens to
+   rise delays a flag by a session, which D-12 accepts. >1% ignores rounding. */
 function isClimbing(hist) {
-  const w = Math.min(3, Math.floor(hist.length / 2));
-  if (w < 2) return false;                       // too little data to tell
-  const best = a => Math.max(...a.map(h => h.bestE1rm));
-  const recent = best(hist.slice(-w));
-  const prior = best(hist.slice(-2 * w, -w));
-  return recent > prior * 1.01;                  // >1% ignores rounding noise
+  for (let i = hist.length - 2; i < hist.length; i++) {
+    if (i < 3) continue;                         // too little data to tell
+    if (beats(hist[i], hist.slice(i - 3, i), 1.01)) return true;
+  }
+  return false;
 }
 
 function detectPlateaus() {
@@ -375,10 +433,11 @@ function detectPlateaus() {
     // 4. still climbing → not stalled, whatever the all-time best says
     if (isClimbing(hist)) return;
 
-    // 3. no PR for long enough
-    const firstBestIdx = hist.findIndex(h => h.bestE1rm >= max - 0.01);
-    const sessionsSince = hist.length - 1 - firstBestIdx;
-    const daysSince = daysBetween(hist[firstBestIdx].date, hist[hist.length - 1].date);
+    // 3. no PR for long enough — by e1RM or by reps at a load
+    let lastPrIdx = 0;
+    for (let i = 1; i < hist.length; i++) if (beats(hist[i], hist.slice(0, i), 1.0001)) lastPrIdx = i;
+    const sessionsSince = hist.length - 1 - lastPrIdx;
+    const daysSince = daysBetween(hist[lastPrIdx].date, hist[hist.length - 1].date);
     if (sessionsSince >= 3 && daysSince >= 21) {
       flags.push({
         name, sessions: sessionsSince, days: daysSince,
@@ -447,20 +506,32 @@ function parseTarget(t) {
   return m ? { sets: +m[1], reps: +m[2] } : null;
 }
 
-/* every logged set of this exercise from its most recent session */
-function lastSessionSets(name) {
+/* Every logged set of this exercise from its most recent session — or, given
+   the prescription, its most recent session AT that prescription. A lift on a
+   heavy 4×5 day and a light 3×10 day has two histories; reading whichever came
+   last prescribed the light day at the heavy weight and the heavy day 40 lb
+   short. Only a recent match counts (within LAYOFF_DAYS of the latest session),
+   so changing a lift's rep target doesn't resurrect a months-old weight. */
+function lastSessionSets(name, targetStr) {
   const key = name.toLowerCase();
   const sessions = getWorkouts()
     .filter(s => !s.cardio && (s.exercises || []).some(e => e.name.toLowerCase() === key))
     .sort((a, b) => a.date < b.date ? 1 : -1);
   if (!sessions.length) return null;
-  const s = sessions[0];
-  const ex = s.exercises.find(e => e.name.toLowerCase() === key);
+  const exOf = s => s.exercises.find(e => e.name.toLowerCase() === key);
+  const want = parseTarget(targetStr);
+  const same = want && sessions.find(s =>
+    parseTarget(exOf(s).target)?.reps === want.reps && daysBetween(s.date, sessions[0].date) < LAYOFF_DAYS);
+  const s = same || sessions[0];
+  const ex = exOf(s);
   return { date: s.date, sets: workingSets(ex.sets).filter(st => st.reps > 0), allSets: (ex.sets || []).filter(st => st.reps > 0) };
 }
 
 /* Increment scales with the load instead of a flat 5 lb, which was a 25% jump on
-   a lateral raise and a rounding error on a heavy squat. */
+   a lateral raise and a rounding error on a heavy squat. ~2.5% for everything:
+   big lower-body lifts used to get 5%, which is a novice jump — 20 lb a session
+   on a 405 deadlift misses early and then reads as a stall. The step rounding
+   still gives lighter lowers the same 5 lb they always got. */
 function incrementW(name, currentDisp) {
   const pct = (currentDisp || 0) * 0.025;
   if (perHandLift(name)) {
@@ -468,9 +539,6 @@ function incrementW(name, currentDisp) {
     return Math.max(s, Math.round(pct / s) * s);
   }
   const step = wStep();
-  if (/squat|deadlift|leg press|hip thrust|calf raise/i.test(name)) {
-    return Math.max(step, Math.round(pct * 2 / step) * step);   // big lowers tolerate more
-  }
   return Math.max(step, Math.round(pct / step) * step);
 }
 function roundW(v, name) {
@@ -553,7 +621,7 @@ function nextTarget(name, targetStr, stalledNames) {
   const tgt = parseTarget(targetStr) || { sets: 3, reps: 8 };
   const pref = progressionPref(name);
   const u = wUnit();
-  const last = lastSessionSets(name);
+  const last = lastSessionSets(name, targetStr);
   const isStalled = () => (stalledNames || new Set(detectPlateaus().map(p => p.name.toLowerCase()))).has(name.toLowerCase());
 
   const holdResult = lastText => {
@@ -587,7 +655,10 @@ function nextTarget(name, targetStr, stalledNames) {
      that weight, not the session's best reps borrowed from a lighter set */
   const topReps = Math.max(...topSets.map(s => s.reps));
   const lastText = `${r1(lastDisp)} ${u} × ${topReps} · ${when}`;
-  const allHit = topSets.length >= tgt.sets && topSets.every(s => s.reps >= tgt.reps);
+  /* judged on the best `tgt.sets` sets at that weight — an extra set beyond the
+     plan is bonus work, not a missed rep that blocks the increase */
+  const best = [...topSets].sort((a, b) => b.reps - a.reps).slice(0, tgt.sets);
+  const allHit = best.length >= tgt.sets && best.every(s => s.reps >= tgt.reps);
 
   // a hold outranks everything below: no increase, no deload
   if (pref.hold) return holdResult(lastText);
@@ -618,7 +689,7 @@ function nextTarget(name, targetStr, stalledNames) {
   }
 
   const stalled = isStalled();
-  const bestDisp = toW(bestWorkingWeightKg(name));
+  const bestDisp = toW(bestComparableKg(name, tgt));
 
   // Deload only from the top. Below your best you are already climbing back.
   if (stalled && lastDisp >= bestDisp * 0.98) {
@@ -1885,7 +1956,7 @@ function renderExerciseRow(ex) {
 
 function renderFocusedExercise(ex, xi, count) {
   const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
-  const last = lastSessionSets(ex.name);
+  const last = lastSessionSets(ex.name, ex.target || findTargetFor(ex.name));
   const prevWork = last ? last.sets : [];
   const done = ex.sets.filter(st => st.done).length;
   const cur = currentSetIndex(ex);
@@ -2362,7 +2433,7 @@ function openWhyTarget(name, targetStr) {
   const plateaus = detectPlateaus();
   const stalled = new Set(plateaus.map(p => p.name.toLowerCase()));
   const pr = nextTarget(name, targetStr || findTargetFor(name), stalled);
-  const last = lastSessionSets(name);
+  const last = lastSessionSets(name, targetStr || findTargetFor(name));
   const plateau = plateaus.find(p => p.name.toLowerCase() === name.toLowerCase());
   const u = wUnit();
   const big = pr.w > 0 ? `${fmtW1(pr.w)}<span class="unit"> ${perHandLift(name) ? u + '/hand' : u} × ${pr.reps}${isTimedLift(name) ? 's' : ''}</span>`

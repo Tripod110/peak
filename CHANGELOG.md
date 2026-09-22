@@ -24,7 +24,7 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
-## v41 — the device id stops travelling in backups
+## v41 — the plateau engine reads reps, and the device id stays home
 2026-09-22 · **pending push**
 
 `forge:deviceId` is the only thing the Worker checks on `/subscribe` and `/unsubscribe`, so
@@ -36,6 +36,27 @@ made to be shared, so it was the wrong thing to put in one.
   backups that still carry it restore normally, and it isn't counted in "ignored N entries" —
   Peak wrote it, so the file isn't misdescribing itself.
 - Test: `tests/untrusted-backup.test.mjs` covers export, restore and the skipped count.
+
+**The plateau engine stops deloading lifters who are progressing** ([D-21](DECISIONS.md#d-21)).
+An 18-scenario review found these histories being flagged or deloaded:
+
+- **Adding reps at the same weight.** Rows going 8/6/6 → 8/8/7 got "deload to 140". More total
+  reps at a load now counts as a PR, including high-rep work past the e1RM formula's 12-rep cap.
+- **Rebuilding after a 1–3 week break.** "Climbing" now compares the last sessions with the ones
+  just before them, not with a pre-break best.
+- **Heavy and light days of the same lift.** A 3×10 day was prescribed the 4×5 day's 225 lb, and
+  the reverse. Each rep scheme now builds from its own last session.
+- **One old heavy single** kept a lift "below its best" forever, so the deload never came. The
+  deload ceiling now ignores sets under half the target reps.
+- **An extra set** beyond the plan blocked the weight increase.
+- **Lower-body jumps were 5% a session** (405 → 425 on a deadlift). They're 2.5% now, like
+  everything else.
+- **The plateau card contradicted itself:** "deload to 205" next to "add sets before dropping
+  weight", based on the trailing 7 days. It now reads the routine, per D-16, and adds to the
+  prescription instead of arguing with it.
+
+Genuine stalls, including noisy ones, are still flagged and deloaded. Tests:
+`tests/plateau.test.mjs` adds 11 histories; 85 pass.
 
 **Worker** (ships with `wrangler deploy`, separately from the Pages push):
 
