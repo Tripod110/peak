@@ -45,6 +45,8 @@ const ICONS = {
   chart: '<path d="M4 19.5h16M7 16V10M12 16V5.5M17 16v-8"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4.5h-4.5"/>',
   reorder: '<path d="M4.5 8h15M4.5 12h15M4.5 16h15"/>',
+  apple: '<path d="M12 7.5c-1.8-1.6-7-1.4-7 4.2 0 4.1 2.8 8.3 4.8 8.3 1 0 1.4-.6 2.2-.6s1.2.6 2.2.6c2 0 4.8-4.2 4.8-8.3 0-5.6-5.2-5.8-7-4.2z"/><path d="M12 7.5c0-2 .9-3.5 2.6-4.2"/>',
+  bowl: '<path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M8.5 20.5h7M9 8c0-1.5 1-2 1-3.5M13.5 8c0-1.5 1-2 1-3.5"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>'
 };
 function icon(name) {
@@ -59,11 +61,11 @@ function emptyNote(t) { return `<div class="card"><div class="muted small">${esc
    Today, Train and Food already render, and icon() SVG is for tiles, heroes,
    sheet items and buttons. Picking one per slot stops every release turning
    into an icon-churn diff. */
-function navRow(action, view, ico, label, value, tone) {
+function navRow(action, view, icoHtml, label, value, tone) {
   const color = tone === 'warn' ? 'var(--warning)' : tone === 'good' ? CHART.good : 'var(--muted)';
   return `
   <button class="nav-row" data-action="${action}"${view ? ` data-view="${view}"` : ''}>
-    <span class="nr-ico" aria-hidden="true">${ico}</span>
+    <span class="nr-ico" aria-hidden="true">${icoHtml}</span>
     <span class="nr-label">${esc(label)}</span>
     <span class="nr-value" style="color:${color}">${esc(value)}</span>
     <span class="nr-chev" aria-hidden="true">›</span>
@@ -76,7 +78,8 @@ function navRow(action, view, ico, label, value, tone) {
 
    o = { id, state:'live'|'done'|'', eyebrow, eyebrowHtml, eyebrowIcon, eyebrowTone:'good'|'live',
          title, meta, metaHtml, bodyHtml,
-         actions:[{label, icon, action, data:{}, cls, disabled}] } */
+         actions:[{label, icon, action, data:{}, cls, disabled}],
+         secondary:[same shape] — small ghost buttons in one row under the actions } */
 function heroCard(o) {
   const dot = o.eyebrowTone === 'live' ? '<span class="live-dot" aria-hidden="true"></span> ' : '';
   /* eyebrowHtml replaces the eyebrow line outright, for a hero whose top row is
@@ -91,12 +94,13 @@ function heroCard(o) {
     ${o.metaHtml || ''}
     ${o.bodyHtml || ''}
     ${(o.actions || []).map(a => heroAction(a)).join('')}
+    ${o.secondary && o.secondary.length ? `<div class="grid-2 hero-secondary">${o.secondary.map(a => heroAction({ ...a, cls: `small ghost ${a.cls || ''}`, flush: true })).join('')}</div>` : ''}
   </section>`;
 }
 function heroAction(a) {
   const data = Object.entries(a.data || {}).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
   return `
-    <button class="btn ${a.cls || ''} mt" data-action="${a.action}"${data}${a.disabled ? ' disabled' : ''}>${a.icon ? icon(a.icon) + ' ' : ''}${esc(a.label)}</button>`;
+    <button class="btn ${a.cls || ''}${a.flush ? '' : ' mt'}" data-action="${a.action}"${data}${a.disabled ? ' disabled' : ''}>${a.icon ? icon(a.icon) + ' ' : ''}${esc(a.label)}</button>`;
 }
 
 /* [{v, l}] — the number and what it counts. */

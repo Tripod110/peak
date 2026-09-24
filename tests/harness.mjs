@@ -77,7 +77,7 @@ export function makeContext() {
       coachSignals, coachState, coachInsight, coachFacts, sessionDebrief, debriefLift, snoozeCoach, getCoachMemory,
       liftGoal, setLiftGoal, liftOutlook, theilSen, COACH_VOICE_IDS, addFoodEntry, setSleepEntry,
       coachDeloadActive, startDeloadWeek, switchPlan, applyCoachSwitch, startShortSession, activeRoutine, renderCoachLine,
-      weekKeyOf, checkinDue, weeklyCheckin, dismissCheckin, coachAiGuard,
+      weekKeyOf, checkinDue, COACH_COPY, coachSuggestions, renderCoachCard, weeklyCheckin, dismissCheckin, coachAiGuard,
       customExercise, saveCustomExercise, renameExerciseEverywhere, perHandLift, isTimedLift, defaultTargetFor, pickerCandidates, musclesFor,
       getRoutineLibrary, createRoutine, switchRoutine, deleteLibraryRoutine, sessionAsDay, saveSessionAsDay, getActivities, rememberActivity,
       fixLastReps, setLastEffort, routineWeeklyMuscleSets, MUSCLES, setSetType,
@@ -86,5 +86,43 @@ export function makeContext() {
   `, ctx);
   // wipeAll uses Object.keys(localStorage); give it the real key list
   vm.runInContext(`Store.wipeAll = function () { localStorage.keys().filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k)); _cache.clear(); };`, ctx);
+  return ctx;
+}
+
+/* The whole app, app.js included, for tests that need a real screen's markup
+ * (see copy.test.mjs). Every script loads in index.html's order; boot() is cut
+ * off the end so nothing tries to paint, and the DOM is stubbed just enough
+ * for app.js's top-level listeners to attach to nothing. Rendering functions
+ * return strings, so a test can read exactly what a screen would say. */
+export function makeAppContext() {
+  const mem = new Map();
+  const localStorage = {
+    getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)),
+    removeItem: k => mem.delete(k), key: i => [...mem.keys()][i] ?? null, get length() { return mem.size; }
+  };
+  const el = () => ({
+    addEventListener() {}, removeEventListener() {}, setAttribute() {}, removeAttribute() {},
+    classList: { toggle() {}, add() {}, remove() {}, contains: () => false }, style: { setProperty() {} },
+    contains: () => false, querySelector: () => null, querySelectorAll: () => [], dataset: {}
+  });
+  const document = {
+    addEventListener() {}, querySelectorAll: () => [], querySelector: () => null,
+    getElementById: () => el(), createElement: () => el(), body: el(), documentElement: el(), activeElement: null
+  };
+  const ctx = {
+    console, localStorage, document, navigator: {}, location: { search: '', hash: '' },
+    window: { matchMedia: () => ({ matches: false, addEventListener() {} }), addEventListener() {} },
+    setTimeout, clearTimeout, setInterval: () => 0, crypto: globalThis.crypto, CSS: { escape: s => s }
+  };
+  vm.createContext(ctx);
+  const files = ['store.js', 'ui.js', 'charts.js', 'quips.js', 'api.js', 'food.js', 'train.js',
+    'routines.js', 'sleep.js', 'grocery.js', 'custom.js', 'coach.js', 'app.js'];
+  let src = files.map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n;\n');
+  const boot = src.lastIndexOf('(function boot() {');
+  if (boot < 0) throw new Error('harness: app.js boot() not found — update makeAppContext');
+  src = src.slice(0, boot) + `
+    ;globalThis.__app = { App, renderTodayHome, setProfile, setSettings, saveWorkout, setSleepEntry,
+      addFoodEntry, todayKey, dismissCheckin, checkinDue, renderCoachCard, activeRoutine };`;
+  vm.runInContext(src, ctx);
   return ctx;
 }

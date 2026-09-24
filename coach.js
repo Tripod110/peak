@@ -203,36 +203,36 @@ function plural(n, one, many) { return `${n} ${n === 1 ? one : many || one + 's'
 const COACH_COPY = {
   starting: {
     encouraging: [f => ({ h: `${plural(f.sessions, 'session')} in — the foundation's going in`, b: `Peak is learning how you train. Log each lift ${f.watchNeed} more time${f.watchNeed === 1 ? '' : 's'} and it starts calling your plateaus for you.` })],
-    straight:    [f => ({ h: `${plural(f.sessions, 'session')} logged`, b: `Peak needs about four sessions per lift before it can judge progress. ${f.watchNeed ? `${f.watchNeed} to go on your next lift.` : 'Nearly there.'} Consistency is the whole job right now.` })],
+    straight:    [f => ({ h: `${plural(f.sessions, 'session')} logged`, b: `Peak needs about four sessions per lift before it can judge progress. ${f.watchNeed ? `Log your next lift ${f.watchNeed} more time${f.watchNeed === 1 ? '' : 's'} to get there.` : 'Keep logging — you\'re nearly there.'}` })],
     drill:       [f => ({ h: `${plural(f.sessions, 'session')}. That's a start, not a streak.`, b: `Four sessions per lift before Peak can judge you. Stack them up.` })]
   },
   roll: {
-    encouraging: [f => ({ h: `${plural(f.prs, 'PR')} in the last four weeks 🔥`, b: `${f.names} ${f.progN === 1 ? 'is' : 'are'} climbing. Whatever you're doing — the sleep, the food, the showing up — it's working. Keep it exactly like this.` }),
+    encouraging: [f => ({ h: `${plural(f.prs, 'PR')} in the last four weeks 🔥`, b: `${f.names} ${f.progN === 1 ? 'is' : 'are'} climbing — the sleep, the food and the showing up are working. Keep it exactly like this.` }),
                   f => ({ h: `You're on a roll`, b: `${plural(f.prs, 'personal best')} this month across ${f.names}. This is what a good block feels like — enjoy it.` })],
     straight:    [f => ({ h: `${plural(f.prs, 'PR')} in four weeks`, b: `${f.names} ${f.progN === 1 ? 'is' : 'are'} progressing. Don't change anything that's working.` }),
                   f => ({ h: `Momentum is good`, b: `${plural(f.prs, 'PR')} this month. Keep the plan, keep the sleep, keep the protein.` })],
     drill:       [f => ({ h: `${plural(f.prs, 'PR')}. Good. Now do it again.`, b: `${f.names} ${f.progN === 1 ? 'is' : 'are'} moving. Nobody gets to coast — earn the next one.` })]
   },
   grinding: {
-    encouraging: [f => ({ h: `You've been putting in the work — let's make it pay`, b: `You've hit ${f.adherencePct}% of your sessions, but ${f.names} ${f.flatN === 1 ? "hasn't" : "haven't"} moved in a while. That's not effort, that's your body adapting. A change of stimulus usually wakes things up.` })],
-    straight:    [f => ({ h: `Flat for a while — switch it up`, b: `${f.flatN} of ${f.judgedN} lifts have gone quiet (${f.names}) while you've made ${f.adherencePct}% of sessions. You're showing up; the program has stopped working. Change the stimulus.` }),
+    encouraging: [f => ({ h: `You've been putting in the work — let's make it pay`, b: `${f.names} ${f.flatN === 1 ? "hasn't" : "haven't"} moved despite ${f.adherencePct}% attendance. That's adaptation, not effort — change the stimulus.` })],
+    straight:    [f => ({ h: `Flat for a while — switch it up`, b: `${f.flatN} of ${f.judgedN} lifts are flat (${f.names}) at ${f.adherencePct}% attendance. You're showing up — change the program.` }),
                   f => ({ h: `Same plan, same numbers`, b: `${f.names}: no real progress lately, and it isn't attendance. Time for a new block.` })],
     drill:       [f => ({ h: `Same weights, week after week. Enough.`, b: `${f.names} ${f.flatN === 1 ? 'is' : 'are'} stuck. You're turning up — now change the plan and make it hurt in a new way.` })]
   },
   holding: {
-    encouraging: [f => ({ h: `Strength holding on a cut — that's a win`, b: `Most people lose strength in a deficit. You're keeping ${f.names} where ${f.judgedN === 1 ? 'it is' : 'they are'}. Protect it: protein and sleep are doing the heavy lifting now.` })],
+    encouraging: [f => ({ h: `Strength holding on a cut — that's a win`, b: `You're keeping ${f.names} where ${f.judgedN === 1 ? 'it is' : 'they are'} — most people can't in a deficit. Protein and sleep protect it.` })],
     straight:    [f => ({ h: `Holding strength in a deficit`, b: `Flat numbers on a cut are the goal, not a problem. Keep protein high and don't chase PRs until you're back at maintenance.` })],
-    drill:       [f => ({ h: `You're cutting and you're not getting weaker. Good.`, b: `Hold the line. Hit your protein. PRs come back when the food does.` })]
+    drill:       [f => ({ h: `You're cutting and you're not getting weaker. Good.`, b: `Hold the line and hit your protein. PRs come back when the food does.` })]
   },
   drifting: {
     encouraging: [f => ({ h: f.daysSince >= 7 ? `It's been ${plural(f.daysSince, 'day')} — let's ease back in` : `Life's been busy — that's okay`, b: `You don't need a perfect week. One short session keeps the habit alive — even just the first three lifts of ${f.nextDay}.` })],
     straight:    [f => ({ h: f.daysSince >= 7 ? `${plural(f.daysSince, 'day')} since your last session` : `Sessions are slipping`, b: `${f.recentPerWeek} a week lately against a plan of ${f.planned}. Either do a short session today, or change the plan to one you'll actually keep.` })],
-    drill:       [f => ({ h: f.daysSince >= 7 ? `${plural(f.daysSince, 'day')}. Where have you been?` : `You're skipping sessions.`, b: `Excuses don't build muscle. Three lifts. Today. No negotiating.` })]
+    drill:       [f => ({ h: f.daysSince >= 7 ? `${plural(f.daysSince, 'day')}. Where have you been?` : `You're skipping sessions.`, b: `Excuses don't build muscle. Three lifts, today, no negotiating.` })]
   },
   rundown: {
     encouraging: [f => ({ h: `Your body's asking for a breather`, b: `Session scores have dipped${f.lowSleep ? ` and sleep's averaging ${f.sleepText}` : ''}${f.lowProtein ? `${f.lowSleep ? ',' : ' and'} protein's been short most days` : ''}. An easier week now sets up a strong one next.` })],
     straight:    [f => ({ h: `Recovery is the bottleneck`, b: `Scores are down ${f.scoreDrop} points${f.lowSleep ? `, sleep is ${f.sleepText} a night` : ''}${f.lowProtein ? `, protein hit on only ${f.proteinHit} of ${f.proteinLogged} days` : ''}. Fix that before adding load — or take a lighter week.` })],
-    drill:       [f => ({ h: `You're running on empty.`, b: `${f.lowSleep ? `${f.sleepText} of sleep. ` : ''}${f.lowProtein ? 'Protein missed. ' : ''}No wonder the numbers dropped. Sleep, eat, then we train.` })]
+    drill:       [f => ({ h: `You're running on empty.`, b: `No wonder the numbers dropped${f.lowSleep ? ` on ${f.sleepText} of sleep` : ''}${f.lowProtein ? `${f.lowSleep ? ' and' : ' on'} missed protein` : ''}. Sleep, eat, then we train.` })]
   },
   comeback: {
     encouraging: [f => ({ h: `Welcome back 💪`, b: `After a break, strength comes back much faster than it was built. Peak won't call any plateaus while you rebuild — just train.` })],
@@ -487,7 +487,7 @@ function renderCoachLine() {
   if (!i) return deload ? `<section class="card coach-card" aria-label="Coach">${deload}</section>` : '';
   return `
   <section class="card coach-card ${i.tone}" aria-label="Coach">
-    <div class="coach-eyebrow">Coach</div>
+    <div class="eyebrow coach-eyebrow">Coach</div>
     <b class="coach-h">${esc(i.headline)}</b>
     <p class="coach-b">${esc(i.body)}</p>
     ${deload}
@@ -723,8 +723,6 @@ function weeklyCheckin() {
       if (daysBetween(full[i].date, todayKey()) < 7 && beats(full[i], full.slice(0, i), 1.0001)) prs7++;
     }
   });
-  const weak = typeof weeklyWeakLink === 'function' && getProfile()
-    ? weeklyWeakLink(getProfile(), computeTargets(getProfile())) : null;
   const goals = sig.lifts.map(l => liftOutlook(l.name)).filter(o => o.status === 'ok')
     .map(o => ({ name: o.name, goal: fmtGoal(o.goal), eta: shortDate(o.eta), weeksVsTarget: o.vsTargetDays == null ? null : Math.round(o.vsTargetDays / 7) }));
   const facts = {
@@ -733,12 +731,23 @@ function weeklyCheckin() {
     progressing: sig.progressing.map(l => l.name), flat: sig.flatOrStalled.map(l => l.name),
     sleepAvg: sig.sleep7.avgMin ? `${Math.floor(sig.sleep7.avgMin / 60)}h${String(sig.sleep7.avgMin % 60).padStart(2, '0')}` : null,
     proteinHitDays: sig.proteinLogged ? `${sig.proteinHit} of ${sig.proteinLogged}` : null,
-    focus: weak && !['ok', 'none'].includes(weak.key) ? weak.full : null,
+    proteinStreak: proteinStreak(sig.proteinTarget),
     goals
   };
-  const rule = { headline: words.h, body: words.b + (facts.focus ? ` This week's focus: ${facts.focus}` : '') };
+  // the week's weak link has its own row in Explore → This week; the check-in doesn't repeat it
+  const rule = { headline: words.h, body: words.b };
   const ai = coachAiCached(facts);
   return { week: weekKeyOf(), facts, ...(ai || rule), aiWorded: !!ai, rule, action: COACH_ACTIONS[state] ? COACH_ACTIONS[state]() : null };
+}
+
+/* Consecutive days at ≥90% of the protein target, ending today if today already
+   counts, else yesterday. The Protein tile shows today; this is the part it can't. */
+function proteinStreak(target) {
+  if (!target) return 0;
+  const hit = i => dayTotals(todayKey(-i)).protein >= target * 0.9;
+  let n = 0;
+  for (let i = hit(0) ? 0 : 1; i < 90 && hit(i); i++) n++;
+  return n;
 }
 
 function renderWeeklyCheckin() {
@@ -749,12 +758,11 @@ function renderWeeklyCheckin() {
   const stat = (v, label) => `<div class="ck-stat"><b>${esc(v)}</b><span>${esc(label)}</span></div>`;
   return `
   <section class="card coach-card checkin" aria-label="Weekly check-in">
-    <div class="coach-eyebrow">Your week · from ${esc(shortDate(c.week))}</div>
+    <div class="eyebrow coach-eyebrow">Your week · from ${esc(shortDate(c.week))}</div>
     <div class="ck-stats">
-      ${stat(`${f.sessions7}/${f.planned}`, 'sessions')}
       ${stat(String(f.prs7), f.prs7 === 1 ? 'PR' : 'PRs')}
-      ${f.sleepAvg ? stat(f.sleepAvg, 'avg sleep') : ''}
-      ${f.proteinHitDays ? stat(f.proteinHitDays, 'protein days') : ''}
+      ${f.sleepAvg ? stat(f.sleepAvg, 'sleep, 7-day avg') : ''}
+      ${f.proteinStreak >= 2 ? stat(`${f.proteinStreak} days`, 'protein streak') : ''}
     </div>
     <b class="coach-h">${esc(c.headline)}</b>
     <p class="coach-b">${esc(c.body)}</p>
@@ -820,7 +828,7 @@ async function requestCoachAi(facts, rule) {
     const voiceLine = { encouraging: 'warm and encouraging', straight: 'direct and honest, like a good gym coach', drill: 'a tough-love drill sergeant, blunt but never insulting' }[facts.voice] || 'direct';
     const prompt = `You are a strength coach writing a short weekly check-in for one lifter. Voice: ${voiceLine}.
 Use ONLY the facts below. Do not add numbers, lifts or advice that are not in them. Do not give medical advice.
-headline: at most 8 words. body: 2-3 sentences, under 60 words, speaking to the lifter as "you".
+headline: at most 8 words. body: exactly 2 sentences, under 45 words — one thing observed, one thing to do, speaking to the lifter as "you".
 The coach's verdict (keep its meaning and its advice): "${rule.headline} — ${rule.body}"
 Facts: ${JSON.stringify(facts)}`;
     const res = await fetch(`${GEMINI}/models/${encodeURIComponent(model || DEFAULT_MODEL)}:generateContent`, {

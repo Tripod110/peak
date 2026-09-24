@@ -33,9 +33,11 @@ function renderFoodHome() {
   const score = nutritionScore(key);
   const isToday = key === todayKey();
   const proteinPct = t.protein ? Math.min(100, Math.round(totals.protein / t.protein * 100)) : 0;
+  // one-tap usuals: the card exists only when there is something in it
+  const quickAdd = frequentChips() + groceryFoodChips();
 
   return `
-  ${renderFoodHero(key, t, totals, items, score, isToday)}
+  ${renderFoodHero(key, t, totals, items, isToday)}
 
   ${tileStrip([
     tile({
@@ -46,31 +48,21 @@ function renderFoodHome() {
     tile({
       action: 'food-nav', data: { view: 'macros' }, ico: 'flame', label: 'Calories',
       value: Math.round(totals.kcal).toLocaleString(), unit: `/ ${t.kcal.toLocaleString()}`,
-      sub: kcalLeftLabel(totals.kcal, t.kcal),
+      sub: kcalStatusLabel(totals.kcal, t.kcal),
       ariaLabel: `${Math.round(totals.kcal)} of ${t.kcal} calories. Open macros`
     }),
     tile({
       action: 'food-score', ico: 'chart', label: 'Score',
       ...(score == null
-        ? { empty: true, value: 'No food', sub: 'nothing logged', ariaLabel: 'No score yet: nothing logged this day' }
+        ? { empty: true, value: 'No food', sub: 'log a meal', ariaLabel: 'No score yet: nothing logged this day' }
         : { value: score, unit: '/ 100', sub: score >= 70 ? 'solid day' : score >= 45 ? 'room to improve' : 'off target',
             ariaLabel: `Nutrition score ${score} out of 100. What goes into this?` })
     })
   ])}
 
   <div class="card">
-    <h2>Log something else</h2>
-    <div class="grid-2">
-      <button class="btn" data-action="open-manual-food">${icon('plus')} Manual entry</button>
-      <button class="btn" data-action="repeat-last" ${lastLoggedDay() ? '' : 'disabled'}>${icon('refresh')} Repeat a day</button>
-    </div>
-    ${frequentChips()}
-    ${groceryFoodChips()}
-  </div>
-
-  <div class="card">
     <h2>${isToday ? "Today's food" : 'Logged'}
-      <span class="h2-right">${Math.round(totals.kcal)} kcal · ${Math.round(totals.protein)}g protein</span></h2>
+      <span class="h2-right">${items.length ? `${items.length} item${items.length === 1 ? '' : 's'}` : ''}</span></h2>
     ${items.length === 0
       ? `<div class="muted center" style="padding:14px 0">Nothing logged ${isToday ? 'yet today' : 'this day'}. Scan a meal above.</div>`
       : items.map(e => `
@@ -85,27 +77,37 @@ function renderFoodHome() {
     ${items.length ? '<div class="chart-note">Tap any entry to edit its amounts or time.</div>' : ''}
   </div>
 
+  ${quickAdd ? `<div class="card">
+    <h2>Quick add</h2>
+    ${quickAdd}
+  </div>` : ''}
+
   <div class="card">
     <h2>Explore</h2>
-    ${navRow('food-nav', 'macros', '🥗', 'Macros', `${Math.round(totals.protein)}g protein · ${Math.round(totals.carbs)}g carbs · ${Math.round(totals.fat)}g fat`)}
-    ${navRow('food-nav', 'frequents', '🔁', 'Frequent foods', freqCount() ? `${freqCount()} saved` : 'none yet')}
-    ${navRow('food-nav', 'days', '📅', 'Past days', `${daySummary().loggedCount} of last 14 logged`)}
-    ${navRow('goto-nutrition', null, '📈', 'Nutrition trends', '14-day charts')}
+    ${navRow('food-nav', 'macros', icon('egg'), 'Macros', `${Math.round(totals.carbs)}g carbs · ${Math.round(totals.fat)}g fat`)}
+    ${navRow('food-nav', 'frequents', icon('refresh'), 'Frequent foods', freqCount() ? `${freqCount()} saved` : 'none yet')}
+    ${navRow('food-nav', 'days', icon('calendar'), 'Past days', `${daySummary().loggedCount} of last 14 logged`)}
+    ${navRow('goto-nutrition', null, icon('chart'), 'Nutrition trends', '14-day charts')}
   </div>`;
 }
 
+/* The hero says how many kcal are left; the Calories tile under it says only
+   which side of the target you're on, so the number is printed once. */
 function kcalLeftLabel(eaten, target) {
   const left = Math.round(target - eaten);
-  if (left > 0) return `${left.toLocaleString()} left`;
-  if (left === 0) return 'exactly on target';
-  return `${Math.abs(left).toLocaleString()} over`;
+  if (left > 0) return `${left.toLocaleString()} kcal left`;
+  if (left === 0) return 'Exactly on target';
+  return `${Math.abs(left).toLocaleString()} kcal over`;
+}
+function kcalStatusLabel(eaten, target) {
+  const left = Math.round(target - eaten);
+  return left > 0 ? 'under target' : left === 0 ? 'on target' : 'over target';
 }
 
 /* The day you are looking at, what is left in it, and the fastest way to add
    to it. The ring and the four macro bars moved to the Macros drill-in: on the
    screen you open five times a day, one number matters and it is protein. */
-function renderFoodHero(key, t, totals, items, score, isToday) {
-  const left = Math.round(t.kcal - totals.kcal);
+function renderFoodHero(key, t, totals, items, isToday) {
   const proteinLeft = Math.round(Math.max(0, t.protein - totals.protein));
   const nav = `
     <div class="day-nav">
@@ -115,32 +117,50 @@ function renderFoodHero(key, t, totals, items, score, isToday) {
     </div>
     ${isToday ? '' : '<div class="center"><button class="link-btn" data-action="food-today">Back to today</button></div>'}`;
 
+  /* A past day is over: say how it went, not what's left of it. */
+  if (!isToday) {
+    const left = Math.round(t.kcal - totals.kcal);
+    return heroCard({
+      id: 'food-hero', eyebrowHtml: nav,
+      state: items.length && proteinLeft === 0 ? 'done' : '',
+      // the gap, not the total — the Calories tile under it already prints what was eaten
+      title: !items.length ? 'Nothing logged'
+        : left > 0 ? `${left.toLocaleString()} kcal under` : left < 0 ? `${Math.abs(left).toLocaleString()} kcal over` : 'On target',
+      meta: items.length
+        ? (proteinLeft > 0 ? `Protein finished ${proteinLeft}g short.` : 'Protein target hit.')
+        : `If you remember what you ate on ${prettyDate(key)}, add it — trends read better without gaps.`,
+      actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }],
+      secondary: foodHeroSecondary(),
+    });
+  }
+
   if (!items.length) {
     return heroCard({
       id: 'food-hero', eyebrowHtml: nav,
       title: `${t.kcal.toLocaleString()} kcal to spend`,
-      meta: `${t.protein}g protein${isToday ? ' today' : ` on ${prettyDate(key)}`} · ${GOAL_LABEL[getProfile().goal]}`,
-      actions: [
-        { label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' },
-        { label: 'Add manually', icon: 'plus', action: 'open-manual-food', cls: 'ghost' }
-      ]
+      meta: `${t.protein}g protein today · ${GOAL_LABEL[getProfile().goal]}`,
+      actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }],
+      secondary: foodHeroSecondary(),
     });
   }
 
   return heroCard({
     id: 'food-hero', eyebrowHtml: nav,
     state: proteinLeft === 0 ? 'done' : '',
-    title: left >= 0 ? `${left.toLocaleString()} kcal left` : `${Math.abs(left).toLocaleString()} kcal over`,
+    title: kcalLeftLabel(totals.kcal, t.kcal),
     meta: proteinLeft > 0
       ? `${proteinLeft}g protein still to go — the number that decides whether the training sticks.`
       : 'Protein target hit. That is the one that matters.',
-    bodyHtml: heroStats([
-      { v: `${Math.round(totals.protein)}/${t.protein}`, l: 'protein' },
-      { v: items.length, l: items.length === 1 ? 'item' : 'items' },
-      score != null ? { v: score, l: 'score' } : null
-    ]),
-    actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }]
+    actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }],
+    secondary: foodHeroSecondary()
   });
+}
+/* Scan is the one big way in; typing it and repeating a day sit under it, small. */
+function foodHeroSecondary() {
+  return [
+    { label: 'Enter manually', icon: 'plus', action: 'open-manual-food' },
+    { label: 'Repeat a day', icon: 'refresh', action: 'repeat-last', disabled: !lastLoggedDay() }
+  ];
 }
 
 /* The ring and the four bars, one tap from home. */

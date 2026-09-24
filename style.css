@@ -1,13 +1,28 @@
 /* Forge — dark-first mobile PWA */
 :root {
   color-scheme: dark;
+  /* spacing scale (UI-PASS stage 3) — themes never override these. New and
+     edited rules use it; older rules convert as they're touched. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  /* type scale — hero / value / title / body / meta / label. Converted rules use
+     these; the rest of the sheet still has literals (listed in UI-PASS.md). */
+  --fs-hero: 36px;
+  --fs-value: 23px;
+  --fs-title: 16px;
+  --fs-body: 14px;
+  --fs-meta: 12px;
+  --fs-label: 11px;
   /* surfaces & ink (reference dark palette) */
   --page: #0d0d0d;
   --surface: #1a1a19;
   --surface-2: #242422;
   --ink: #ffffff;
   --ink-2: #c3c2b7;
-  --muted: #898781;
+  --muted: #8e8c86;   /* v51: was #898781, 4.33:1 on surface-2 */
   --grid: #2c2c2a;
   --baseline: #383835;
   --border: rgba(255,255,255,0.10);
@@ -21,6 +36,9 @@
   --warning: #fab219;
   --serious: #ec835a;
   --critical: #d03b3b;
+  /* red as TEXT: --critical is a fill/border colour and reads at ~3.4:1 on the dark
+     surfaces. ≥4.6:1 on every surface of every dark theme; light overrides it. */
+  --critical-ink: #dd7272;
   --radius: 14px;
   --tabbar-h: 62px;
 }
@@ -78,7 +96,8 @@
   --surface-2: #ecebe6;
   --ink: #17160f;
   --ink-2: #4a4840;
-  --muted: #7c7a71;
+  --muted: #6b6961;   /* v51: was #7c7a71, 3.61:1 on surface-2 */
+  --critical-ink: #bf3636;
   --grid: #ddd9d0;
   --baseline: #cfcbc0;
   --border: rgba(0,0,0,0.10);
@@ -119,6 +138,8 @@ input, select, textarea {
   width: 100%;
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+/* 44px targets for every text field and picker (Grocery's add field was 41px) */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]), select { min-height: 44px; }
 input[type=number] { -moz-appearance: textfield; }
 label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px; }
 
@@ -191,15 +212,16 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 14px;
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
 }
-.card h2 { font-size: 14px; font-weight: 600; color: var(--ink-2); margin-bottom: 12px; letter-spacing: 0.02em; }
-.card h2 .h2-right { float: right; font-weight: 400; color: var(--muted); font-size: 12px; }
+.card h2 { font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); margin-bottom: var(--sp-3); letter-spacing: 0.02em; }
+.card h2 .h2-right { float: right; font-weight: 400; color: var(--muted); font-size: var(--fs-meta); }
 
 .row { display: flex; gap: 10px; align-items: center; }
 .row > .grow { flex: 1; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hero-secondary { margin-top: var(--sp-2); gap: var(--sp-2); }
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 
 /* stat tiles */
@@ -231,8 +253,8 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 .btn.primary { background: var(--blue); border-color: transparent; color: #fff; }
 .btn.accent { background: var(--orange); border-color: transparent; color: #fff; }
 .btn.ghost { background: transparent; }
-.btn.small { padding: 7px 12px; font-size: 13px; width: auto; border-radius: 9px; }
-.btn.danger { color: var(--critical); }
+.btn.small { padding: 7px 12px; font-size: 13px; width: auto; min-width: 44px; border-radius: 9px; }
+.btn.danger { color: var(--critical-ink); }
 .btn:disabled { opacity: 0.5; }
 
 .muted { color: var(--muted); font-size: 13px; }
@@ -250,7 +272,7 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 }
 .pill.good { color: var(--good); }
 .pill.warn { color: var(--warning); }
-.pill.crit { color: var(--critical); }
+.pill.crit { color: var(--critical-ink); }
 
 /* ---------- lists ---------- */
 .list-item {
@@ -270,7 +292,7 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   display: inline-flex; align-items: center; justify-content: center;
 }
 /* a list row whose body opens an editor */
-.li-tap { flex: 1; min-width: 0; text-align: left; padding: 2px 0; }
+.li-tap { flex: 1; min-width: 0; min-height: 44px; text-align: left; padding: 2px 0; }
 .li-tap:active { opacity: 0.6; }
 
 /* ---------- macro bars ---------- */
@@ -456,7 +478,9 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   font-size: 11.5px; color: var(--ink-2);
 }
 .qa:active { border-color: var(--blue); transform: scale(0.97); }
-.qa-i { font-size: 19px; line-height: 1; }
+/* icons, not emoji: ICONS in ui.js is the only source (UI-PASS stage 3) */
+.qa-i { display: flex; line-height: 1; color: var(--ink-2); }
+.qa-i .ico { width: 22px; height: 22px; }
 
 /* ---------- dashboard: glance strip ---------- */
 .glance { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
@@ -477,7 +501,8 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 }
 .nav-row:last-child { border-bottom: none; }
 .nav-row:active { background: var(--surface-2); }
-.nr-ico { font-size: 17px; }
+.nr-ico { display: flex; align-items: center; justify-content: center; width: 22px; color: var(--muted); }
+.nr-ico .ico { width: 20px; height: 20px; }
 .nr-label { font-size: 15px; font-weight: 500; }
 .nr-value { font-size: 12px; text-align: right; }
 .nr-chev { color: var(--baseline); font-size: 19px; }
@@ -502,7 +527,7 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   flex: 0 0 auto; position: relative;
   padding: 9px 13px; border-radius: 10px; font-size: 13px; font-weight: 600;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
-  min-height: 40px;
+  min-height: 44px;
 }
 .day-chip.on { background: var(--surface-2); border-color: var(--orange); color: var(--ink); }
 .dc-next {
@@ -611,6 +636,11 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 .coach.warn { border-left-color: var(--warning); }
 .coach .a-body { color: var(--ink-2); }
 .coach .a-body b { display: block; margin-bottom: 2px; color: var(--ink); }
+.coach-rows { list-style: none; margin: var(--sp-2) 0 0; padding: 0; }
+.coach-rows li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-1) var(--sp-2); padding: var(--sp-2) 0; border-top: 1px solid var(--border); }
+.coach-rows li:first-child { border-top: 0; }
+.coach-rows .cr-n { color: var(--ink); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.coach-rows .cr-a { display: flex; gap: var(--sp-2); margin-left: auto; }
 
 /* muscle volume rows */
 .mv-row { margin-bottom: 11px; }
@@ -810,7 +840,7 @@ body.in-workout #fab-root { display: none; }
 
 .eyebrow {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  font-size: var(--fs-meta); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
 }
 .eyebrow .ico { width: 15px; height: 15px; }
 .eyebrow.good { color: var(--good); }
@@ -820,7 +850,7 @@ body.in-workout #fab-root { display: none; }
 /* ---------- hero card (Today + Train) ---------- */
 .hero-card { padding: 20px 18px 18px; }
 .hero-title, .card h2.hero-title {
-  font-size: 36px; font-weight: 800; line-height: 1.02; letter-spacing: -0.025em;
+  font-size: var(--fs-hero); font-weight: 800; line-height: 1.02; letter-spacing: -0.025em;
   margin: 8px 0 6px; overflow-wrap: anywhere; color: var(--ink);
 }
 .hero-meta { font-size: 14px; color: var(--ink-2); }
@@ -842,19 +872,21 @@ body.in-workout #fab-root { display: none; }
 .empty-inline { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; padding: 14px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
 
 /* ---------- Today: three glance tiles ---------- */
-.stat-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin-bottom: var(--sp-4); }
 .tile {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
-  min-height: 96px; padding: 12px 11px; min-width: 0; text-align: left;
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1);
+  min-height: 96px; padding: var(--sp-3); min-width: 0; text-align: left;
   background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
 }
 .tile:active { border-color: var(--blue); }
-.tile-l { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.tile-l { display: flex; align-items: center; gap: var(--sp-1); max-width: 100%; overflow-wrap: anywhere; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .tile-l .ico { width: 14px; height: 14px; }
-.tile-v { font-size: 23px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile-v { font-size: var(--fs-value); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tile-v small { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
-.tile-v.tile-empty { font-size: 16px; color: var(--ink-2); white-space: normal; }
-.tile-s { font-size: 11px; color: var(--muted); }
+.tile-v.tile-empty { font-size: var(--fs-title); color: var(--ink-2); white-space: normal; }
+/* one line, always: a wrapping sub made Today's strip taller than Food's. The tile's
+   aria-label carries the full meaning, so the rare ellipsis loses nothing. */
+.tile-s { max-width: 100%; font-size: var(--fs-label); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile-bar { align-self: stretch; height: 5px; margin-top: auto; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .tile-bar span { display: block; height: 100%; background: var(--blue); border-radius: 3px; }
 .focus-line { display: flex; align-items: center; gap: 10px; margin: 0 2px 14px; }
@@ -890,6 +922,10 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .wk-bar span { display: block; height: 100%; border-radius: 3px; background: var(--good); transition: width 0.3s ease; }
 .wk-meta { font-size: 13px; color: var(--muted); }
 .wk-meta b { color: var(--ink); font-size: 15px; }
+/* Numbers that change while you watch — set counts, the set label, the plate
+   maths, the dock's "Complete set N of M" — keep fixed-width digits so the line
+   doesn't shuffle each tap. Timers and tile values carry their own. */
+.wk-meta, .eyebrow, .se-label, .ss-no, .pl-base, .pl-plate, .pl-text, .pl-plates, .dock-main { font-variant-numeric: tabular-nums; }
 .wk-foot { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .empty-state h3 { font-size: 22px; margin-bottom: 6px; }
 
@@ -1008,7 +1044,7 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .sheet-item:last-child { border-bottom: none; }
 .sheet-item:active { background: var(--surface-2); }
 .sheet-item:disabled { opacity: 0.4; }
-.sheet-item.danger { color: var(--critical); }
+.sheet-item.danger { color: var(--critical-ink); }
 .sheet-item[aria-checked="true"] { font-weight: 750; color: var(--ink); }
 .sheet-item[aria-checked="true"] .ico { color: var(--good); }
 .sheet-h { font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 18px 0 6px; }
@@ -1021,11 +1057,17 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .rv-note { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .rv-left { font-size: 12px; color: var(--warning); margin-top: 2px; }
 
+/* 'CALORIES' + its icon needs 84px; a tile only has that from a 378px viewport. Below
+   it, overflow-wrap broke labels mid-word (PROTEI/N). The icon is decorative
+   (aria-hidden), so narrow phones drop it rather than the word. */
+@media (max-width: 379px) {
+  .tile-l .ico { display: none; }
+}
 @media (max-width: 359px) {
   .hero-title, .card h2.hero-title { font-size: 30px; }
   .se-field { grid-template-columns: 48px 44px minmax(0, 1fr) 44px; gap: 5px; }
   .se-field input { font-size: 22px; }
-  .tile { padding: 10px 8px; }
+  .tile { padding: var(--sp-2); }
   .tile-v { font-size: 19px; }
   .ex-focus { padding: 12px 10px 14px; }
 }
@@ -1052,9 +1094,10 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .coach-card { border-left: 3px solid var(--blue); }
 .coach-card.good { border-left-color: var(--good); }
 .coach-card.warn { border-left-color: var(--warning); }
-.coach-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-.coach-h { display: block; font-size: 16px; color: var(--ink); margin-bottom: 4px; }
-.coach-b { color: var(--ink-2); font-size: 14px; line-height: 1.45; margin: 0; }
+/* the look comes from .eyebrow — one eyebrow style app-wide; this only spaces it */
+.coach-eyebrow { margin-bottom: var(--sp-1); }
+.coach-h { display: block; font-size: var(--fs-title); color: var(--ink); margin-bottom: 4px; }
+.coach-b { color: var(--ink-2); font-size: var(--fs-body); line-height: 1.45; margin: 0; }
 .coach-sub { color: var(--muted); font-size: 13px; margin-top: 8px; }
 .coach-actions { gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .coach-actions .btn { min-height: 44px; }
@@ -1093,10 +1136,10 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .chart-table table { width: 100%; border-collapse: collapse; }
 .chart-table th, .chart-table td { text-align: left; padding: 5px 0; border-top: 1px solid var(--grid); color: var(--ink-2); font-weight: 400; }
 .chart-table th { color: var(--muted); }
-.ck-stats { display: flex; gap: 8px; margin: 6px 0 12px; flex-wrap: wrap; }
-.ck-stat { flex: 1 1 64px; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
-.ck-stat b { display: block; font-size: 17px; color: var(--ink); }
-.ck-stat span { font-size: 12px; color: var(--muted); }
+.ck-stats { display: flex; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-3); flex-wrap: wrap; }
+.ck-stat { flex: 1 1 64px; background: var(--surface-2); border-radius: 10px; padding: var(--sp-2); }
+.ck-stat b { display: block; font-size: var(--fs-title); color: var(--ink); }
+.ck-stat span { font-size: var(--fs-meta); color: var(--muted); }
 .coach-line.warn { border-left: 3px solid var(--warning); }
 .coach-line.good { border-left: 3px solid var(--good); }
 

@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v48';
+const APP_VERSION = 'v52';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -433,7 +433,7 @@ function renderTodayHome() {
             sub: 'last night', ariaLabel: `Sleep last night: ${fmtDur(night.durationMin)}. Edit sleep log` }
         : { empty: true, value: 'Not logged', sub: 'tap to log', ariaLabel: 'Sleep not logged. Log last night' }) }),
     tile({ action: 'today-nav', data: { view: 'streaks' }, ico: 'calendar', label: 'Week',
-      value: wk, unit: `/ ${p.gymDays}`, sub: 'sessions, 7 days',
+      value: wk, unit: `/ ${p.gymDays}`, sub: 'last 7 days',
       ariaLabel: `${wk} of ${p.gymDays} lifting sessions in the last 7 days. Open consistency` })
   ])}
 
@@ -447,21 +447,21 @@ function renderTodayHome() {
   <div class="card">
     <h2>Quick log</h2>
     <div class="qa-grid">
-      <button class="qa" data-action="quick-scan"><span class="qa-i" aria-hidden="true">📷</span>Scan</button>
-      <button class="qa" data-action="quick-food"><span class="qa-i" aria-hidden="true">＋</span>Food</button>
-      <button class="qa" data-action="quick-train"><span class="qa-i" aria-hidden="true">🏋</span>Train</button>
-      <button class="qa" data-action="quick-sleep"><span class="qa-i" aria-hidden="true">☾</span>Sleep</button>
-      <button class="qa" data-action="quick-weight"><span class="qa-i" aria-hidden="true">⚖</span>Weight</button>
+      <button class="qa" data-action="quick-scan"><span class="qa-i" aria-hidden="true">${icon('camera')}</span>Scan</button>
+      <button class="qa" data-action="quick-food"><span class="qa-i" aria-hidden="true">${icon('plus')}</span>Food</button>
+      <button class="qa" data-action="quick-train"><span class="qa-i" aria-hidden="true">${icon('dumbbell')}</span>Train</button>
+      <button class="qa" data-action="quick-sleep"><span class="qa-i" aria-hidden="true">${icon('moon')}</span>Sleep</button>
+      <button class="qa" data-action="quick-weight"><span class="qa-i" aria-hidden="true">${icon('scale')}</span>Weight</button>
     </div>
   </div>
 
   <div class="card">
     <h2>Explore</h2>
-    ${navRow('today-nav', 'week', '📈', 'This week', weak.short, weak.tone)}
-    ${navRow('today-nav', 'nutrition', '🍽', 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
-    ${navRow('today-nav', 'weight', '⚖', 'Body weight', weightNavValue(p, latestDisp, wChange))}
-    ${navRow('today-nav', 'streaks', '🔥', 'Consistency', streakSummary())}
-    <div class="chart-note">Target ${kcalTarget.toLocaleString()} kcal${trainKcalToday ? ` (+${trainKcalToday} from today's training)` : ''} · ${GOAL_LABEL[p.goal]}${slScore != null ? ` · sleep score ${slScore}` : ''}</div>
+    ${navRow('today-nav', 'week', icon('chart'), 'This week', weak.short, weak.tone)}
+    ${navRow('today-nav', 'nutrition', icon('flame'), 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
+    ${navRow('today-nav', 'weight', icon('scale'), 'Body weight', weightNavValue(p, latestDisp, wChange))}
+    ${navRow('today-nav', 'streaks', icon('calendar'), 'Consistency', streakSummary())}
+    <div class="chart-note">${GOAL_LABEL[p.goal]} target${trainKcalToday ? ` · includes +${trainKcalToday} kcal from today's training` : ''}</div>
   </div>`;
 }
 const FOCUS_LABEL = { 'quick-scan': 'Scan', 'quick-food': 'Log food', 'quick-sleep': 'Log sleep', 'quick-train': 'Train' };
@@ -523,7 +523,7 @@ function weeklyWeakLink(p, t) {
   }
   {
     const sev = (p.gymDays - lifts.length) / p.gymDays;
-    if (sev > 0.20) cands.push({ key: 'sessions', sev, ico: '🏋', short: `${lifts.length} of ${p.gymDays} sessions`,
+    if (sev > 0.20) cands.push({ key: 'sessions', sev, ico: '🏋', short: 'sessions are behind',
       full: `${lifts.length} of ${p.gymDays} planned lifting sessions${stats.cardio ? ` (cardio doesn't count toward these)` : ''}. Consistency outranks intensity — just get in the gym.` });
   }
   if (avgScore != null) {

@@ -264,3 +264,49 @@ test('an AI rewording is only accepted if every number and lift in it came from 
   assert.equal(P.coachAiGuard({ headline: 'Nice week', body: 'Your leg press is flying.' }, P.weeklyCheckin().facts), false, 'a lift the facts never mentioned');
   assert.equal(P.coachAiGuard({ headline: 'x', body: 'y'.repeat(600) }, f), false, 'too long');
 });
+
+test('every coach message is at most two sentences and ~140 characters — one observed, one to do', () => {
+  const sentences = b => b.split(/(?<=[.!?])\s+/).filter(x => x.trim()).length;
+  const base = { sessions: 5, watchNeed: 2, prs: 3, names: 'Romanian Deadlift, Overhead Press and 2 more', progN: 2, flatN: 2, judgedN: 4,
+    adherencePct: 90, daysSince: 9, nextDay: 'Upper Body Power', recentPerWeek: 1, planned: 3,
+    scoreDrop: 9, sleepText: '6h10', proteinHit: 2, proteinLogged: 6 };
+  const variants = [{}, { lowSleep: true }, { lowProtein: true }, { lowSleep: true, lowProtein: true }, { watchNeed: 0, progN: 0, daysSince: 3 }];
+  for (const [state, voices] of Object.entries(P.COACH_COPY))
+    for (const [voice, list] of Object.entries(voices))
+      list.forEach((fn, i) => variants.forEach(v => {
+        const { b } = fn({ ...base, ...v });
+        assert.ok(sentences(b) <= 2, `${state}/${voice}[${i}] ${JSON.stringify(v)}: "${b}"`);
+        assert.ok(b.length <= 140, `${state}/${voice}[${i}] ${JSON.stringify(v)} is ${b.length} chars: "${b}"`);
+      }));
+});
+
+test('lifts you never do on one day become one card with a row each, not a stack of cards', () => {
+  const day = P.activeRoutine().days[0];
+  const [kept, ...never] = day.ex.map(e => e[0]);
+  for (let i = 0; i < 3; i++) P.saveWorkout({ id: `g${i}`, date: localDay(2 + i * 3), dayName: day.name,
+    exercises: [{ name: kept, target: '3×5', sets: [{ weight: 60, reps: 5, type: 'normal' }] }] });
+  const drops = P.coachSuggestions().filter(s => s.action === 'coach-drop-ex');
+  assert.equal(drops.length, never.length, 'one suggestion per lift you skip');
+  const html = P.renderCoachCard();
+  assert.ok(!/Drop .* from /.test(html), 'no separate "Drop X?" cards');
+  assert.equal(html.split('lifts you never do on').length - 1, 1, 'one card for the day');
+  assert.match(html, new RegExp(`${never.length} lifts you never do on ${day.name}`));
+  never.forEach(n => assert.ok(html.includes(`aria-label="Remove it: ${n}"`), `a row with its own action for ${n}`));
+  assert.ok(!P.coachSuggestions().some(x => /one at a time/.test(x.body)), 'no suggestion tells you to deal with them one at a time');
+});
+
+test('every Train suggestion body fits in ~140 characters, even with long names', () => {
+  const day = P.activeRoutine().days[0];
+  const kept = day.ex[0][0];
+  const extra = 'Single-Arm Dumbbell Romanian Deadlift';
+  for (let i = 0; i < 6; i++) P.saveWorkout({ id: `L${i}`, date: localDay(1 + i * 2), dayName: day.name,
+    exercises: [{ name: kept, target: '2×5', sets: [1, 2].map(() => ({ weight: 60, reps: 5, type: 'normal' })) },
+                { name: extra, target: '3×10', sets: [{ weight: 20, reps: 10, type: 'normal' }] }] });
+  const all = P.coachSuggestions();
+  const kinds = new Set(all.map(s => s.action));
+  ['coach-add-ex', 'coach-drop-ex', 'coach-set-target'].forEach(k => assert.ok(kinds.has(k), `scenario produces ${k}`));
+  all.forEach(s => {
+    assert.ok(s.body.length <= 140, `${s.key} body is ${s.body.length} chars: "${s.body}"`);
+    if (s.group) assert.ok(s.group.body.length <= 140, `${s.group.id} group body is ${s.group.body.length} chars`);
+  });
+});

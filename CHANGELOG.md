@@ -24,6 +24,116 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v52 — Food, rebuilt
+2026-09-24 · **pending push**
+
+Stage 4 of the UI pass ([UI-PASS.md](UI-PASS.md)), the last. The Food tab answers "what have I
+eaten, and what's left?" before you scroll, and everything it did before still works.
+
+- **One way in, two under it.** *Scan a meal* is the hero's only big button; *Enter manually*
+  and *Repeat a day* sit beneath it as a small row. The "Log something else" card is gone.
+- **The order is the question.** Hero (what's left) → tiles (how it stacks up) → the day's food
+  (what you ate) → Quick add → Explore. Frequent-food and grocery chips moved into a Quick add
+  card under the list, which only appears when there are chips.
+- **Past days read in the past tense.** A finished day said "1,090 kcal left" and "protein still
+  to go"; it now says "1,090 kcal under" and "Protein finished 24g short." An unlogged past day
+  says "Nothing logged" and invites a backfill instead of offering 2,740 kcal "to spend".
+- **Kept as one list.** Grouping entries by morning/afternoon/evening was planned and dropped at
+  sign-off.
+- **Fixed:** tile labels broke mid-word ("PROTEI/N") on phones narrower than 378px since v49;
+  the decorative icon drops out there instead.
+
+Every Food flow walked in the browser and checked against stored data: scan → review → edit →
+log, manual entry, editing amounts and time, delete with undo, quick add, past days, repeat a
+day, macros, trends, the score sheet. Known gap: on a 320×568 screen the list starts just
+below the fold.
+
+---
+
+## v51 — one visual system
+2026-09-24 · `35e82be` · **pending push**
+
+Stage 3 of the UI pass ([UI-PASS.md](UI-PASS.md)). No content moved; the five tabs now look
+like one app.
+
+- **Scales, not literals.** Spacing (`--sp-1`…`--sp-5`, 4–24px) and type (`--fs-hero` 36 ·
+  `value` 23 · `title` 16 · `body` 14 · `meta` 12 · `label` 11) live in `:root`. Everything
+  this pass touched uses them: cards, tiles, eyebrows, the check-in, the coach line and rows.
+  Older rules convert when they're next edited.
+- **One eyebrow.** The check-in and coach cards used their own 11px eyebrow; they take the
+  heroes' now. Section headings were already one style. Cards sit 16px apart, like the tiles.
+- **Icons, not emoji.** Quick log and all 22 Explore rows use Peak's own icon set, which
+  gained an apple and a bowl for Grocery. Emoji drew differently per platform and ignored
+  the theme.
+- **Tiles are 96px on every tab**, whatever they hold: four sub-lines were shortened to fit
+  one line at 320px, and a sub can no longer wrap.
+- **Digits that tick don't shuffle.** The workout's progress line, set label, set numbers,
+  plate maths and "Complete set N of M" use fixed-width digits, like the timers already did.
+- **Accessibility, measured.** An audit of every control on every tab and the live workout,
+  in all five themes, found 30 gaps — every one already present in v48. All closed: muted
+  text retuned in dark and light, a new red for danger text that reads ≥4.6:1 everywhere,
+  and 44px day chips, food rows, text fields and small buttons. Same audit after: 0.
+- **Fixed:** Sleep's "vs last week" read "−0h 05m"; small differences now read in minutes.
+
+142 tests pass; each change measured before and after in the browser at 390 and 320px.
+
+---
+
+## v50 — the coach says less
+2026-09-24 · `39d4f29` · **pending push**
+
+Stage 2 of the UI pass ([UI-PASS.md](UI-PASS.md)). Train's suggestions read as a list, and no
+screen says the same sentence twice.
+
+- **Suggestions group.** A day with four lifts you never do used to surface them one card at a
+  time, each telling you to deal with the others later. Now suggestions of the same kind share
+  one card: a heading ("8 lifts you never do"), one line on what Peak saw, then a row per lift
+  with its own Remove / No thanks. Rows name their day when a card spans more than one. The
+  two-card cap counts cards, not suggestions. Screen readers hear the lift in each button.
+- **Shorter copy.** Every Train suggestion body is what was seen, then what acting does, in 140
+  characters or fewer; the "one at a time" clause is gone. Coach messages on Today got the same
+  ceiling: three that ran to 168–203 characters with long lift names were rewritten.
+- **A test keeps it honest.** `tests/copy.test.mjs` renders Today (with the weekly check-in and
+  with the coach line) and Train's coach card, and fails on any sentence over 20 characters that
+  appears twice. It caught one on its first run: per-day grouping had left two cards ending in
+  the same sentence. The harness gains `makeAppContext()`, which loads app.js without booting
+  it, so tests can read a real screen's markup.
+
+142 tests pass; all five tabs swept for repeated sentences in the browser, grouped card checked
+at 390 and 320px with its actions clicked through.
+
+---
+
+## v49 — one number, one place
+2026-09-24 · `4f4115d` · **pending push**
+
+Stage 1 of the UI pass ([UI-PASS.md](UI-PASS.md)). Nothing new: Today, Food and Sleep each
+print any given number once, so the eye never has to decide which copy matters.
+
+- **Today.** The weekly check-in stops repeating the Week tile's session count and the Protein
+  tile's grams; protein stays only as a streak ("5 days · protein streak", from 2 days up).
+  Sleep is labelled "7-day avg" in the check-in against the tile's "last night". Explore →
+  This week says "sessions are behind" instead of the tile's number, and the note under
+  Explore drops the sleep score and the kcal target the Nutrition row already shows.
+- **The check-in says less.** Its body is two sentences: what happened, what to do. The
+  appended "This week's focus:" sentence is gone (Explore owns the weak link), eight coach
+  variants that ran to three or four sentences were cut to two, and the Gemini rewording is
+  asked for exactly two. A test pins every coach variant at two sentences or fewer.
+- **Food.** The hero keeps its "N kcal left" headline and protein sentence and loses its stat
+  row. The Calories tile says under / on / over target instead of repeating the headline.
+  The day's list header shows the item count, not the tiles' totals; Explore → Macros shows
+  carbs and fat.
+- **Sleep.** The hero keeps duration, bed → wake and how rested; the score lives on the Score
+  tile. The 7-day average and the bed/wake spread print once, on their tiles; the insight
+  leads with the gap to 8h; Explore → Hours slept shows the change on last week and Bed & wake
+  times shows your usual window.
+- **Fixed:** Sleep scrolled sideways on 320px screens — "REGULARITY" didn't fit its tile. The
+  tile is now "Timing", and tile labels wrap rather than widen the page.
+
+136 tests pass; each change checked in the browser at 390 and 320px across themes.
+
+---
+
 ## v48 — bring your history
 2026-09-24 · **pending push**
 
