@@ -247,7 +247,12 @@ ate.
       What moves: the "Log something else" card is gone — manual and repeat join the hero,
       chips become block 4 and sit *under* the list. Nothing is removed; no data shape changes.
       *Signed off 2026-09-24: no part-of-day grouping; quick-add below the list.*
-- [ ] Day navigation and the day's headline in one place.
+- [x] Day navigation and the day's headline in one place.
+      *Placement already held (the stepper is the hero's top line). What was wrong was the
+      headline on past days: "1,090 kcal left" and "24g protein still to go — the number that
+      decides…" for a day that's over, "2,740 kcal to spend" for an unlogged one. Past days now
+      say how it went — "1,090 kcal under" / "Protein finished 24g short." — or "Nothing
+      logged" with a nudge to backfill. The gap, not the total: the tiles carry the totals.*
 - [x] ~~Entries grouped by part of day (morning / afternoon / evening) with a running total, rather
       than one flat list.~~ *Dropped at sign-off (2026-09-24): the human chose to keep one flat
       list.*

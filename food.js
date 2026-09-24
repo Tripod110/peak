@@ -120,11 +120,30 @@ function renderFoodHero(key, t, totals, items, isToday) {
     </div>
     ${isToday ? '' : '<div class="center"><button class="link-btn" data-action="food-today">Back to today</button></div>'}`;
 
+  /* A past day is over: say how it went, not what's left of it. */
+  if (!isToday) {
+    const left = Math.round(t.kcal - totals.kcal);
+    return heroCard({
+      id: 'food-hero', eyebrowHtml: nav,
+      state: items.length && proteinLeft === 0 ? 'done' : '',
+      // the gap, not the total — the Calories tile under it already prints what was eaten
+      title: !items.length ? 'Nothing logged'
+        : left > 0 ? `${left.toLocaleString()} kcal under` : left < 0 ? `${Math.abs(left).toLocaleString()} kcal over` : 'On target',
+      meta: items.length
+        ? (proteinLeft > 0 ? `Protein finished ${proteinLeft}g short.` : 'Protein target hit.')
+        : `If you remember what you ate on ${prettyDate(key)}, add it — trends read better without gaps.`,
+      actions: [
+        { label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' },
+        ...(items.length ? [] : [{ label: 'Add manually', icon: 'plus', action: 'open-manual-food', cls: 'ghost' }])
+      ]
+    });
+  }
+
   if (!items.length) {
     return heroCard({
       id: 'food-hero', eyebrowHtml: nav,
       title: `${t.kcal.toLocaleString()} kcal to spend`,
-      meta: `${t.protein}g protein${isToday ? ' today' : ` on ${prettyDate(key)}`} · ${GOAL_LABEL[getProfile().goal]}`,
+      meta: `${t.protein}g protein today · ${GOAL_LABEL[getProfile().goal]}`,
       actions: [
         { label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' },
         { label: 'Add manually', icon: 'plus', action: 'open-manual-food', cls: 'ghost' }
