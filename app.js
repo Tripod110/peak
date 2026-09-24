@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v47';
+const APP_VERSION = 'v48';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -1271,6 +1271,8 @@ function openSettingsModal() {
       <button class="btn mt" data-action="export-data">⬇ Export data (JSON)</button>
       <label class="btn mt" style="display:flex">⬆ Import backup<input id="import-file" type="file" accept=".json" style="display:none"></label>
       <div class="chart-note">Importing replaces everything on this device with the contents of the backup.</div>
+      <button class="btn mt" data-action="open-import">⇪ Import workouts from Strong or Hevy</button>
+      <div class="chart-note">Adds your history from another app — nothing here is replaced.</div>
       <button class="btn ghost danger mt" data-action="reset-app">Reset everything</button>
       <div class="chart-note">Peak stores everything on this device only. Clearing your browser data erases your history — export a backup now and then.</div>
     </details>
@@ -1674,6 +1676,7 @@ document.addEventListener('click', e => {
       closeModal(); App.render(); break;
     }
     /* log anything (custom.js) */
+    case 'open-import': openImportSheet(); break;
     case 'ce-new': {
       const pk = App.picker;
       closeModal();

@@ -324,3 +324,210 @@ function saveSessionAsDay(id, name) {
   destructive('routine-swap', prev, `Added ${name || 'the day'} to ${r.name}`);
   return true;
 }
+
+/* ---------- 5. import from Strong or Hevy ----------
+   Years of history elsewhere is exactly what the plateau engine and the coach
+   need on day one. Both apps export a CSV with one row per set; this turns it
+   into Peak sessions.
+
+     Strong: Date, Workout Name, Exercise Name, Set Order, Weight, Reps, Seconds…
+             (comma or semicolon; weight in whatever unit Strong was set to —
+             the file doesn't say, so we ask)
+     Hevy:   title, start_time, exercise_title, set_type, weight_lbs|weight_kg,
+             reps, duration_seconds…
+
+   A CSV from someone else's app is untrusted input like a backup (D-17): it's
+   parsed into plain values here, and the whole store goes back through
+   sanitizeStored before anything renders it. */
+
+/* RFC-4180-ish: quoted fields, doubled quotes, CRLF, the delimiter sniffed from the header */
+function parseCsv(text) {
+  const src = String(text || '').replace(/^﻿/, '');
+  const firstLine = src.split(/\r?\n/, 1)[0] || '';
+  const delim = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ';' : ',';
+  const rows = [];
+  let row = [], field = '', q = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (q) {
+      if (ch === '"') { if (src[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === delim) { row.push(field); field = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.some(f => f !== '')) rows.push(row);
+      row = [];
+    } else field += ch;
+  }
+  row.push(field);
+  if (row.some(f => f !== '')) rows.push(row);
+  return rows;
+}
+
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+/* "2023-01-15 10:30:00" (Strong) · "15 Jan 2023, 10:30" (Hevy) → YYYY-MM-DD */
+function importDate(s) {
+  const v = String(s || '').trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = /^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})/.exec(v);
+  if (m && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+
+/* "Bench Press (Barbell)" → Peak's "Bench Press"; "Bicep Curl (Dumbbell)" →
+   "Dumbbell Curl". Tries the library under a few spellings; a lift Peak
+   doesn't know keeps its own name and lands in the "not counted yet" tagging
+   flow, where Create exercise can define it. */
+const IMPORT_ALIASES = {
+  'bent over row': 'Barbell Row', 'bent over row (barbell)': 'Barbell Row', 'bicep curl (dumbbell)': 'Dumbbell Curl',
+  'bicep curl (barbell)': 'Barbell Curl', 'bicep curl (cable)': 'Cable Curl', 'hammer curl (dumbbell)': 'Hammer Curl',
+  'triceps pushdown (cable - straight bar)': 'Triceps Pushdown', 'triceps rope pushdown': 'Rope Pushdown',
+  'lat pulldown (cable)': 'Lat Pulldown', 'seated row (cable)': 'Seated Cable Row', 'pull up': 'Pull-up', 'chin up': 'Chin-up',
+  'squat (barbell)': 'Squat', 'front squat (barbell)': 'Front Squat', 'deadlift (barbell)': 'Deadlift',
+  'romanian deadlift (barbell)': 'Romanian Deadlift', 'overhead press (barbell)': 'Overhead Press',
+  'shoulder press (dumbbell)': 'Seated Dumbbell Shoulder Press', 'lateral raise (dumbbell)': 'Lateral Raise',
+  'hip thrust (barbell)': 'Hip Thrust', 'leg press (machine)': 'Leg Press', 'leg extension (machine)': 'Leg Extension',
+  'lying leg curl (machine)': 'Leg Curl', 'seated leg curl (machine)': 'Seated Leg Curl', 'plank': 'Plank (seconds)'
+};
+const squash = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+let _libSquashed = null;
+function libBySquash(s) {
+  if (!_libSquashed) { _libSquashed = new Map(); libAll().forEach(e => _libSquashed.set(squash(e.n), e.n)); }
+  return _libSquashed.get(squash(s)) || null;
+}
+function mapImportedName(raw) {
+  const name = String(raw || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  if (!name) return '';
+  const alias = IMPORT_ALIASES[name.toLowerCase()];
+  if (alias) return alias;
+  const direct = libBySquash(name);
+  if (direct) return direct;
+  const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(name);
+  if (m) {
+    const base = m[1], equip = m[2].split(/\s*-\s*/)[0];
+    for (const c of [`${equip} ${base}`, base, `${base} ${equip}`]) { const hit = libBySquash(c); if (hit) return hit; }
+  }
+  return name;
+}
+
+function importHash(k) {
+  let h = 0;
+  for (let i = 0; i < k.length; i++) { h = (h << 5) - h + k.charCodeAt(i); h |= 0; }
+  return Math.abs(h).toString(36);
+}
+
+/* → { format, sessions: [...], sets, skipped, unknown: [names] } */
+function parseWorkoutCsv(text, weightUnit) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) throw new Error('That file has no rows to import.');
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const col = n => head.indexOf(n);
+  let format;
+  if (col('exercise_title') >= 0 && col('start_time') >= 0) format = 'hevy';
+  else if (col('exercise name') >= 0 && col('date') >= 0) format = 'strong';
+  else throw new Error("That doesn't look like a Strong or Hevy export — check it's the workout CSV.");
+
+  const lbCol = col('weight_lbs'), kgCol = col('weight_kg');
+  const get = (r, n) => { const i = col(n); return i >= 0 ? (r[i] ?? '') : ''; };
+  const toKg = v => {
+    const n = Number(String(v).replace(',', '.'));
+    if (!(n > 0)) return 0;
+    if (format === 'hevy') return kgCol >= 0 ? n : n / 2.20462;
+    return weightUnit === 'kg' ? n : n / 2.20462;
+  };
+
+  const byKey = new Map();
+  let sets = 0, skipped = 0;
+  rows.slice(1).forEach(r => {
+    const stamp = format === 'hevy' ? get(r, 'start_time') : get(r, 'date');
+    const date = importDate(stamp);
+    const exName = mapImportedName(format === 'hevy' ? get(r, 'exercise_title') : get(r, 'exercise name'));
+    if (!date || !exName) { skipped++; return; }
+    const workout = String(format === 'hevy' ? get(r, 'title') : get(r, 'workout name')).trim().slice(0, 60) || 'Imported workout';
+    let reps = Math.round(Number(get(r, 'reps')) || 0);
+    const secs = Math.round(Number(format === 'hevy' ? get(r, 'duration_seconds') : get(r, 'seconds')) || 0);
+    const weight = toKg(format === 'hevy' ? (kgCol >= 0 ? r[kgCol] : lbCol >= 0 ? r[lbCol] : '') : get(r, 'weight'));
+    const dist = Number(format === 'hevy' ? (get(r, 'distance_km') || get(r, 'distance_miles')) : get(r, 'distance')) || 0;
+    if (dist > 0 && !(weight > 0)) { skipped++; return; }   // a run or a row: cardio, not a lift
+    if (!reps && secs) reps = secs;            // a timed hold: seconds are the reps, as elsewhere in Peak
+    if (!reps) { skipped++; return; }           // cardio rows and empty sets
+    const kindRaw = String(format === 'hevy' ? get(r, 'set_type') : get(r, 'set order')).toLowerCase();
+    const type = /warm|^w$/.test(kindRaw) ? 'warmup' : /drop|^d$/.test(kindRaw) ? 'drop' : /fail|^f$/.test(kindRaw) ? 'failure' : 'normal';
+    const key = `${stamp}|${workout}`;
+    if (!byKey.has(key)) byKey.set(key, { date, workout, stamp, exercises: new Map() });
+    const s = byKey.get(key);
+    if (!s.exercises.has(exName)) s.exercises.set(exName, []);
+    s.exercises.get(exName).push({ weight: Math.round(weight * 1000) / 1000, reps: Math.min(reps, 1000), type });
+    sets++;
+  });
+
+  const sessions = [...byKey.values()].map(s => ({
+    id: 'imp' + importHash(`${format}|${s.stamp}|${s.workout}`),
+    date: s.date, dayName: s.workout, imported: format, freestyle: true,
+    exercises: [...s.exercises.entries()].map(([name, st]) => ({ name, target: '', sets: st }))
+  })).sort((a, b) => a.date < b.date ? -1 : 1);
+
+  const names = new Set(sessions.flatMap(s => s.exercises.map(e => e.name)));
+  const unknown = [...names].filter(n => { const m = musclesFor(n); return !m.p.length && !m.s.length; });
+  return { format, sessions, sets, skipped, unknown };
+}
+
+/* Adds the sessions you don't already have. "Already have" is the same import
+   id (re-importing the same file), or a session already in Peak on that date
+   with the same lifts — so importing after switching apps doesn't double up. */
+function importWorkouts(parsed) {
+  const existing = getWorkouts();
+  const ids = new Set(existing.map(w => w.id));
+  const sig = w => `${w.date}|${(w.exercises || []).map(e => e.name.toLowerCase()).sort().join(',')}`;
+  const have = new Set(existing.map(sig));
+  const fresh = parsed.sessions.filter(s => !ids.has(s.id) && !have.has(sig(s)));
+  if (!fresh.length) return { added: 0, duplicate: parsed.sessions.length };
+  Store.set('workouts', existing.concat(fresh));
+  sanitizeStored();
+  destructive('import', { ids: fresh.map(s => s.id) },
+    `Imported ${plural(fresh.length, 'workout')} from ${parsed.format === 'hevy' ? 'Hevy' : 'Strong'}`);
+  return { added: fresh.length, duplicate: parsed.sessions.length - fresh.length };
+}
+registerUndo('import', u => {
+  const gone = new Set(u.ids);
+  Store.set('workouts', getWorkouts().filter(w => !gone.has(w.id)));
+});
+
+function openImportSheet() {
+  openModal(`
+    <h3>Import from Strong or Hevy</h3>
+    <div class="modal-sub">Export your workouts as CSV from the other app, then pick the file here. Your history lands in Peak alongside what you've logged — nothing is replaced, and Undo takes it all back out.</div>
+    <label>Weights in a Strong file are in</label>
+    <div class="seg" id="imp-unit">
+      <button data-v="lb" class="${isMetric() ? '' : 'on'}">lb</button>
+      <button data-v="kg" class="${isMetric() ? 'on' : ''}">kg</button>
+    </div>
+    <div class="chart-note">Hevy files say their unit themselves.</div>
+    <label class="btn primary mt" style="display:flex">Choose CSV file<input id="imp-file" type="file" accept=".csv,text/csv" style="display:none"></label>
+    <div class="chart-note">Strong: Settings → Export data. Hevy: Settings → Export &amp; import data → Export workouts.</div>
+    <button class="btn ghost mt" data-action="close-modal">Cancel</button>
+  `, { label: 'Import workouts' });
+  document.getElementById('imp-file')?.addEventListener('change', ev => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    if (f.size > 20 * 1024 * 1024) { toast('That file is over 20 MB — is it the workout export?'); return; }
+    const unit = document.querySelector('#imp-unit button.on')?.dataset.v || 'lb';
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const parsed = parseWorkoutCsv(rd.result, unit);
+        const res = importWorkouts(parsed);
+        closeModal();
+        App.render();
+        if (!res.added) { toast('Nothing new in that file — every workout is already in Peak'); return; }
+        if (parsed.unknown.length) {
+          setTimeout(() => toast(`${plural(parsed.unknown.length, 'lift')} Peak doesn't know yet — tag them on Train so they count toward your volume`), 1200);
+        }
+      } catch (e) { toast(e.message); }
+    };
+    rd.readAsText(f);
+  });
+}

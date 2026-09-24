@@ -24,6 +24,34 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v48 — bring your history
+2026-09-24 · **pending push**
+
+**Import from Strong or Hevy** (Settings → *Import workouts from Strong or Hevy*). Years of history
+elsewhere is exactly what plateau watch, progression, the coach and goal projections need, so they
+work on day one instead of after three weeks.
+
+- **Both exports are read as they come.** The format is detected from the header row, and comma
+  or semicolon files both parse, including quoted fields and doubled quotes. Hevy's
+  `weight_kg`/`weight_lbs` column gives the unit. Strong's file doesn't say, so the sheet asks
+  (it defaults to your units).
+- **Names map onto Peak's library:** "Bench Press (Barbell)" → Bench Press, "Bicep Curl (Dumbbell)"
+  → Dumbbell Curl, "Pull Up" → Pull-up. Lifts Peak doesn't know keep their own name and are counted
+  for tagging, where *Create exercise* can define them.
+- **Set types carry over.** Warm-up, drop and failure sets keep their type, and timed holds keep
+  their seconds. Cardio rows (distance, no weight) are skipped rather than logged as a lift.
+- **Nothing is replaced or duplicated.** Re-importing the same file adds nothing, and neither does a
+  session you already logged in Peak on that date with the same lifts. One Undo removes the whole
+  import.
+- **Untrusted input, like a backup (D-17).** The file is parsed into plain values, and the store goes
+  back through `sanitizeStored` before anything renders.
+
+Tests: `tests/import.test.mjs` covers 7 cases, including a hostile exercise name; 135 pass.
+Checked end to end in the browser: six weeks of Hevy history through the real file input, and the
+next prescription built from it.
+
+---
+
 ## v47 — onboarding leads with training
 `8712379` · 2026-09-24 · **live**
 
