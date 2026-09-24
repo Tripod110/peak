@@ -204,11 +204,16 @@ The app has grown three generations of styling. This makes them agree. No conten
       audit against v48: **the same 30 findings on both — this pass regressed nothing.**
       Landscape (844×390): no overflow on any tab; the left/right `env(safe-area-inset-*)` rules
       and `viewport-fit=cover` are intact. But the audit shows v46 didn't fully land — next box.*
-- [ ] Fix the gaps the audit found (all pre-existing, present in v48):
+- [x] Fix the gaps the audit found (all pre-existing, present in v48):
       contrast — light theme's inactive tab labels 3.91, Train's day chips 3.61 (light) / 4.33
       (dark), Sleep's ghost-danger "Delete" 3.44–3.64 in four themes, Food's entry ✕ and
       Grocery's aisle toggle 4.30 (light); targets — day chips 40px tall, Food entry rows 37px,
       Grocery's add field 41px and add button 42px wide.
+      *`--muted` retuned in dark (#898781 → #8e8c86) and light (#7c7a71 → #6b6961); pink, ocean
+      and forest already passed. New `--critical-ink` for red text (#dd7272 dark themes,
+      #bf3636 light) — `--critical` stays the fill/border red. Day chips 44px, Food entry rows
+      44px, text inputs and selects 44px, `.btn.small` at least 44px wide. Same audit after:
+      0 findings on all five tabs and the live workout screen, in all five themes.*
 
 Stage done when: switching tabs doesn't feel like switching apps.
 
