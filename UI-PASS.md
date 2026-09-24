@@ -101,7 +101,7 @@ decide which copy matters.
 
 - [x] The score is in the hero and in the Score tile. Hero keeps duration, times and how rested;
       the tile keeps the score.
-- [ ] Sleep overflows at 320px: a tile label (`span.tile-l`) ends at 325px. Found while
+- [x] Sleep overflows at 320px: a tile label (`span.tile-l`) ends at 325px. Found while
       verifying stage 1 item 2; pre-existing on v48.
 - [ ] Sleep still repeats itself: the 7-day average is in the 7-day tile, the insight line
       ("averaging 7h 06m over 6 nights") and Explore → Hours slept; regularity (±N min) is in

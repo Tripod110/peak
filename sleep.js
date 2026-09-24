@@ -279,7 +279,7 @@ function renderSleepHome() {
         : { empty: true, value: 'Not logged', sub: `${logged14} of 14 nights`, ariaLabel: 'This night is not logged. Open the last 14 nights' })
     }),
     tile({
-      action: 'sleep-nav', data: { view: 'consistency' }, ico: 'clock', label: 'Regularity',
+      action: 'sleep-nav', data: { view: 'consistency' }, ico: 'clock', label: 'Timing',
       ...(c.bedSd == null
         ? { empty: true, value: 'Collecting', sub: `${c.nights} of 3 nights`, ariaLabel: 'Not enough nights to judge regularity yet. Open bed and wake times' }
         : { value: `±${Math.max(c.bedSd, c.wakeSd)}`, unit: 'min',
