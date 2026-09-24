@@ -179,10 +179,17 @@ The app has grown three generations of styling. This makes them agree. No conten
       before/after on all five tabs at 390 and 320px: the one change is the check-in stat,
       17 → 16px. Still literal: 173 declarations (9px 9.5px 10px 10.5px 11px 11.5px 12px 13px 14px 15px 16px 17px 18px 19px 20px 21px 22px 24px 25px 26px 28px 30px 34px 42px), including the 320px overrides
       (hero 30px, tile value 19px) — they convert when a later edit touches them.*
-- [ ] Icons: `ICONS` in `ui.js` is the source. Replace the leftover emoji in Today's Quick log
+- [x] Icons: `ICONS` in `ui.js` is the source. Replace the leftover emoji in Today's Quick log
       and the `navRow` calls across Today/Train/Food/Sleep/Grocery with `icon()` — or decide
       emoji stay and make their size and alignment consistent in one rule. Write the decision
       here either way.
+      *Decision: icons, not emoji. Emoji draw differently on every platform and ignore the
+      theme's colours; the tab bar and tiles already used `ICONS`. All 22 `navRow` calls and the
+      five Quick log buttons now pass `icon()`; `ICONS` gained `apple` and `bowl` for Grocery's
+      Snacks and Easy meals. `.nr-ico`/`.qa-i` give every icon the same box (20px / 22px) and
+      the muted ink colour. `navRow`'s `ico` argument is renamed `icoHtml` (D-17: caller-built
+      markup). Emoji left elsewhere (alerts, the focus line, toasts, check-in goals) are not
+      in this item's scope.*
 - [ ] Tile strips are the same height across tabs whatever they contain (Today's "Not logged"
       vs Food's "1,860 / 2,450").
 - [ ] Re-check the v46 gains: button text contrast ≥4.5:1 in all five themes, 44px targets,

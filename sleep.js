@@ -292,10 +292,10 @@ function renderSleepHome() {
 
   <div class="card">
     <h2>Explore</h2>
-    ${navRow('sleep-nav', 'nights', '🌙', 'Last 14 nights', `${logged14} logged`)}
-    ${navRow('sleep-nav', 'trend', '📈', 'Hours slept', weekOverWeek(wk))}
-    ${navRow('sleep-nav', 'training', '🏋', 'Sleep vs training', sleepLinkNavValue())}
-    ${navRow('sleep-nav', 'consistency', '⏰', 'Bed & wake times', usualWindowNavValue())}
+    ${navRow('sleep-nav', 'nights', icon('moon'), 'Last 14 nights', `${logged14} logged`)}
+    ${navRow('sleep-nav', 'trend', icon('chart'), 'Hours slept', weekOverWeek(wk))}
+    ${navRow('sleep-nav', 'training', icon('dumbbell'), 'Sleep vs training', sleepLinkNavValue())}
+    ${navRow('sleep-nav', 'consistency', icon('clock'), 'Bed & wake times', usualWindowNavValue())}
   </div>`;
 }
 

@@ -87,10 +87,10 @@ function renderFoodHome() {
 
   <div class="card">
     <h2>Explore</h2>
-    ${navRow('food-nav', 'macros', '🥗', 'Macros', `${Math.round(totals.carbs)}g carbs · ${Math.round(totals.fat)}g fat`)}
-    ${navRow('food-nav', 'frequents', '🔁', 'Frequent foods', freqCount() ? `${freqCount()} saved` : 'none yet')}
-    ${navRow('food-nav', 'days', '📅', 'Past days', `${daySummary().loggedCount} of last 14 logged`)}
-    ${navRow('goto-nutrition', null, '📈', 'Nutrition trends', '14-day charts')}
+    ${navRow('food-nav', 'macros', icon('egg'), 'Macros', `${Math.round(totals.carbs)}g carbs · ${Math.round(totals.fat)}g fat`)}
+    ${navRow('food-nav', 'frequents', icon('refresh'), 'Frequent foods', freqCount() ? `${freqCount()} saved` : 'none yet')}
+    ${navRow('food-nav', 'days', icon('calendar'), 'Past days', `${daySummary().loggedCount} of last 14 logged`)}
+    ${navRow('goto-nutrition', null, icon('chart'), 'Nutrition trends', '14-day charts')}
   </div>`;
 }
 

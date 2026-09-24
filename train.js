@@ -1196,15 +1196,15 @@ function renderTrainHome() {
 
   <div class="card">
     <h2>Your training <span class="h2-right">tap any row</span></h2>
-    ${navRow('train-nav', 'history', '📜', 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
-    ${navRow('train-nav', 'routine', '✎', 'Edit your routine',
+    ${navRow('train-nav', 'history', icon('clock'), 'Session history', all.length ? `${all.length} logged` : 'nothing yet')}
+    ${navRow('train-nav', 'routine', icon('sliders'), 'Edit your routine',
       `${tpl.days.length} days${isCustomRoutine() ? ' · yours' : ' · standard'}`)}
-    ${navRow('train-nav', 'muscles', '💪', 'Weekly sets by muscle',
+    ${navRow('train-nav', 'muscles', icon('chart'), 'Weekly sets by muscle',
       !hasLifts ? 'no data yet' : firstWeek ? 'filling in' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
       !hasLifts ? '' : (mv.unclassified.length || low) ? 'warn' : 'good')}
-    ${navRow('train-nav', 'moved', '🏋', 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
-    ${navRow('train-nav', 'records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
-    ${navRow('train-nav', 'consistency', '📅', 'Consistency',
+    ${navRow('train-nav', 'moved', icon('dumbbell'), 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
+    ${navRow('train-nav', 'records', icon('up'), 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
+    ${navRow('train-nav', 'consistency', icon('calendar'), 'Consistency',
       `${wkLifts}/${p.gymDays} this week${streak ? ` · ${streak}-week streak` : ''}`)}
     ${wkCardio ? `<div class="chart-note">Plus ${wkCardio} cardio session${wkCardio > 1 ? 's' : ''} this week.</div>` : ''}
     ${quip ? `<div class="quip ${quip.fresh ? 'fresh' : ''}" style="margin:12px 0 0">${esc(quip.text)}</div>` : ''}

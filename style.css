@@ -471,7 +471,9 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   font-size: 11.5px; color: var(--ink-2);
 }
 .qa:active { border-color: var(--blue); transform: scale(0.97); }
-.qa-i { font-size: 19px; line-height: 1; }
+/* icons, not emoji: ICONS in ui.js is the only source (UI-PASS stage 3) */
+.qa-i { display: flex; line-height: 1; color: var(--ink-2); }
+.qa-i .ico { width: 22px; height: 22px; }
 
 /* ---------- dashboard: glance strip ---------- */
 .glance { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
@@ -492,7 +494,8 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 }
 .nav-row:last-child { border-bottom: none; }
 .nav-row:active { background: var(--surface-2); }
-.nr-ico { font-size: 17px; }
+.nr-ico { display: flex; align-items: center; justify-content: center; width: 22px; color: var(--muted); }
+.nr-ico .ico { width: 20px; height: 20px; }
 .nr-label { font-size: 15px; font-weight: 500; }
 .nr-value { font-size: 12px; text-align: right; }
 .nr-chev { color: var(--baseline); font-size: 19px; }

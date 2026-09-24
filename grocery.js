@@ -188,10 +188,10 @@ function renderGroceryHome() {
 
   <div class="card">
     <h2>Add from</h2>
-    ${navRow('groc-nav', 'usuals', '🔁', 'Your usuals', usuals ? `${usuals} you log often` : 'log a food twice to start')}
-    ${navRow('groc-nav', 'staples', '🥩', 'Protein staples', `${STAPLES.length} cheap per gram`)}
-    ${navRow('groc-nav', 'snacks', '🍫', 'Snacks', `${SNACKS.length} between meals`)}
-    ${navRow('groc-nav', 'meals', '🍳', 'Easy meals', `${EASY_MEALS.length} · adds every ingredient`)}
+    ${navRow('groc-nav', 'usuals', icon('refresh'), 'Your usuals', usuals ? `${usuals} you log often` : 'log a food twice to start')}
+    ${navRow('groc-nav', 'staples', icon('egg'), 'Protein staples', `${STAPLES.length} cheap per gram`)}
+    ${navRow('groc-nav', 'snacks', icon('apple'), 'Snacks', `${SNACKS.length} between meals`)}
+    ${navRow('groc-nav', 'meals', icon('bowl'), 'Easy meals', `${EASY_MEALS.length} · adds every ingredient`)}
   </div>`;
 }
 

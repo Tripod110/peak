@@ -447,20 +447,20 @@ function renderTodayHome() {
   <div class="card">
     <h2>Quick log</h2>
     <div class="qa-grid">
-      <button class="qa" data-action="quick-scan"><span class="qa-i" aria-hidden="true">📷</span>Scan</button>
-      <button class="qa" data-action="quick-food"><span class="qa-i" aria-hidden="true">＋</span>Food</button>
-      <button class="qa" data-action="quick-train"><span class="qa-i" aria-hidden="true">🏋</span>Train</button>
-      <button class="qa" data-action="quick-sleep"><span class="qa-i" aria-hidden="true">☾</span>Sleep</button>
-      <button class="qa" data-action="quick-weight"><span class="qa-i" aria-hidden="true">⚖</span>Weight</button>
+      <button class="qa" data-action="quick-scan"><span class="qa-i" aria-hidden="true">${icon('camera')}</span>Scan</button>
+      <button class="qa" data-action="quick-food"><span class="qa-i" aria-hidden="true">${icon('plus')}</span>Food</button>
+      <button class="qa" data-action="quick-train"><span class="qa-i" aria-hidden="true">${icon('dumbbell')}</span>Train</button>
+      <button class="qa" data-action="quick-sleep"><span class="qa-i" aria-hidden="true">${icon('moon')}</span>Sleep</button>
+      <button class="qa" data-action="quick-weight"><span class="qa-i" aria-hidden="true">${icon('scale')}</span>Weight</button>
     </div>
   </div>
 
   <div class="card">
     <h2>Explore</h2>
-    ${navRow('today-nav', 'week', '📈', 'This week', weak.short, weak.tone)}
-    ${navRow('today-nav', 'nutrition', '🍽', 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
-    ${navRow('today-nav', 'weight', '⚖', 'Body weight', weightNavValue(p, latestDisp, wChange))}
-    ${navRow('today-nav', 'streaks', '🔥', 'Consistency', streakSummary())}
+    ${navRow('today-nav', 'week', icon('chart'), 'This week', weak.short, weak.tone)}
+    ${navRow('today-nav', 'nutrition', icon('flame'), 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
+    ${navRow('today-nav', 'weight', icon('scale'), 'Body weight', weightNavValue(p, latestDisp, wChange))}
+    ${navRow('today-nav', 'streaks', icon('calendar'), 'Consistency', streakSummary())}
     <div class="chart-note">${GOAL_LABEL[p.goal]} target${trainKcalToday ? ` · includes +${trainKcalToday} kcal from today's training` : ''}</div>
   </div>`;
 }
