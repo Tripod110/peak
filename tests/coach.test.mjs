@@ -291,5 +291,5 @@ test('lifts you never do on one day become one card with a row each, not a stack
   assert.equal(html.split('lifts you never do on').length - 1, 1, 'one card for the day');
   assert.match(html, new RegExp(`${never.length} lifts you never do on ${day.name}`));
   never.forEach(n => assert.ok(html.includes(`aria-label="Remove it: ${n}"`), `a row with its own action for ${n}`));
-  assert.ok(!/one at a time/.test(html.split('coach-rows')[0].split('lifts you never do')[1] || ''), 'the grouped card doesn\'t say deal with them one at a time');
+  assert.ok(!P.coachSuggestions().some(x => /one at a time/.test(x.body)), 'no suggestion tells you to deal with them one at a time');
 });

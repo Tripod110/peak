@@ -494,9 +494,7 @@ function coachSuggestions() {
       skipped.forEach(({ name, exIdx }) => out.push({
         key: `drop:${day.name}:${name}`, tone: 'warn', ico: '−', rank: 3,
         title: `Drop ${name} from ${day.name}?`,
-        body: `It's been in the plan for your last ${recent.length} ${day.name} sessions and you haven't logged a single set of it.${
-          skipped.length > 1 ? ` (${skipped.length - 1} other lift${skipped.length > 2 ? 's are' : ' is'} in the same position — deal with them one at a time.)` : ''
-        } Removing it shortens the session; your history stays.`,
+        body: `It's been in the plan for your last ${recent.length} ${day.name} sessions and you haven't logged a single set of it. Removing it shortens the session; your history stays.`,
         label: 'Remove it', action: 'coach-drop-ex', data: { day: dayIdx, ex: exIdx, name },
         group: { id: `drop:${day.name}`, title: n2 => `${n2} lifts you never do on ${day.name}`,
           body: `None of them has a logged set in your last ${recent.length} ${day.name} sessions. Removing one shortens the session; your history stays.` },
