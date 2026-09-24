@@ -164,6 +164,7 @@ test('completing an exercise advances to the next unfinished one, wrapping round
   const lastEx = s.exercises.at(-1);
   s.focusUid = lastEx.uid;
   lastEx.sets.forEach((st, i) => { if (i < lastEx.sets.length - 1) st.done = true; });
+  lastEx.sets.at(-1).weight = lastEx.sets.at(-1).weight || lb(50);
   P.completeSet(lastEx.uid, lastEx.sets.length - 1);
   assert.equal(s.focusUid, s.exercises[0].uid, 'wrapped back to the skipped first exercise');
 });
@@ -332,6 +333,7 @@ test('a superset goes straight to the partner, and rest comes after the round', 
   P.toggleSuperset(a.uid);
   assert.equal(a.superset, 'A'); assert.equal(b.superset, 'A');
   a.sets[0].reps = a.sets[0].reps || 5; b.sets[0].reps = b.sets[0].reps || 5;
+  a.sets[0].weight = a.sets[0].weight || lb(135); b.sets[0].weight = b.sets[0].weight || lb(95);
   P.completeSet(a.uid, 0);
   assert.equal(P.App.rest, null, 'no rest between partners');
   assert.equal(P.App.activeSession.focusUid, b.uid);
@@ -358,4 +360,16 @@ test('the metric stepper moves in 1.25 kg', () => {
   ex.sets[0].weight = 100;
   P.stepSetWeight(ex.uid, 0, 1);
   assert.ok(Math.abs(ex.sets[0].weight - 101.25) < 1e-9);
+});
+
+test('completing a loaded lift at 0 asks once; a second tap means bodyweight', () => {
+  P.startWorkout(0);
+  const ex = P.App.activeSession.exercises.find(e => e.name === 'Bench Press');
+  ex.sets[0].weight = null; ex.sets[0].reps = 5;
+  P.completeSet(ex.uid, 0);
+  assert.equal(ex.sets[0].done, false, 'held back the first time');
+  assert.ok(ctx.toasts.some(t => /No weight entered/.test(t)));
+  const realNow = Date.now; Date.now = () => realNow() + 1000;
+  try { P.completeSet(ex.uid, 0); } finally { Date.now = realNow; }
+  assert.equal(ex.sets[0].done, true, 'the second tap goes through');
 });

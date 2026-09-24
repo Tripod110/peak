@@ -355,9 +355,14 @@ function renderProteinNudge() {
   const avg = sum / days;
   const gap = t.protein - avg;
   if (gap < 20) return '';
+  /* one tap per staple, straight from the nudge — the cheapest protein that isn't already on the list */
+  const list = getGrocery();
+  const picks = STAPLES.map((s, i) => ({ s, i })).filter(({ s }) => !list.some(g => !g.done && groceryMatch(g.name, s.name))).slice(0, 3);
   return `<div class="alert"><span class="a-ico">🥩</span><div class="a-body">
     <b>You've averaged ${Math.round(avg)}g protein — ${Math.round(gap)}g under target.</b>
-    Stock the cart accordingly: the staples below are the cheapest way to close that gap.</div></div>`;
+    Stock the cart accordingly: these are the cheapest way to close that gap.
+    ${picks.length ? `<div class="row mt" style="gap:6px;flex-wrap:wrap">${picks.map(({ s, i }) =>
+      `<button class="btn small" data-action="g-staple" data-view="staples" data-idx="${i}">＋ ${esc(s.name)}</button>`).join('')}</div>` : ''}</div></div>`;
 }
 
 /* Adding something already on the list bumps its quantity instead of refusing.

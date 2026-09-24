@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v46';
+const APP_VERSION = 'v47';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -954,77 +954,83 @@ function toast(msg, action) {
 }
 
 /* ---------- onboarding ---------- */
+/* Onboarding leads with training, because that's what Peak coaches. It used to
+   open on sex, age, weight and height "to calibrate your calorie targets", and
+   pre-select 5 days and a slow cut — so a 3-day lifter who tapped through got a
+   5-day plan (plateau checks weeks later) and a deficit they never chose.
+     1. how you train — days per week (nothing pre-picked), then a split that
+        fits those days, or Build my own
+     2. about you — the numbers the food targets need
+     3. your goal — maintenance by default */
 function openOnboarding(step = 1) {
   const ob = App.ob;
   const metric = ob.units === 'metric';
   const dots = [1, 2, 3].map(i => `<span class="${i <= step ? 'on' : ''}"></span>`).join('');
   if (step === 1) {
+    const days = ob.gymDays || null;
+    const fits = days ? Object.entries(TEMPLATES).filter(([, v]) => v.days.length === Math.min(days, 6)) : [];
     openModal(`
       <div class="ob-step-dots">${dots}</div>
       <h3>Welcome to Peak ⛰️</h3>
-      <div class="modal-sub">Peak watches every lift and tells you the moment one stops progressing — then deloads it and walks you back up. First, 30 seconds of setup to calibrate your calorie &amp; protein targets. Everything here stays editable in Settings.</div>
+      <div class="modal-sub">Peak coaches your training: it watches every lift, tells you when one stalls and what to do about it, and pulls your food and sleep into the same picture. Three quick questions.</div>
       <label>Units</label>
       <div class="seg" id="ob-units">
         <button data-v="imperial" class="${metric ? '' : 'on'}">lb / ft</button>
         <button data-v="metric" class="${metric ? 'on' : ''}">kg / cm</button>
       </div>
+      <label>How many days a week do you lift?</label>
+      <div class="seg" id="ob-days" role="radiogroup" aria-label="Days per week">
+        ${[2, 3, 4, 5, 6, 7].map(d => `<button data-v="${d}" role="radio" aria-checked="${days === d}" class="${days === d ? 'on' : ''}">${d}</button>`).join('')}
+      </div>
+      ${days ? `
+      <label>Pick a split</label>
+      <div class="ob-splits" role="radiogroup" aria-label="Training split">
+        ${fits.map(([k, v]) => `
+        <button class="ob-split ${ob.template === k ? 'on' : ''}" role="radio" aria-checked="${ob.template === k}" data-action="ob-split" data-v="${k}">
+          <b>${esc(v.name)}</b><span>${esc(v.days.map(d => d.name).join(' · '))}</span></button>`).join('')}
+        <button class="ob-split ${ob.template === 'custom' ? 'on' : ''}" role="radio" aria-checked="${ob.template === 'custom'}" data-action="ob-split" data-v="custom">
+          <b>Build my own</b><span>Start with ${days} empty days and add your own lifts</span></button>
+      </div>` : ''}
+      <button class="btn primary mt" data-action="ob-next" data-step="1">Continue</button>
+    `, { dismissible: false });
+  } else if (step === 2) {
+    openModal(`
+      <div class="ob-step-dots">${dots}</div>
+      <h3>About you</h3>
+      <button class="back-link" data-action="ob-back" data-step="1">‹ Back</button>
+      <div class="modal-sub">For your calorie and protein targets. Stays on this device; edit any time in Settings.</div>
       <label>Sex (for the metabolism formula)</label>
       <div class="seg" id="ob-sex">
         <button data-v="male" class="${ob.sex !== 'female' ? 'on' : ''}">Male</button>
         <button data-v="female" class="${ob.sex === 'female' ? 'on' : ''}">Female</button>
       </div>
       <div class="grid-2">
-        <div><label>Age</label><input id="ob-age" type="number" inputmode="numeric" value="${ob.age || ''}" placeholder="e.g. 27"></div>
-        <div><label>Weight (${metric ? 'kg' : 'lb'})</label><input id="ob-weight" type="number" inputmode="decimal" value="${ob.weight || ''}" placeholder="${metric ? 'e.g. 78' : 'e.g. 170'}"></div>
+        <div><label for="ob-age">Age</label><input id="ob-age" type="number" inputmode="numeric" value="${ob.age || ''}" placeholder="e.g. 27"></div>
+        <div><label for="ob-weight">Weight (${metric ? 'kg' : 'lb'})</label><input id="ob-weight" type="number" inputmode="decimal" value="${ob.weight || ''}" placeholder="${metric ? 'e.g. 78' : 'e.g. 170'}"></div>
         ${metric
-          ? `<div class="grid-2-span"><label>Height (cm)</label><input id="ob-cm" type="number" inputmode="numeric" value="${ob.cm || ''}" placeholder="e.g. 178"></div>`
-          : `<div><label>Height (ft)</label><input id="ob-ft" type="number" inputmode="numeric" value="${ob.ft || ''}" placeholder="5"></div>
-             <div><label>Height (in)</label><input id="ob-in" type="number" inputmode="numeric" value="${ob.inch ?? ''}" placeholder="10"></div>`}
-      </div>
-      <button class="btn primary mt" data-action="ob-next" data-step="1">Continue</button>
-    `, { dismissible: false });
-  } else if (step === 2) {
-    openModal(`
-      <div class="ob-step-dots">${dots}</div>
-      <h3>Goal & activity</h3>
-      <button class="back-link" data-action="ob-back" data-step="1">‹ Back</button>
-      <label>Primary goal right now</label>
-      <select id="ob-goal">
-        ${Object.entries({ cut: 'Fat loss (−20% calories, high protein)', slowcut: 'Slow cut (−10%, easier to stick to)',
-          recomp: 'Recomp (maintenance, high protein)', bulk: 'Lean bulk (+10%)' }).map(([k, v]) =>
-          `<option value="${k}" ${ob.goal === k || (!ob.goal && k === 'slowcut') ? 'selected' : ''}>${v}</option>`).join('')}
-      </select>
-      <label>Goal weight (${metric ? 'kg' : 'lb'}, optional)</label>
-      <input id="ob-goalw" type="number" inputmode="decimal" value="${ob.goalW || ''}" placeholder="leave blank to skip">
-      <label>Activity outside the gym</label>
-      <select id="ob-activity">
-        ${Object.entries(ACTIVITY_LABEL).map(([k, v]) =>
-          `<option value="${k}" ${ob.activity === k || (!ob.activity && k === 'light') ? 'selected' : ''}>${v}</option>`).join('')}
-      </select>
-      <label>Gym days per week</label>
-      <div class="seg" id="ob-days">
-        ${[3, 4, 5, 6].map(d => `<button data-v="${d}" class="${(ob.gymDays || 5) === d ? 'on' : ''}">${d}</button>`).join('')}
+          ? `<div class="grid-2-span"><label for="ob-cm">Height (cm)</label><input id="ob-cm" type="number" inputmode="numeric" value="${ob.cm || 175}"></div>`
+          : `<div><label for="ob-ft">Height (ft)</label><input id="ob-ft" type="number" inputmode="numeric" value="${ob.ft || 5}"></div>
+             <div><label for="ob-in">Height (in)</label><input id="ob-in" type="number" inputmode="numeric" value="${ob.inch ?? 9}"></div>`}
       </div>
       <button class="btn primary mt" data-action="ob-next" data-step="2">Continue</button>
     `, { dismissible: false });
   } else {
-    const days = ob.gymDays || 5;
-    ob.template = ob.template || TEMPLATE_FOR_DAYS[days];
-    const p = buildProfileFromOb();
-    const t = computeTargets(p);
     openModal(`
       <div class="ob-step-dots">${dots}</div>
-      <h3>Your plan</h3>
+      <h3>Your goal</h3>
       <button class="back-link" data-action="ob-back" data-step="2">‹ Back</button>
-      <div class="modal-sub">Based on your stats — all of it stays editable in Settings, including age, height and activity.</div>
-      <div class="grid-2">
-        <div class="card mb0 center"><div class="hero-num" style="font-size:26px">${t.kcal.toLocaleString()}</div><div class="muted small">kcal / day</div></div>
-        <div class="card mb0 center"><div class="hero-num" style="font-size:26px">${t.protein}g</div><div class="muted small">protein / day</div></div>
-      </div>
-      <label>Training split (${days} days/week)</label>
-      <select id="ob-template">
-        ${Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}" ${k === ob.template ? 'selected' : ''}>${v.name}</option>`).join('')}
-        <option value="custom" ${ob.template === 'custom' ? 'selected' : ''}>Build my own — start with ${days} empty days</option>
+      <label for="ob-goal">Right now I want to…</label>
+      <select id="ob-goal">
+        ${Object.entries({ recomp: 'Get stronger at my current weight (maintenance)', slowcut: 'Lose fat slowly (−10%)',
+          cut: 'Lose fat faster (−20%, high protein)', bulk: 'Build muscle (+10%)' }).map(([k, v]) =>
+          `<option value="${k}" ${(ob.goal || 'recomp') === k ? 'selected' : ''}>${v}</option>`).join('')}
+      </select>
+      <label for="ob-goalw">Goal weight (${metric ? 'kg' : 'lb'}, optional)</label>
+      <input id="ob-goalw" type="number" inputmode="decimal" value="${ob.goalW || ''}" placeholder="leave blank to skip">
+      <label for="ob-activity">Activity outside the gym</label>
+      <select id="ob-activity">
+        ${Object.entries(ACTIVITY_LABEL).map(([k, v]) =>
+          `<option value="${k}" ${ob.activity === k || (!ob.activity && k === 'light') ? 'selected' : ''}>${v}</option>`).join('')}
       </select>
       <button class="btn accent mt" data-action="ob-finish">Start the climb ⛰️</button>
     `, { dismissible: false });
@@ -1058,8 +1064,8 @@ function buildProfileFromOb() {
     heightCm,
     goalWeightKg: ob.goalW ? (metric ? Number(ob.goalW) : lbToKg(Number(ob.goalW))) : null,
     activity: ob.activity || 'light',
-    goal: ob.goal || 'slowcut',
-    gymDays: ob.gymDays || 5,
+    goal: ob.goal || 'recomp',
+    gymDays: ob.gymDays || 3,
     template: ob.template || 'ppl5',
     createdAt: todayKey()
   };
@@ -1454,20 +1460,23 @@ document.addEventListener('click', e => {
     case 'ob-next': {
       const step = Number(el.dataset.step);
       if (step === 1) {
-        const err = readObStep1();
-        if (err) { toast(err); return; }
+        if (!App.ob.gymDays) { toast('Pick how many days a week you lift'); return; }
+        if (!App.ob.template) { toast('Pick a split — or Build my own'); return; }
         openOnboarding(2);
       } else if (step === 2) {
-        App.ob.goal = document.getElementById('ob-goal').value;
-        App.ob.activity = document.getElementById('ob-activity').value;
-        App.ob.goalW = document.getElementById('ob-goalw').value.trim();
+        const err = readObStep1();
+        if (err) { toast(err); return; }
         openOnboarding(3);
       }
       break;
     }
     case 'ob-back': openOnboarding(Number(el.dataset.step)); break;
+    case 'ob-split': App.ob.template = el.dataset.v; openOnboarding(1); break;
     case 'ob-finish': {
-      const picked = document.getElementById('ob-template').value;
+      App.ob.goal = document.getElementById('ob-goal').value;
+      App.ob.activity = document.getElementById('ob-activity').value;
+      App.ob.goalW = document.getElementById('ob-goalw').value.trim();
+      const picked = App.ob.template || TEMPLATE_FOR_DAYS[App.ob.gymDays] || 'fb3';
       /* "Build my own": the profile still names a real split (the fallback if the
          routine is ever reset), and the routine starts as empty named days that
          open straight in the editor. */
@@ -1482,7 +1491,11 @@ document.addEventListener('click', e => {
           days: Array.from({ length: n }, (_, i) => ({ name: `Day ${i + 1}`, ex: [] })) });
         App.tab = 'train'; App.trainView = 'routine'; App.routineDay = 0; App._renderedTab = null;
       }
-      closeModal(); toast(picked === 'custom' ? 'Locked in — now add your lifts to each day' : 'Locked in. Welcome to Peak ⛰️');
+      const tg = computeTargets(getProfile());
+      closeModal();
+      toast(picked === 'custom'
+        ? `Locked in — now add your lifts to each day. Targets: ${tg.kcal.toLocaleString()} kcal · ${tg.protein} g protein`
+        : `Locked in. Targets: ${tg.kcal.toLocaleString()} kcal · ${tg.protein} g protein — edit any time in Settings`);
       App.render();
       break;
     }
@@ -1862,7 +1875,8 @@ document.addEventListener('click', e => {
   btn.classList.add('on');
   const segId = btn.parentElement.id;
   if (segId === 'ob-sex') App.ob.sex = btn.dataset.v;
-  if (segId === 'ob-days') App.ob.gymDays = Number(btn.dataset.v);
+  // a split chosen for 5 days is wrong for 3 — changing the days clears it
+  if (segId === 'ob-days') { App.ob.gymDays = Number(btn.dataset.v); App.ob.template = null; openOnboarding(1); }
   if (segId === 'ob-units') { App.ob.units = btn.dataset.v; openOnboarding(1); }
   if (segId === 'set-units') {
     // re-open so every field re-labels in the newly chosen unit

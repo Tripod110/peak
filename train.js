@@ -228,6 +228,29 @@ function plateauVolumeNote(exName) {
 
 /* Warmup sets are logged but must never count toward volume, PRs, est. 1RM,
    session score, or progression — only working sets do. */
+/* Sleep → training, in your own numbers, where you train. Sleep's drill-in has
+   the full split; Train shows one line once there's enough on both sides and
+   the gap is big enough to act on. */
+function renderSleepSplitLine() {
+  if (typeof sleepTrainingLink !== 'function') return '';
+  const l = sleepTrainingLink();
+  if (!l.ready || Math.abs(l.delta) < 5) return '';
+  const better = l.delta > 0;
+  return `
+  <div class="focus-line">
+    <span class="fc-ico" aria-hidden="true">☾</span>
+    <span class="fc-text">${better
+      ? `You score <b>${l.delta} points higher</b> after a 7h30+ night (${l.goodN} vs ${l.shortN} sessions).`
+      : `Oddly, you score ${-l.delta} points higher after short nights — keep logging and this will settle.`}</span>
+    ${better ? '<button class="btn small" data-action="quick-sleep">Log sleep</button>' : ''}
+  </div>`;
+}
+
+/* true until a week has passed since the first lifting session */
+function inFirstLiftingWeek() {
+  const first = getWorkouts().filter(s => !s.cardio).map(s => s.date).sort()[0];
+  return !!first && daysBetween(first, todayKey()) < 7;
+}
 function isWarmup(st) { return st && st.type === 'warmup'; }
 function workingSets(sets) { return (sets || []).filter(st => !isWarmup(st)); }
 
@@ -1152,6 +1175,7 @@ function renderTrainHome() {
   const mv = muscleSetsInDays(7);
   const low = MUSCLES.filter(m => mv.sets[m] < MUSCLE_LANDMARKS[m][0]).length;
   const hasLifts = all.some(s => !s.cardio);
+  const firstWeek = inFirstLiftingWeek();
 
   const quip = volumeQuip(lifeKg, weekKg);
   if (quip && quip.fresh) { setTimeout(() => { toast(quip.text); settleQuip(); }, 400); }
@@ -1161,6 +1185,7 @@ function renderTrainHome() {
   ${renderTodaysSession(tpl, day, dayIdx, nextIdx, stalledNames, plateaus)}
 
   ${typeof renderCoachTrainLine === 'function' ? renderCoachTrainLine() : ''}
+  ${renderSleepSplitLine()}
   ${renderCoachCard()}
 
   <div class="grid-2">
@@ -1175,7 +1200,7 @@ function renderTrainHome() {
     ${navRow('train-nav', 'routine', '✎', 'Edit your routine',
       `${tpl.days.length} days${isCustomRoutine() ? ' · yours' : ' · standard'}`)}
     ${navRow('train-nav', 'muscles', '💪', 'Weekly sets by muscle',
-      !hasLifts ? 'no data yet' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
+      !hasLifts ? 'no data yet' : firstWeek ? 'filling in' : mv.unclassified.length ? `${mv.unclassified.length} lift${mv.unclassified.length > 1 ? 's' : ''} to tag` : low ? `${low} below range` : 'all in range',
       !hasLifts ? '' : (mv.unclassified.length || low) ? 'warn' : 'good')}
     ${navRow('train-nav', 'moved', '🏋', 'Weight moved', weekKg > 0 ? `${fmtWt(weekKg)} ${wUnit()} this week` : 'starts with set one')}
     ${navRow('train-nav', 'records', '🏆', 'Personal records', topPr ? `${topPr.name} ${topPr.bestDisp} ${wUnit()}` : 'none yet')}
@@ -1373,7 +1398,11 @@ function renderMuscleVolumeCard(all) {
   const order = [...rows].sort((a, b) =>
     (a.state === 'under' ? -1 : 0) - (b.state === 'under' ? -1 : 0) || b.v - a.v);
 
-  const headline = under.length
+  /* One workout in, every muscle is "below effective volume" — true, and a
+     failure message on day one. Say what's happening instead. */
+  const headline = inFirstLiftingWeek()
+    ? '<span class="muted">Your first week — this fills in as you train</span>'
+    : under.length
     ? `<span style="color:var(--warning)">${under.length} muscle${under.length > 1 ? 's' : ''} below effective volume</span>`
     : over.length ? `<span style="color:var(--critical)">${over.length} above recoverable volume</span>`
     : `<span style="color:${CHART.good}">Every muscle in range</span>`;
@@ -2329,6 +2358,17 @@ function completeSet(uid, si) {
     App.setSel = { uid, si };
     App.render();
     document.querySelector('[data-set-r]')?.focus();
+    return;
+  }
+  /* A loaded lift completed at 0 is almost always a weight nobody typed. Saved
+     as-is it's invisible to plateau watch (it only tracks loaded sessions), so
+     ask once; a second tap means it really was bodyweight. */
+  if (!isWarmup(st) && !(st.weight > 0) && !st.zeroOk && exerciseHasLoad(ex.name) && !isTimedLift(ex.name)) {
+    st.zeroOk = true;
+    App.setSel = { uid, si };
+    App.render();
+    toast(`No weight entered for ${ex.name} — add it, or tap Complete again if it was bodyweight`);
+    document.querySelector('[data-set-w]')?.focus();
     return;
   }
   _lastCompleteAt = Date.now();

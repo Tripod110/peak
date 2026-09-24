@@ -24,8 +24,41 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
-## v46 — looks and access
+## v47 — onboarding leads with training
 2026-09-24 · **pending push**
+
+The new-user review's findings, adapted for an all-in-one app: nutrition is still set up in
+onboarding, it just stops coming first and stops choosing for you.
+
+- **Onboarding runs training first.** (1) Units, how many days a week you lift (**nothing
+  pre-selected**) and a split filtered to that many days, plus *Build my own*. (2) About you. (3)
+  Your goal. It used to open on sex, age, weight and height "to calibrate calorie targets", with
+  5 days and a slow cut pre-selected, so a 3-day lifter who tapped through got a 5-day plan and a
+  deficit they never picked.
+- **Maintenance is the default goal.** "Get stronger at my current weight" is the first option.
+- **Changing your days clears the chosen split.** Going back from 5 to 3 days used to keep the
+  5-day plan.
+- **Height fields hold real values** instead of placeholders that looked filled in and then
+  failed "Enter your height".
+- **Your targets show when you finish** ("2,430 kcal · 147 g protein"), rather than a screen of
+  numbers in the middle of setup.
+- **Tab order: Today · Train · Food · Sleep · Grocery.** Nothing is removed.
+- **Completing a loaded lift at 0 asks once.** An untyped weight was saved as 0 lb and was invisible
+  to plateau watch. A second tap confirms it really was bodyweight.
+- **No failure message on day one.** In your first week the muscle-volume row says it's filling in,
+  instead of "10 muscles below effective volume".
+- **Grocery's protein nudge has buttons.** When protein has been short, the nudge offers the
+  cheapest three staples that aren't already on your list, one tap each.
+- **Train shows your sleep split** once there's enough data: "You score 9 points higher after a
+  7h30+ night (6 vs 5 sessions)".
+
+Tests: 1 new, 2 updated for the 0 lb check; 128 pass. The whole onboarding flow was clicked through
+in the browser from a wiped state.
+
+---
+
+## v46 — looks and access
+2026-09-24 · **live** (pushed as `f3ab0d1`)
 
 The mobile and accessibility review's findings.
 
@@ -57,7 +90,7 @@ fallback timing and VoiceOver/TalkBack. Both are on the SHIPPING.md device pass.
 ---
 
 ## v45 — the gym floor
-2026-09-24 · **pending push**
+2026-09-24 · **live** (pushed as `f3ab0d1`)
 
 The in-gym friction the lifter and mobile reviews found.
 

@@ -1159,3 +1159,10 @@ body:not(.in-workout) #toast-root { bottom: calc(var(--tabbar-h) + env(safe-area
 #fab-root { right: calc(16px + env(safe-area-inset-right)); }
 .sub-title:focus { outline: none; }
 .sub-title:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+
+/* ---------- onboarding (v47) ---------- */
+.ob-splits { display: grid; gap: 8px; margin-top: 6px; }
+.ob-split { text-align: left; padding: 10px 12px; min-height: 44px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-2); font-size: 13px; }
+.ob-split b { display: block; color: var(--ink); font-size: 14px; }
+.ob-split span { display: block; color: var(--muted); margin-top: 2px; }
+.ob-split.on { border-color: var(--blue); }
