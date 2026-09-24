@@ -24,8 +24,33 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
-## v49 — one number, one place
+## v50 — the coach says less
 2026-09-24 · **pending push**
+
+Stage 2 of the UI pass ([UI-PASS.md](UI-PASS.md)). Train's suggestions read as a list, and no
+screen says the same sentence twice.
+
+- **Suggestions group.** A day with four lifts you never do used to surface them one card at a
+  time, each telling you to deal with the others later. Now suggestions of the same kind share
+  one card: a heading ("8 lifts you never do"), one line on what Peak saw, then a row per lift
+  with its own Remove / No thanks. Rows name their day when a card spans more than one. The
+  two-card cap counts cards, not suggestions. Screen readers hear the lift in each button.
+- **Shorter copy.** Every Train suggestion body is what was seen, then what acting does, in 140
+  characters or fewer; the "one at a time" clause is gone. Coach messages on Today got the same
+  ceiling: three that ran to 168–203 characters with long lift names were rewritten.
+- **A test keeps it honest.** `tests/copy.test.mjs` renders Today (with the weekly check-in and
+  with the coach line) and Train's coach card, and fails on any sentence over 20 characters that
+  appears twice. It caught one on its first run: per-day grouping had left two cards ending in
+  the same sentence. The harness gains `makeAppContext()`, which loads app.js without booting
+  it, so tests can read a real screen's markup.
+
+142 tests pass; all five tabs swept for repeated sentences in the browser, grouped card checked
+at 390 and 320px with its actions clicked through.
+
+---
+
+## v49 — one number, one place
+2026-09-24 · `4f4115d` · **pending push**
 
 Stage 1 of the UI pass ([UI-PASS.md](UI-PASS.md)). Nothing new: Today, Food and Sleep each
 print any given number once, so the eye never has to decide which copy matters.
