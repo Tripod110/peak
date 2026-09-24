@@ -264,3 +264,17 @@ test('an AI rewording is only accepted if every number and lift in it came from 
   assert.equal(P.coachAiGuard({ headline: 'Nice week', body: 'Your leg press is flying.' }, P.weeklyCheckin().facts), false, 'a lift the facts never mentioned');
   assert.equal(P.coachAiGuard({ headline: 'x', body: 'y'.repeat(600) }, f), false, 'too long');
 });
+
+test('every coach message is at most two sentences — one observed, one to do', () => {
+  const sentences = b => b.split(/(?<=[.!?])\s+/).filter(x => x.trim()).length;
+  const base = { sessions: 5, watchNeed: 2, prs: 3, names: 'Squat and Bench Press', progN: 2, flatN: 2, judgedN: 4,
+    adherencePct: 90, daysSince: 9, nextDay: 'Full Body A', recentPerWeek: 1, planned: 3,
+    scoreDrop: 9, sleepText: '6h10', proteinHit: 2, proteinLogged: 6 };
+  const variants = [{}, { lowSleep: true }, { lowProtein: true }, { lowSleep: true, lowProtein: true }, { watchNeed: 0, progN: 0, daysSince: 3 }];
+  for (const [state, voices] of Object.entries(P.COACH_COPY))
+    for (const [voice, list] of Object.entries(voices))
+      list.forEach((fn, i) => variants.forEach(v => {
+        const { b } = fn({ ...base, ...v });
+        assert.ok(sentences(b) <= 2, `${state}/${voice}[${i}] ${JSON.stringify(v)}: "${b}"`);
+      }));
+});

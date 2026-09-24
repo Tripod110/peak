@@ -77,7 +77,7 @@ export function makeContext() {
       coachSignals, coachState, coachInsight, coachFacts, sessionDebrief, debriefLift, snoozeCoach, getCoachMemory,
       liftGoal, setLiftGoal, liftOutlook, theilSen, COACH_VOICE_IDS, addFoodEntry, setSleepEntry,
       coachDeloadActive, startDeloadWeek, switchPlan, applyCoachSwitch, startShortSession, activeRoutine, renderCoachLine,
-      weekKeyOf, checkinDue, weeklyCheckin, dismissCheckin, coachAiGuard,
+      weekKeyOf, checkinDue, COACH_COPY, weeklyCheckin, dismissCheckin, coachAiGuard,
       customExercise, saveCustomExercise, renameExerciseEverywhere, perHandLift, isTimedLift, defaultTargetFor, pickerCandidates, musclesFor,
       getRoutineLibrary, createRoutine, switchRoutine, deleteLibraryRoutine, sessionAsDay, saveSessionAsDay, getActivities, rememberActivity,
       fixLastReps, setLastEffort, routineWeeklyMuscleSets, MUSCLES, setSetType,

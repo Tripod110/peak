@@ -78,7 +78,7 @@ decide which copy matters.
 - [x] Sleep appears as the check-in's 7-day average and the tile's last night. Both are useful
       and neither says which it is — label them ("7-day avg" / "last night"), and delete
       `sleep score NN` from the Explore card's `chart-note`.
-- [ ] The check-in body is a paragraph that says consistency twice ("Consistency is the whole
+- [x] The check-in body is a paragraph that says consistency twice ("Consistency is the whole
       job right now… Consistency outranks intensity"). Cap it at two sentences: one thing
       observed, one thing to do. The "This week's focus:" sentence repeats `weeklyWeakLink`,
       which Explore already shows — keep one.
