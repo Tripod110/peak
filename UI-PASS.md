@@ -256,8 +256,13 @@ ate.
 - [x] ~~Entries grouped by part of day (morning / afternoon / evening) with a running total, rather
       than one flat list.~~ *Dropped at sign-off (2026-09-24): the human chose to keep one flat
       list.*
-- [ ] Logging affordances stop being a grab-bag: scan is primary, manual entry and repeat-a-day
+- [x] Logging affordances stop being a grab-bag: scan is primary, manual entry and repeat-a-day
       are secondary, frequents and grocery chips appear only when they have content.
+      *Scan a meal is the hero's one big button in every state; Enter manually and Repeat a day
+      sit under it as a small two-button row (new `secondary` option on `heroCard`). The "Log
+      something else" card is gone; a "Quick add" card after the day's list holds the chips and
+      renders only when there are some. Clicked through: both secondary buttons open their
+      sheets, a chip logs its food, Repeat is disabled with no history.*
 - [ ] Everything that worked still works: scan → review → log, manual entry, edit an entry's
       amounts and time, delete with undo, repeat a day, past days, macro drill-in, trends.
 

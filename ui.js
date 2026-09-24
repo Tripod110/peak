@@ -78,7 +78,8 @@ function navRow(action, view, icoHtml, label, value, tone) {
 
    o = { id, state:'live'|'done'|'', eyebrow, eyebrowHtml, eyebrowIcon, eyebrowTone:'good'|'live',
          title, meta, metaHtml, bodyHtml,
-         actions:[{label, icon, action, data:{}, cls, disabled}] } */
+         actions:[{label, icon, action, data:{}, cls, disabled}],
+         secondary:[same shape] — small ghost buttons in one row under the actions } */
 function heroCard(o) {
   const dot = o.eyebrowTone === 'live' ? '<span class="live-dot" aria-hidden="true"></span> ' : '';
   /* eyebrowHtml replaces the eyebrow line outright, for a hero whose top row is
@@ -93,12 +94,13 @@ function heroCard(o) {
     ${o.metaHtml || ''}
     ${o.bodyHtml || ''}
     ${(o.actions || []).map(a => heroAction(a)).join('')}
+    ${o.secondary && o.secondary.length ? `<div class="grid-2 hero-secondary">${o.secondary.map(a => heroAction({ ...a, cls: `small ghost ${a.cls || ''}`, flush: true })).join('')}</div>` : ''}
   </section>`;
 }
 function heroAction(a) {
   const data = Object.entries(a.data || {}).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
   return `
-    <button class="btn ${a.cls || ''} mt" data-action="${a.action}"${data}${a.disabled ? ' disabled' : ''}>${a.icon ? icon(a.icon) + ' ' : ''}${esc(a.label)}</button>`;
+    <button class="btn ${a.cls || ''}${a.flush ? '' : ' mt'}" data-action="${a.action}"${data}${a.disabled ? ' disabled' : ''}>${a.icon ? icon(a.icon) + ' ' : ''}${esc(a.label)}</button>`;
 }
 
 /* [{v, l}] — the number and what it counts. */

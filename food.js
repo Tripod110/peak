@@ -33,6 +33,8 @@ function renderFoodHome() {
   const score = nutritionScore(key);
   const isToday = key === todayKey();
   const proteinPct = t.protein ? Math.min(100, Math.round(totals.protein / t.protein * 100)) : 0;
+  // one-tap usuals: the card exists only when there is something in it
+  const quickAdd = frequentChips() + groceryFoodChips();
 
   return `
   ${renderFoodHero(key, t, totals, items, isToday)}
@@ -59,16 +61,6 @@ function renderFoodHome() {
   ])}
 
   <div class="card">
-    <h2>Log something else</h2>
-    <div class="grid-2">
-      <button class="btn" data-action="open-manual-food">${icon('plus')} Manual entry</button>
-      <button class="btn" data-action="repeat-last" ${lastLoggedDay() ? '' : 'disabled'}>${icon('refresh')} Repeat a day</button>
-    </div>
-    ${frequentChips()}
-    ${groceryFoodChips()}
-  </div>
-
-  <div class="card">
     <h2>${isToday ? "Today's food" : 'Logged'}
       <span class="h2-right">${items.length ? `${items.length} item${items.length === 1 ? '' : 's'}` : ''}</span></h2>
     ${items.length === 0
@@ -84,6 +76,11 @@ function renderFoodHome() {
       </div>`).join('')}
     ${items.length ? '<div class="chart-note">Tap any entry to edit its amounts or time.</div>' : ''}
   </div>
+
+  ${quickAdd ? `<div class="card">
+    <h2>Quick add</h2>
+    ${quickAdd}
+  </div>` : ''}
 
   <div class="card">
     <h2>Explore</h2>
@@ -132,10 +129,8 @@ function renderFoodHero(key, t, totals, items, isToday) {
       meta: items.length
         ? (proteinLeft > 0 ? `Protein finished ${proteinLeft}g short.` : 'Protein target hit.')
         : `If you remember what you ate on ${prettyDate(key)}, add it — trends read better without gaps.`,
-      actions: [
-        { label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' },
-        ...(items.length ? [] : [{ label: 'Add manually', icon: 'plus', action: 'open-manual-food', cls: 'ghost' }])
-      ]
+      actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }],
+      secondary: foodHeroSecondary(),
     });
   }
 
@@ -144,10 +139,8 @@ function renderFoodHero(key, t, totals, items, isToday) {
       id: 'food-hero', eyebrowHtml: nav,
       title: `${t.kcal.toLocaleString()} kcal to spend`,
       meta: `${t.protein}g protein today · ${GOAL_LABEL[getProfile().goal]}`,
-      actions: [
-        { label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' },
-        { label: 'Add manually', icon: 'plus', action: 'open-manual-food', cls: 'ghost' }
-      ]
+      actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }],
+      secondary: foodHeroSecondary(),
     });
   }
 
@@ -158,8 +151,16 @@ function renderFoodHero(key, t, totals, items, isToday) {
     meta: proteinLeft > 0
       ? `${proteinLeft}g protein still to go — the number that decides whether the training sticks.`
       : 'Protein target hit. That is the one that matters.',
-    actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }]
+    actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }],
+    secondary: foodHeroSecondary()
   });
+}
+/* Scan is the one big way in; typing it and repeating a day sit under it, small. */
+function foodHeroSecondary() {
+  return [
+    { label: 'Enter manually', icon: 'plus', action: 'open-manual-food' },
+    { label: 'Repeat a day', icon: 'refresh', action: 'repeat-last', disabled: !lastLoggedDay() }
+  ];
 }
 
 /* The ring and the four bars, one tap from home. */
