@@ -24,6 +24,38 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v46 — looks and access
+2026-09-24 · **pending push**
+
+The mobile and accessibility review's findings.
+
+- **Button text passes 4.5:1 in every theme** (measured in the browser; it used to be 1.9–3.9).
+  The dark theme keeps white text on slightly deeper fills, and pink, ocean and forest use dark ink
+  on their bright accents. New tokens: `--fill-blue`, `--fill-orange`, `--on-accent`. Chart
+  colours are unchanged.
+- **The Light theme finally has light bars.** The header and tab bar were hard-coded black
+  (`--bar-bg` per theme). Light's warning and good text also go from 1.8:1 and 3.4:1 to 5.9:1
+  and 5.5:1.
+- **Scan review inputs are 16px,** so iOS no longer zooms in when you edit macros.
+- **44px tap targets** for segmented buttons, picker filters, routine day headers, theme swatches,
+  onboarding Back and the grocery steppers.
+- **Landscape on notched phones:** the header, content, tab bar, dock and + button respect the
+  left/right safe areas.
+- **Focus follows drill-ins.** Opening any of the eleven subviews focuses its heading, and Back
+  returns focus to the row that opened it. Before, focus fell to the page on every change.
+- **Toasts are spoken** through the live region, including the Undo ones.
+- **The service worker can't half-install.** A failed download now fails the install and keeps the
+  previous full cache. Before, a partial install deleted the good cache and the app stopped
+  opening offline. Page loads also fall back to the cached shell after 2.5s on a weak connection,
+  instead of hanging.
+- Gym-mode tabs are dimmed less (0.6 opacity instead of 0.35), so their labels stay readable.
+
+Checked in the browser at 375×812: contrast measured in all five themes, the Light bars, and focus
+in and out of a drill-in. 127 tests pass. *Still unverifiable without hardware: the offline
+fallback timing and VoiceOver/TalkBack. Both are on the SHIPPING.md device pass.*
+
+---
+
 ## v45 — the gym floor
 2026-09-24 · **pending push**
 

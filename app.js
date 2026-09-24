@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v45';
+const APP_VERSION = 'v46';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -165,10 +165,34 @@ const App = {
     if (focusSel && (!document.activeElement || document.activeElement === document.body)) {
       view.querySelector(focusSel)?.focus({ preventScroll: true });
     }
+    moveFocusForView();
     paintRest();
     afterWorkoutRender();
   }
 };
+
+/* A drill-in replaces the whole page, and the button you pressed goes with it —
+   so focus fell to <body> and a screen reader lost its place on every one of
+   the eleven subviews. Opening one focuses its heading; Back returns focus to
+   the row that opened it. */
+let _lastViewKey = null;
+function currentSubview() {
+  return { today: App.todayView, train: App.trainView, food: App.foodView, sleep: App.sleepView, grocery: App.grocView }[App.tab] || 'home';
+}
+function moveFocusForView() {
+  const sub = currentSubview();
+  const key = App.tab + ':' + sub;
+  const prev = _lastViewKey;
+  _lastViewKey = key;
+  if (!prev || prev === key) return;
+  const [prevTab, prevSub] = prev.split(':');
+  if (sub !== 'home') {
+    const h = document.querySelector('#view .sub-title');
+    if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+  } else if (prevTab === App.tab && prevSub && prevSub !== 'home') {
+    document.querySelector(`#view [data-view="${CSS.escape(prevSub)}"]`)?.focus({ preventScroll: true });
+  }
+}
 
 /* Scroll or move focus to what a workout action just opened. Runs after the
    dock has painted so --dock-h is current when the browser scrolls. */
@@ -924,6 +948,8 @@ function toast(msg, action) {
     el.appendChild(b);
   }
   root.appendChild(el);
+  // a toast is visual-only unless it's also spoken; an action toast says how to reach it
+  announce(action ? `${msg}. ${action.label} is available.` : msg);
   setTimeout(() => el.remove(), action ? 6000 : 2600);
 }
 

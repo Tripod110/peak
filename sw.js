@@ -12,12 +12,12 @@
    The previous build was network-first for everything, which fixed stale updates
    at the cost of a network timeout on every single launch offline or on 1 bar.
 */
-const CACHE = 'peak-v45';
+const CACHE = 'peak-v46';
 const SHELL = [
   './', 'index.html',
-  'style.css?v=45',
-  'store.js?v=45', 'ui.js?v=45', 'charts.js?v=45', 'quips.js?v=45', 'api.js?v=45',
-  'food.js?v=45', 'train.js?v=45', 'routines.js?v=45', 'sleep.js?v=45', 'grocery.js?v=45', 'custom.js?v=45', 'coach.js?v=45', 'app.js?v=45',
+  'style.css?v=46',
+  'store.js?v=46', 'ui.js?v=46', 'charts.js?v=46', 'quips.js?v=46', 'api.js?v=46',
+  'food.js?v=46', 'train.js?v=46', 'routines.js?v=46', 'sleep.js?v=46', 'grocery.js?v=46', 'custom.js?v=46', 'coach.js?v=46', 'app.js?v=46',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 
@@ -25,14 +25,20 @@ self.addEventListener('install', e => {
   // cache:'reload' bypasses the browser's HTTP cache so the SW stores genuinely
   // fresh copies — otherwise a stale HTTP-cached file gets re-saved under the new
   // cache name and updates never actually land.
+  /* All or nothing. Swallowing a failed download let an install "succeed" with
+     half the shell, and activate() then deleted the previous — complete — cache,
+     so the app stopped opening offline. A failed install keeps the old worker
+     and its full cache, and the browser simply tries again next launch. */
   e.waitUntil(
     caches.open(CACHE)
       .then(c => Promise.all(SHELL.map(u =>
-        fetch(new Request(u, { cache: 'reload' }))
-          .then(res => { if (res.ok) return c.put(u, res); })
-          .catch(() => {})
+        fetch(new Request(u, { cache: 'reload' })).then(res => {
+          if (!res.ok) throw new Error(`precache ${u}: ${res.status}`);
+          return c.put(u, res);
+        })
       )))
       .then(() => self.skipWaiting())
+      .catch(err => caches.delete(CACHE).then(() => { throw err; }))
   );
 });
 
@@ -64,13 +70,24 @@ self.addEventListener('fetch', e => {
   const isNav = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
 
   if (isNav) {
-    // network-first: the entry point must never be stale
-    e.respondWith(
-      fetch(new Request(req, { cache: 'reload' }))
-        .then(res => putIfOk(req, res))
-        .catch(() => caches.match(req, { ignoreSearch: true })
-          .then(hit => hit || caches.match('index.html', { ignoreSearch: true })))
-    );
+    /* network-first, but not network-forever: on one bar of gym wifi a fetch
+       can hang for a minute. After 2.5s serve the cached shell; the network
+       copy still lands in the cache for next time when it does arrive. */
+    const cached = () => caches.match(req, { ignoreSearch: true })
+      .then(hit => hit || caches.match('index.html', { ignoreSearch: true }));
+    const network = fetch(new Request(req, { cache: 'reload' })).then(res => putIfOk(req, res));
+    e.respondWith(new Promise(resolve => {
+      let done = false;
+      const finish = r => { if (r && !done) { done = true; resolve(r); } };
+      // network answer wins if it comes; offline falls straight to the cache
+      network.then(finish, () => cached().then(finish));
+      // slow network: the cached shell after 2.5s
+      setTimeout(() => cached().then(finish), 2500);
+      // nothing anywhere: let the browser show its offline page
+      Promise.allSettled([network]).then(() => setTimeout(() => {
+        if (!done) cached().then(r => { done = true; resolve(r || Response.error()); });
+      }, 2600));
+    }));
     return;
   }
 

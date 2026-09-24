@@ -1122,3 +1122,40 @@ body.kbd-open #fab-root { display: none; }
 body:not(.in-workout) .view { padding-bottom: calc(96px + var(--dock-h, 0px)); }
 body:not(.in-workout) #toast-root { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 84px); }
 .ss-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--border); vertical-align: 1px; }
+
+/* ---------- looks & access (v46) ----------
+   Button text on accent fills passes 4.5:1 in every theme. Measured, not
+   guessed: white on the dark theme's own blue/orange was 3.6/3.9, and 1.9–2.7 on
+   pink, ocean and forest. The dark theme keeps white text on slightly deeper
+   fills (chart colours are untouched); the three bright themes use dark ink. */
+:root {
+  --fill-blue: #3275c7; --fill-orange: #c35022; --on-accent: #ffffff;
+  --bar-bg: rgba(13, 13, 13, 0.93);
+}
+:root[data-theme="pink"]   { --fill-blue: var(--blue); --fill-orange: var(--orange); --on-accent: #16090f; --bar-bg: rgba(23, 12, 18, 0.93); }
+:root[data-theme="ocean"]  { --fill-blue: var(--blue); --fill-orange: var(--orange); --on-accent: #06141a; --bar-bg: rgba(7, 18, 22, 0.93); }
+:root[data-theme="forest"] { --fill-blue: var(--blue); --fill-orange: var(--orange); --on-accent: #0b140b; --bar-bg: rgba(12, 19, 13, 0.93); }
+/* light: its accents already pass with white; its bars were hard-coded black,
+   and its warning/good text was 1.8 and 3.4 on white */
+:root[data-theme="light"]  { --fill-blue: var(--blue); --fill-orange: var(--orange); --on-accent: #ffffff; --bar-bg: rgba(245, 244, 240, 0.93);
+  --warning: #8a5a00; --good: #1a7a1a; }
+
+.topbar, .tabbar { background: var(--bar-bg); }
+.btn.primary, .seg button.on, .pk-g.on, .mus-grid button.on, .fab { background: var(--fill-blue); color: var(--on-accent); }
+.btn.accent { background: var(--fill-orange); color: var(--on-accent); }
+.tabbar.gym-mode .tab:not([data-tab="train"]):not([data-tab="today"]) { opacity: 0.6; }
+
+/* iOS zooms any focused input under 16px */
+.si-macros input { font-size: 16px; }
+
+/* 44px targets everywhere a thumb goes */
+.seg button, .pk-g, .day-head, .theme-swatch, .back-link { min-height: 44px; }
+.g-step { min-width: 44px; min-height: 44px; }
+
+/* landscape on notched phones: nothing under the notch */
+.topbar { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.view { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.tabbar, #rest-root { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+#fab-root { right: calc(16px + env(safe-area-inset-right)); }
+.sub-title:focus { outline: none; }
+.sub-title:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
