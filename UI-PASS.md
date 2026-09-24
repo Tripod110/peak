@@ -90,7 +90,7 @@ decide which copy matters.
 
 **Food** — `food.js:renderFoodHome`, `renderFoodHero`
 
-- [ ] The hero's `heroStats` (protein / items / score) and the tile strip (protein / calories /
+- [x] The hero's `heroStats` (protein / items / score) and the tile strip (protein / calories /
       score) are the same three numbers twice, 40px apart. Keep the tile strip; the hero keeps
       its headline ("590 kcal left") and its protein sentence, and loses the stat row — or keeps
       only `items`, which the tiles don't carry.

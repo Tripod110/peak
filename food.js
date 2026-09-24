@@ -35,7 +35,7 @@ function renderFoodHome() {
   const proteinPct = t.protein ? Math.min(100, Math.round(totals.protein / t.protein * 100)) : 0;
 
   return `
-  ${renderFoodHero(key, t, totals, items, score, isToday)}
+  ${renderFoodHero(key, t, totals, items, isToday)}
 
   ${tileStrip([
     tile({
@@ -104,7 +104,7 @@ function kcalLeftLabel(eaten, target) {
 /* The day you are looking at, what is left in it, and the fastest way to add
    to it. The ring and the four macro bars moved to the Macros drill-in: on the
    screen you open five times a day, one number matters and it is protein. */
-function renderFoodHero(key, t, totals, items, score, isToday) {
+function renderFoodHero(key, t, totals, items, isToday) {
   const left = Math.round(t.kcal - totals.kcal);
   const proteinLeft = Math.round(Math.max(0, t.protein - totals.protein));
   const nav = `
@@ -134,11 +134,6 @@ function renderFoodHero(key, t, totals, items, score, isToday) {
     meta: proteinLeft > 0
       ? `${proteinLeft}g protein still to go — the number that decides whether the training sticks.`
       : 'Protein target hit. That is the one that matters.',
-    bodyHtml: heroStats([
-      { v: `${Math.round(totals.protein)}/${t.protein}`, l: 'protein' },
-      { v: items.length, l: items.length === 1 ? 'item' : 'items' },
-      score != null ? { v: score, l: 'score' } : null
-    ]),
     actions: [{ label: 'Scan a meal', icon: 'camera', action: 'open-scan', cls: 'accent big' }]
   });
 }
