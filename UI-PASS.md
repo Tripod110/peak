@@ -275,6 +275,10 @@ ate.
 
 Stage done when: the Food tab answers "what have I eaten, and what's left?" above the fold, and
 nothing was lost.
+*Checked 2026-09-24: at 390×844, "what's left" (y=142) and the first eaten entry (ends y=586)
+sit above the fold (≈782); every Food flow still works (11/11). **Known gap:** on a 320×568
+screen the hero and tiles fill the fold and the list heading lands at y=515, just under it —
+closing that means a shorter hero on very short screens, left for a follow-up.*
 
 ---
 

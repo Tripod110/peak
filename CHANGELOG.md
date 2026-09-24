@@ -24,8 +24,34 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
-## v51 — one visual system
+## v52 — Food, rebuilt
 2026-09-24 · **pending push**
+
+Stage 4 of the UI pass ([UI-PASS.md](UI-PASS.md)), the last. The Food tab answers "what have I
+eaten, and what's left?" before you scroll, and everything it did before still works.
+
+- **One way in, two under it.** *Scan a meal* is the hero's only big button; *Enter manually*
+  and *Repeat a day* sit beneath it as a small row. The "Log something else" card is gone.
+- **The order is the question.** Hero (what's left) → tiles (how it stacks up) → the day's food
+  (what you ate) → Quick add → Explore. Frequent-food and grocery chips moved into a Quick add
+  card under the list, which only appears when there are chips.
+- **Past days read in the past tense.** A finished day said "1,090 kcal left" and "protein still
+  to go"; it now says "1,090 kcal under" and "Protein finished 24g short." An unlogged past day
+  says "Nothing logged" and invites a backfill instead of offering 2,740 kcal "to spend".
+- **Kept as one list.** Grouping entries by morning/afternoon/evening was planned and dropped at
+  sign-off.
+- **Fixed:** tile labels broke mid-word ("PROTEI/N") on phones narrower than 378px since v49;
+  the decorative icon drops out there instead.
+
+Every Food flow walked in the browser and checked against stored data: scan → review → edit →
+log, manual entry, editing amounts and time, delete with undo, quick add, past days, repeat a
+day, macros, trends, the score sheet. Known gap: on a 320×568 screen the list starts just
+below the fold.
+
+---
+
+## v51 — one visual system
+2026-09-24 · `35e82be` · **pending push**
 
 Stage 3 of the UI pass ([UI-PASS.md](UI-PASS.md)). No content moved; the five tabs now look
 like one app.
