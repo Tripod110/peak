@@ -307,3 +307,5 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · (docs) · stage 4: Food target layout sketched; paused for sign-off before code
 - 2026-09-24 · (docs) · stage 4: sketch signed off — flat list kept (grouping box struck), quick-add below the list
 - 2026-09-24 · d171e6b · stage 4: day nav + headline — past days get past-tense headlines
+- 2026-09-24 · 991eeff · fix: tile labels broke mid-word under 378px (Stage 1 regression); icon drops instead
+- 2026-09-24 · c238b76 · stage 4: logging affordances — scan primary, manual/repeat secondary, Quick add only with chips
