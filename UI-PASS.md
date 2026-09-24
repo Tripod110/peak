@@ -203,3 +203,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · a0f1841 · stage 1: done-sweep — kcal target, Food header totals, Macros protein de-duplicated
 - 2026-09-24 · 4f4115d · v49: stage 1 released (version bump + CHANGELOG); stage 2 next
 - 2026-09-24 · c218cee · stage 2: coach suggestions grouped by kind + day, row per lift; test added
+- 2026-09-24 · ab39cda · stage 2: 'one at a time' clause deleted from drop suggestions
