@@ -476,27 +476,32 @@ function coachSuggestions() {
         key: `add:${day.name}:${name}`, tone: 'good', ico: '＋', rank: 1,
         title: `Add ${name} to ${day.name}?`,
         body: `You've added it yourself in ${n} of your last ${recent.length} ${day.name} sessions. Peak can put it in the routine so it's pre-filled next time.`,
-        label: 'Add it', action: 'coach-add-ex', data: { day: dayIdx, name }
+        label: 'Add it', action: 'coach-add-ex', data: { day: dayIdx, name },
+        group: { id: `add:${day.name}`, title: n2 => `${n2} lifts you keep adding to ${day.name}`,
+          body: `Each one shows up in at least ${COACH_MIN_SESSIONS} of your last ${recent.length} ${day.name} sessions. Adding them pre-fills them next time.` },
+        row: `${name} · ${n} of ${recent.length}`
       });
     });
 
     /* 2. a planned lift you never actually do is costing you a scroll.
-       One at a time: a day you consistently cut short produces a suggestion per
-       missing lift, and five cards saying the same thing is nagging, not help. */
+       One suggestion per lift, grouped by renderCoachCard into a single card per
+       day — five cards saying the same thing is nagging, not help. */
     const skipped = day.ex
       .map(([name], exIdx) => ({ name, exIdx }))
       .filter(({ name }) => !recent.some(s =>
         (s.exercises || []).some(ex => ex.name.toLowerCase() === name.toLowerCase())));
     if (skipped.length && skipped.length < day.ex.length) {
-      const { name, exIdx } = skipped[0];
-      out.push({
+      skipped.forEach(({ name, exIdx }) => out.push({
         key: `drop:${day.name}:${name}`, tone: 'warn', ico: '−', rank: 3,
         title: `Drop ${name} from ${day.name}?`,
         body: `It's been in the plan for your last ${recent.length} ${day.name} sessions and you haven't logged a single set of it.${
           skipped.length > 1 ? ` (${skipped.length - 1} other lift${skipped.length > 2 ? 's are' : ' is'} in the same position — deal with them one at a time.)` : ''
         } Removing it shortens the session; your history stays.`,
-        label: 'Remove it', action: 'coach-drop-ex', data: { day: dayIdx, ex: exIdx, name }
-      });
+        label: 'Remove it', action: 'coach-drop-ex', data: { day: dayIdx, ex: exIdx, name },
+        group: { id: `drop:${day.name}`, title: n2 => `${n2} lifts you never do on ${day.name}`,
+          body: `None of them has a logged set in your last ${recent.length} ${day.name} sessions. Removing one shortens the session; your history stays.` },
+        row: name
+      }));
     }
 
     /* 3. the prescription disagrees with what you consistently do */
@@ -514,7 +519,10 @@ function coachSuggestions() {
         title: `${name}: plan says ${tgt.sets} sets, you do ${counts[0]}`,
         body: `Every one of your last ${counts.length} ${day.name} sessions logged exactly ${counts[0]} working sets. Matching the plan to that makes the pre-fill right and your "sets left" count honest.`,
         label: `Make it ${counts[0]}×${tgt.reps}`, action: 'coach-set-target',
-        data: { day: dayIdx, ex: exIdx, target: `${counts[0]}×${tgt.reps}` }
+        data: { day: dayIdx, ex: exIdx, target: `${counts[0]}×${tgt.reps}` },
+        group: { id: `sets:${day.name}`, title: n2 => `${n2} lifts on ${day.name} where the plan's set count is off`,
+          body: `Your last ${recent.length} ${day.name} sessions agree with each other, not with the plan. Matching them makes the pre-fill right.` },
+        row: `${name} · plan ${tgt.sets}, you do ${counts[0]}`
       });
     });
   });
@@ -578,29 +586,63 @@ function routineWeeklyMuscleSets() {
   return sets;
 }
 
-/* The Train home card. Capped at two, because a wall of advice is the same as
-   no advice — and every one of them is one tap from being gone for good. */
+/* Suggestions that share a kind and a day fold into one card: a heading, one
+   line on what was seen, then a row per lift with its own action. Singletons
+   keep the full title-and-body form. */
+function groupCoachSuggestions(list) {
+  const groups = new Map();
+  list.forEach(s => {
+    const id = s.group ? s.group.id : s.key;
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(s);
+  });
+  return [...groups.values()];
+}
+
+/* The Train home card. Capped at two cards, because a wall of advice is the
+   same as no advice — and every one of them is one tap from being gone for good. */
 function renderCoachCard() {
   const all = coachSuggestions();
   if (!all.length) return '';
-  const show = all.slice(0, 2);
-  return `
-  <div class="card">
-    <h2>Peak noticed <span class="h2-right">${all.length > 2 ? `${all.length} suggestions` : 'from your logged sessions'}</span></h2>
-    ${show.map(s => `
+  const cards = groupCoachSuggestions(all);
+  const show = cards.slice(0, 2);
+  const hidden = cards.slice(2).reduce((n, g) => n + g.length, 0);
+  const actions = s => `
+            <button class="btn small primary" data-action="${s.action}" data-key="${esc(s.key)}"
+              data-d='${esc(JSON.stringify(s.data))}'>${esc(s.label)}</button>
+            <button class="btn small ghost" data-action="coach-dismiss" data-key="${esc(s.key)}">No thanks</button>`;
+  const one = s => `
       <div class="coach ${s.tone}">
         <span class="a-ico">${s.ico}</span>
         <div class="a-body">
           <b>${esc(s.title)}</b>
           ${esc(s.body)}
-          <div class="row" style="margin-top:8px;gap:8px">
-            <button class="btn small primary" data-action="${s.action}" data-key="${esc(s.key)}"
-              data-d='${esc(JSON.stringify(s.data))}'>${esc(s.label)}</button>
-            <button class="btn small ghost" data-action="coach-dismiss" data-key="${esc(s.key)}">No thanks</button>
+          <div class="row" style="margin-top:8px;gap:8px">${actions(s)}
           </div>
         </div>
-      </div>`).join('')}
-    ${all.length > 2 ? `<div class="chart-note">${all.length - 2} more will appear as you clear these.</div>` : ''}
+      </div>`;
+  const many = g => `
+      <div class="coach ${g[0].tone}">
+        <span class="a-ico">${g[0].ico}</span>
+        <div class="a-body">
+          <b>${esc(g[0].group.title(g.length))}</b>
+          ${esc(g[0].group.body)}
+          <ul class="coach-rows">
+            ${g.map(s => `<li><span class="cr-n">${esc(s.row)}</span>
+              <span class="cr-a">
+                <button class="btn small primary" data-action="${s.action}" data-key="${esc(s.key)}"
+                  data-d='${esc(JSON.stringify(s.data))}' aria-label="${esc(`${s.label}: ${s.data.name || s.row}`)}">${esc(s.label)}</button>
+                <button class="btn small ghost" data-action="coach-dismiss" data-key="${esc(s.key)}"
+                  aria-label="${esc(`No thanks: ${s.data.name || s.row}`)}">No thanks</button>
+              </span></li>`).join('')}
+          </ul>
+        </div>
+      </div>`;
+  return `
+  <div class="card">
+    <h2>Peak noticed <span class="h2-right">${hidden ? `${all.length} suggestions` : 'from your logged sessions'}</span></h2>
+    ${show.map(g => g.length > 1 ? many(g) : one(g[0])).join('')}
+    ${hidden ? `<div class="chart-note">${hidden} more will appear as you clear these.</div>` : ''}
   </div>`;
 }
 

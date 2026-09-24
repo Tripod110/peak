@@ -278,3 +278,18 @@ test('every coach message is at most two sentences — one observed, one to do',
         assert.ok(sentences(b) <= 2, `${state}/${voice}[${i}] ${JSON.stringify(v)}: "${b}"`);
       }));
 });
+
+test('lifts you never do on one day become one card with a row each, not a stack of cards', () => {
+  const day = P.activeRoutine().days[0];
+  const [kept, ...never] = day.ex.map(e => e[0]);
+  for (let i = 0; i < 3; i++) P.saveWorkout({ id: `g${i}`, date: localDay(2 + i * 3), dayName: day.name,
+    exercises: [{ name: kept, target: '3×5', sets: [{ weight: 60, reps: 5, type: 'normal' }] }] });
+  const drops = P.coachSuggestions().filter(s => s.action === 'coach-drop-ex');
+  assert.equal(drops.length, never.length, 'one suggestion per lift you skip');
+  const html = P.renderCoachCard();
+  assert.ok(!/Drop .* from /.test(html), 'no separate "Drop X?" cards');
+  assert.equal(html.split('lifts you never do on').length - 1, 1, 'one card for the day');
+  assert.match(html, new RegExp(`${never.length} lifts you never do on ${day.name}`));
+  never.forEach(n => assert.ok(html.includes(`aria-label="Remove it: ${n}"`), `a row with its own action for ${n}`));
+  assert.ok(!/one at a time/.test(html.split('coach-rows')[0].split('lifts you never do')[1] || ''), 'the grouped card doesn\'t say deal with them one at a time');
+});

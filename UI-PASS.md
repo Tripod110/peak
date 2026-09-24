@@ -123,7 +123,7 @@ still answer their question in the first viewport.
 Train currently shows two "Drop X from day?" cards, each carrying the same parenthetical telling
 you to deal with them one at a time. The card that says don't do this twice is doing it twice.
 
-- [ ] `routines.js:renderCoachCard` — group suggestions that share a kind and a day into **one**
+- [x] `routines.js:renderCoachCard` — group suggestions that share a kind and a day into **one**
       card: a heading, then a row per lift with its own action. Two separate "Drop X?" cards
       become "Three lifts you never do on Upper A" with three rows.
 - [ ] With grouping in place, delete the "(2 other lifts are in the same position — deal with
