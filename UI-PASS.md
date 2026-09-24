@@ -271,3 +271,5 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 88a14dd · stage 3: tile strips 96px on every tab (subs shortened, .tile-s one line)
 - 2026-09-24 · (docs) · stage 3: a11y re-check — 30 findings, identical on v48 (no regression); fixes split into a new box
 - 2026-09-24 · 7f92e25 · stage 3: a11y gaps closed (30 → 0 findings across five themes)
+- 2026-09-24 · f101583 · stage 3: Sleep week-over-week in minutes (found in tab screenshots)
+- 2026-09-24 · 35e82be · v51: stage 3 released; stage 4 (rebuild Food) next
