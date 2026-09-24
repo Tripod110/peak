@@ -270,3 +270,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 8e2650c · stage 3: icons not emoji in Quick log + 22 Explore rows (decision recorded)
 - 2026-09-24 · 88a14dd · stage 3: tile strips 96px on every tab (subs shortened, .tile-s one line)
 - 2026-09-24 · (docs) · stage 3: a11y re-check — 30 findings, identical on v48 (no regression); fixes split into a new box
+- 2026-09-24 · 7f92e25 · stage 3: a11y gaps closed (30 → 0 findings across five themes)
