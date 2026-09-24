@@ -475,10 +475,10 @@ function coachSuggestions() {
       out.push({
         key: `add:${day.name}:${name}`, tone: 'good', ico: '＋', rank: 1,
         title: `Add ${name} to ${day.name}?`,
-        body: `You've added it yourself in ${n} of your last ${recent.length} ${day.name} sessions. Peak can put it in the routine so it's pre-filled next time.`,
+        body: `You added it by hand in ${n} of your last ${recent.length} ${day.name} sessions. In the routine, it's pre-filled for you.`,
         label: 'Add it', action: 'coach-add-ex', data: { day: dayIdx, name },
         group: { id: `add:${day.name}`, title: n2 => `${n2} lifts you keep adding to ${day.name}`,
-          body: `Each one shows up in at least ${COACH_MIN_SESSIONS} of your last ${recent.length} ${day.name} sessions. Adding them pre-fills them next time.` },
+          body: `Each shows up in ${COACH_MIN_SESSIONS}+ of your last ${recent.length} ${day.name} sessions. In the routine, they're pre-filled.` },
         row: `${name} · ${n} of ${recent.length}`
       });
     });
@@ -494,10 +494,10 @@ function coachSuggestions() {
       skipped.forEach(({ name, exIdx }) => out.push({
         key: `drop:${day.name}:${name}`, tone: 'warn', ico: '−', rank: 3,
         title: `Drop ${name} from ${day.name}?`,
-        body: `It's been in the plan for your last ${recent.length} ${day.name} sessions and you haven't logged a single set of it. Removing it shortens the session; your history stays.`,
+        body: `No sets logged in your last ${recent.length} ${day.name} sessions. Removing it shortens the session; your history stays.`,
         label: 'Remove it', action: 'coach-drop-ex', data: { day: dayIdx, ex: exIdx, name },
         group: { id: `drop:${day.name}`, title: n2 => `${n2} lifts you never do on ${day.name}`,
-          body: `None of them has a logged set in your last ${recent.length} ${day.name} sessions. Removing one shortens the session; your history stays.` },
+          body: `No sets logged in your last ${recent.length} ${day.name} sessions. Removing one shortens the session; your history stays.` },
         row: name
       }));
     }
@@ -515,11 +515,11 @@ function coachSuggestions() {
       out.push({
         key: `sets:${day.name}:${name}:${counts[0]}`, tone: '', ico: '≠', rank: 2,
         title: `${name}: plan says ${tgt.sets} sets, you do ${counts[0]}`,
-        body: `Every one of your last ${counts.length} ${day.name} sessions logged exactly ${counts[0]} working sets. Matching the plan to that makes the pre-fill right and your "sets left" count honest.`,
+        body: `Your last ${counts.length} ${day.name} sessions all had ${counts[0]} working sets. Matching the plan fixes the pre-fill and "sets left".`,
         label: `Make it ${counts[0]}×${tgt.reps}`, action: 'coach-set-target',
         data: { day: dayIdx, ex: exIdx, target: `${counts[0]}×${tgt.reps}` },
         group: { id: `sets:${day.name}`, title: n2 => `${n2} lifts on ${day.name} where the plan's set count is off`,
-          body: `Your last ${recent.length} ${day.name} sessions agree with each other, not with the plan. Matching them makes the pre-fill right.` },
+          body: `Your last ${recent.length} ${day.name} sessions agree with each other, not the plan. Matching them fixes the pre-fill.` },
         row: `${name} · plan ${tgt.sets}, you do ${counts[0]}`
       });
     });
@@ -553,7 +553,7 @@ function coachSuggestions() {
       out.push({
         key: `vol:${m}:${pick.n}`, tone: 'warn', ico: '💪', rank: 4,
         title: `Your routine under-trains ${MUSCLE_LABEL[m].toLowerCase()}`,
-        body: `As written it programs about ${Math.round(planned[m] * 2) / 2} ${MUSCLE_LABEL[m].toLowerCase()} sets a week, against an effective minimum of ${mev}. Adding ${pick.n} to ${r.days[bestDay].name} closes most of that gap.`,
+        body: `It programs ~${Math.round(planned[m] * 2) / 2} sets a week against a minimum of ${mev}. Adding ${pick.n} to ${r.days[bestDay].name} closes most of the gap.`,
         label: `Add ${pick.n}`, action: 'coach-add-ex', data: { day: bestDay, name: pick.n }
       });
     });

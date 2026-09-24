@@ -128,7 +128,7 @@ you to deal with them one at a time. The card that says don't do this twice is d
       become "Three lifts you never do on Upper A" with three rows.
 - [x] With grouping in place, delete the "(2 other lifts are in the same position — deal with
       them one at a time.)" clause from `coachSuggestions` bodies.
-- [ ] Every suggestion body gets a ceiling of ~140 characters: what was seen, then the
+- [x] Every suggestion body gets a ceiling of ~140 characters: what was seen, then the
       consequence of acting. No restating the title.
 - [ ] `coach.js:COACH_COPY` — same ceiling. Any string longer than two sentences gets cut, and
       no sentence may appear twice in one render.
