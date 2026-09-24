@@ -292,3 +292,19 @@ test('one-step moves still work, and still survive a reorder of the set they sit
   P.moveExercise(second.uid, 1);
   assert.equal(P.App.activeSession.exercises[1].uid, second.uid, 'and back again');
 });
+
+test('ticking a pre-filled set asks whether the reps happened, and one tap fixes it', () => {
+  benchSession(7, [185, 185, 185, 185], [5, 5, 5, 5]);
+  P.startWorkout(0);
+  const ex = P.App.activeSession.exercises.find(e => e.name === 'Bench Press');
+  P.completeSet(ex.uid, 0);
+  assert.equal(P.App.rest.check.assumed, true);
+  assert.equal(P.App.rest.check.reps, 5);
+  P.fixLastReps(1);
+  assert.equal(ex.sets[0].reps, 4);
+  assert.equal(ex.sets[0].touched, true);
+  P.setLastEffort('hard');
+  assert.equal(ex.sets[0].effort, 'hard');
+  P.setLastEffort('hard');
+  assert.equal(ex.sets[0].effort, undefined, 'tapping again clears it');
+});

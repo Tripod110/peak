@@ -1107,3 +1107,7 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .rt-row:first-of-type { border-top: 0; }
 .rt-row.on b { color: var(--ink); }
 .pk-tag + .pk-tag { margin-left: 2px; }
+.dock-check { display: flex; align-items: center; gap: 6px; padding: 6px 2px 2px; flex-wrap: wrap; }
+.dc-q { font-size: 13px; color: var(--ink-2); margin-right: auto; }
+.dc-btn { min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-2); font-size: 14px; font-weight: 600; }
+.dc-btn.on { border-color: var(--blue); color: var(--ink); }

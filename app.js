@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v43';
+const APP_VERSION = 'v44';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -1601,6 +1601,8 @@ document.addEventListener('click', e => {
     case 'step-weight': stepSetWeight(uid, si, Number(el.dataset.dir)); break;
     case 'step-reps': stepSetReps(uid, si, Number(el.dataset.dir)); break;
     case 'set-type': closeModal(); setSetType(uid, si, el.dataset.type); break;
+    case 'set-effort': setLastEffort(el.dataset.v); break;
+    case 'set-fix-reps': fixLastReps(Number(el.dataset.n)); break;
     case 'rest-add': if (App.rest) { App.rest.endsAt += 30000; App.rest.total += 30; App.rest.beeped = false; persistSession(); paintRest(); } break;
     case 'rest-skip': App.rest = null; persistSession(); paintRest(); break;
     case 'del-set': closeModal(); deleteSet(uid, si); break;

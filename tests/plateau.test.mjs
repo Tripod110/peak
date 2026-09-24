@@ -120,3 +120,49 @@ test('the plateau note never argues with a deload, and reads the plan, not the l
   assert.ok(!/before dropping weight/i.test(note));
   assert.ok(!/this week/i.test(note));
 });
+
+/* ---- refinements (v44) ---- */
+
+test('back at the old top weight after a deload gets a second attempt before another deload', () => {
+  [70, 63, 56, 49, 42, 35].forEach(d => log('Bench Press', d - 28, '4×5', [225, 225, 225, 225], [5, 5, 4, 4]));
+  log('Bench Press', 6, '4×5', [205, 205, 205, 205], [5, 5, 5, 5]);   // the deload
+  log('Bench Press', 4, '4×5', [215, 215, 215, 215], [5, 5, 5, 5]);
+  log('Bench Press', 2, '4×5', [225, 225, 225, 225], [5, 5, 4, 4]);   // first attempt back at the top: a miss
+  const t = P.nextTarget('Bench Press', '4×5');
+  assert.notEqual(t.type, 'deload', 'one miss on the comeback is not a stall');
+  assert.equal(t.w, 225);
+  log('Bench Press', 0, '4×5', [225, 225, 225, 225], [5, 5, 4, 4]);   // second miss
+  assert.equal(P.nextTarget('Bench Press', '4×5').type, 'deload');
+});
+
+test('a top set with back-off sets earns the increase when the top set is hit', () => {
+  log('Deadlift', 3, '3×5', [405, 365, 365], [5, 5, 5], ['normal', 'backoff', 'backoff']);
+  const t = P.nextTarget('Deadlift', '3×5');
+  assert.equal(t.type, 'add_weight');
+  assert.equal(t.w, 415);
+});
+
+test('every top set marked easy earns a double step; hard or blank is the normal step', () => {
+  P.saveWorkout({ id: 'e', date: localDay(3), dayName: 'Upper A', exercises: [{ name: 'Bench Press', target: '3×5',
+    sets: [5, 5, 5].map(r => ({ weight: lb(185), reps: r, type: 'normal', effort: 'easy' })) }] });
+  assert.equal(P.nextTarget('Bench Press', '3×5').w, 195);
+  P.saveWorkout({ id: 'h', date: localDay(1), dayName: 'Upper A', exercises: [{ name: 'Bench Press', target: '3×5',
+    sets: [5, 5, 5].map((r, i) => ({ weight: lb(195), reps: r, type: 'normal', ...(i === 2 ? { effort: 'hard' } : { effort: 'easy' }) })) }] });
+  assert.equal(P.nextTarget('Bench Press', '3×5').w, 200);
+});
+
+test('a routine that programs past MRV gets a fatigue note, not an "add more" note', () => {
+  // six sets of bench on every day of a 6-day plan is well past chest MRV
+  P.setProfile({ sex: 'male', age: 30, weightKg: 80, heightCm: 180, activity: 'light', goal: 'recomp', gymDays: 6, template: 'ul4' });
+  P.Store.set('routine', { name: 'Chest week', days: Array.from({ length: 6 }, (_, i) => ({ name: `D${i}`, ex: [['Bench Press', '6×5']] })) });
+  const note = P.plateauVolumeNote('Bench Press');
+  assert.match(note, /recover/);
+  assert.doesNotMatch(note, /effective minimum/);
+});
+
+test('side delts are their own muscle: lateral raises count there, presses count half', () => {
+  assert.ok(P.MUSCLES.includes('sidedelts'));
+  assert.deepEqual([...P.musclesFor('Lateral Raise').p], ['sidedelts']);
+  assert.ok(P.musclesFor('Overhead Press').s.includes('sidedelts'));
+  assert.deepEqual([...P.musclesFor('Cable Lateral Raise').p], ['sidedelts']);
+});

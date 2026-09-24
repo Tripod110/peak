@@ -106,13 +106,16 @@ const TEMPLATE_FOR_DAYS = { 2: 'fb2', 3: 'fb3', 4: 'ul4', 5: 'ppl5', 6: 'ppl6', 
    weekly sets, per Renaissance Periodization's volume-landmark framework) —
    general guidance for a trained lifter, not precise personal limits. */
 
-const MUSCLES = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'calves', 'abs'];
+/* Side delts are their own muscle: pressing trains the front delts hard and the
+   side delts barely, so one "shoulders" bucket let a routine full of presses
+   read as well-trained shoulders with zero lateral work. */
+const MUSCLES = ['chest', 'back', 'shoulders', 'sidedelts', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'calves', 'abs'];
 const MUSCLE_LABEL = {
-  chest: 'Chest', back: 'Back', shoulders: 'Shoulders', biceps: 'Biceps', triceps: 'Triceps',
+  chest: 'Chest', back: 'Back', shoulders: 'Front & rear delts', sidedelts: 'Side delts', biceps: 'Biceps', triceps: 'Triceps',
   quads: 'Quads', hamstrings: 'Hamstrings', glutes: 'Glutes', calves: 'Calves', abs: 'Abs'
 };
 const MUSCLE_LANDMARKS = {   // [minimum effective, maximum recoverable] sets/week
-  chest: [8, 22], back: [10, 25], shoulders: [8, 24], biceps: [8, 26], triceps: [6, 22],
+  chest: [8, 22], back: [10, 25], shoulders: [6, 22], sidedelts: [8, 26], biceps: [8, 26], triceps: [6, 22],
   quads: [8, 20], hamstrings: [6, 20], glutes: [4, 16], calves: [8, 20], abs: [6, 25]
 };
 
@@ -134,10 +137,10 @@ const MUSCLE_RULES = [
   { re: /lunge/i, p: ['quads', 'glutes'] },
   { re: /squat/i, p: ['quads'], s: ['glutes', 'hamstrings'] },
   { re: /deadlift|good morning/i, p: ['hamstrings', 'back'], s: ['glutes', 'quads'] },
-  { re: /lateral raise|side raise|upright row/i, p: ['shoulders'] },
+  { re: /lateral raise|side raise|upright row|y.?raise/i, p: ['sidedelts'] },
   { re: /rear delt|face pull|reverse fly/i, p: ['shoulders'], s: ['back'] },
   { re: /landmine press/i, p: ['shoulders'], s: ['chest', 'triceps'] },
-  { re: /overhead press|shoulder press|military|arnold/i, p: ['shoulders'], s: ['triceps'] },
+  { re: /overhead press|shoulder press|military|arnold/i, p: ['shoulders'], s: ['triceps', 'sidedelts'] },
   { re: /incline (bench|db|dumbbell|barbell)?\s*press|incline press/i, p: ['chest'], s: ['shoulders', 'triceps'] },
   { re: /bench press|chest press|push.?up|\bdip\b|chest fly|pec/i, p: ['chest'], s: ['triceps', 'shoulders'] },
   { re: /pushdown|skull.?crusher|overhead extension|triceps|kickback|close.?grip/i, p: ['triceps'] },
@@ -205,6 +208,16 @@ function plateauVolumeNote(exName) {
   const r = activeRoutine();
   if (r.days.some(d => d.ex.some(([n]) => { const m = musclesFor(n); return !m.p.length && !m.s.length; }))) return '';
   const sets = routineWeeklyMuscleSets();
+  /* Too much is the more common intermediate stall: past the maximum you can
+     recover from, more sets dig the hole deeper. Say that first — and it agrees
+     with a deload rather than arguing with it. */
+  const over = musclesFor(exName).p.filter(x => MUSCLE_LANDMARKS[x] && sets[x] > MUSCLE_LANDMARKS[x][1]);
+  if (over.length) {
+    const names = over.map(x => MUSCLE_LABEL[x].toLowerCase()).join(' and ');
+    const got = over.map(x => Math.round(sets[x] * 2) / 2).join('/');
+    const cap = over.map(x => MUSCLE_LANDMARKS[x][1]).join('/');
+    return ` Your routine also programs ${got} ${names} sets a week — past the ~${cap} most people can recover from. A stall with that much volume is usually fatigue: the lighter sessions should help, and trimming a set or two there would too.`;
+  }
   const lacking = musclesFor(exName).p.filter(x => MUSCLE_LANDMARKS[x] && sets[x] < MUSCLE_LANDMARKS[x][0] * 0.8);
   if (!lacking.length) return '';
   const names = lacking.map(x => MUSCLE_LABEL[x].toLowerCase()).join(' and ');
@@ -315,6 +328,23 @@ function bestComparableKg(name, tgt) {
     if ((st.reps || 0) >= minReps && (st.weight || 0) > best) best = st.weight;
   }));
   return best;
+}
+
+/* Sessions at (or within 2% of) the top weight since the last time the lift was
+   worked clearly below it (a deload, or a rebuild). Infinity when there never
+   was a dip — then the ordinary stall rule applies unchanged. */
+function attemptsAtTopSinceDeload(name, tgt, bestKg) {
+  if (!(bestKg > 0)) return Infinity;
+  const key = name.toLowerCase();
+  const tops = getWorkouts().filter(s => !s.cardio && !s.deloadWeek)
+    .sort((a, b) => a.date < b.date ? -1 : 1)
+    .map(s => (s.exercises || []).find(e => e.name.toLowerCase() === key && (!tgt || parseTarget(e.target)?.reps === tgt.reps || !e.target)))
+    .filter(Boolean)
+    .map(e => Math.max(0, ...workingSets(e.sets).filter(st => st.type !== 'backoff').map(st => st.weight || 0)));
+  let dip = -1;
+  tops.forEach((w, i) => { if (w > 0 && w < bestKg * 0.95) dip = i; });
+  if (dip < 0) return Infinity;
+  return tops.slice(dip + 1).filter(w => w >= bestKg * 0.98).length;
 }
 
 /* heaviest working set ever logged on a lift, in kg */
@@ -659,15 +689,25 @@ function nextTarget(name, targetStr, stalledNames) {
   }
 
   const lastDisp = toW(maxKg);
-  const topSets = last.sets.filter(s => Math.abs((s.weight || 0) - maxKg) < 0.01);
+  /* Back-off sets are lighter work after the top set, on purpose. They count as
+     volume everywhere else, but they are not the prescription you're judged on:
+     a top set plus two back-offs on a 3×5 plan is "1 top set to hit", not "2 of
+     3 sets missed" — which used to deny the increase forever. */
+  const backoffs = last.sets.filter(s => s.type === 'backoff').length;
+  const main = last.sets.filter(s => s.type !== 'backoff');
+  const topKg = main.length ? Math.max(...main.map(s => s.weight || 0)) : maxKg;
+  const topSets = (main.length ? main : last.sets).filter(s => Math.abs((s.weight || 0) - topKg) < 0.01);
   /* a set that actually happened — the heaviest weight with the reps done AT
      that weight, not the session's best reps borrowed from a lighter set */
   const topReps = Math.max(...topSets.map(s => s.reps));
   const lastText = `${r1(lastDisp)} ${u} × ${topReps} · ${when}`;
-  /* judged on the best `tgt.sets` sets at that weight — an extra set beyond the
+  /* judged on the best `need` sets at that weight — an extra set beyond the
      plan is bonus work, not a missed rep that blocks the increase */
-  const best = [...topSets].sort((a, b) => b.reps - a.reps).slice(0, tgt.sets);
-  const allHit = best.length >= tgt.sets && best.every(s => s.reps >= tgt.reps);
+  const need = Math.max(1, tgt.sets - backoffs);
+  const best = [...topSets].sort((a, b) => b.reps - a.reps).slice(0, need);
+  const allHit = best.length >= need && best.every(s => s.reps >= tgt.reps);
+  // every top set marked easy: the jump can be bigger (optional effort, logged in the rest dock)
+  const allEasy = allHit && best.every(s => s.effort === 'easy');
 
   // a hold outranks everything below: no increase, no deload
   if (pref.hold) return holdResult(lastText);
@@ -700,15 +740,29 @@ function nextTarget(name, targetStr, stalledNames) {
         short: `up ${incText} ${u} from ${r1(lastDisp)} ${u}`,
         text: `Hit all ${tgt.sets}×${tgt.reps} — go up your custom ${incText} ${u} to ${val} ${u}.` };
     }
-    const inc = incrementW(name, lastDisp);
+    const inc = incrementW(name, lastDisp) * (allEasy ? 2 : 1);
     const val = roundW(lastDisp + inc, name);
     return { type: 'add_weight', w: val, sets: tgt.sets, reps: tgt.reps, lastText,
       short: `up from ${Math.round(lastDisp)} ${u}`,
-      text: `Hit all ${tgt.sets}×${tgt.reps} — go up to ${val} ${u}.` };
+      text: allEasy
+        ? `Hit all ${tgt.sets}×${tgt.reps} and every set felt easy — take a bigger step, up to ${val} ${u}.`
+        : `Hit all ${tgt.sets}×${tgt.reps} — go up to ${val} ${u}.` };
   }
 
   const stalled = isStalled();
-  const bestDisp = toW(bestComparableKg(name, tgt));
+  const bestKg = bestComparableKg(name, tgt);
+  const bestDisp = toW(bestKg);
+
+  /* Back at the old top weight after a deload: give it two honest attempts
+     before calling it stalled again. Without this, the first session back at
+     225 — the one the whole rebuild was for — was a miss away from another cut. */
+  const attempts = attemptsAtTopSinceDeload(name, tgt, bestKg);
+  if (stalled && lastDisp >= bestDisp * 0.98 && attempts < 2) {
+    const val = custom ? r1(lastDisp) : roundW(lastDisp, name);
+    return { type: 'add_reps', w: val, wKg: custom ? maxKg : undefined, sets: tgt.sets, reps: tgt.reps, lastText,
+      short: `back at ${Math.round(lastDisp)} ${u} — attempt 2`,
+      text: `Back at ${val} ${u} after your deload. One more go at ${tgt.sets}×${tgt.reps} before Peak calls it stalled again.` };
+  }
 
   // Deload only from the top. Below your best you are already climbing back.
   if (stalled && lastDisp >= bestDisp * 0.98) {
@@ -1501,9 +1555,9 @@ function plannedSetsFor(name, target, stalled) {
 
 /* ---------- in-gym helpers ---------- */
 
-const SET_TYPES = ['normal', 'warmup', 'failure', 'drop'];
+const SET_TYPES = ['normal', 'warmup', 'backoff', 'failure', 'drop'];
 const SET_BADGE = { normal: null, warmup: 'W', failure: 'F', drop: 'D' };
-const SET_BADGE_COLOR = { warmup: 'var(--warning)', failure: 'var(--critical)', drop: 'var(--violet)' };
+const SET_BADGE_COLOR = { warmup: 'var(--warning)', failure: 'var(--critical)', drop: 'var(--violet)', backoff: 'var(--aqua)' };
 
 /* ---------- plate math ----------
    "What do I load?" is arithmetic nobody should be doing between sets, and it is
@@ -1704,7 +1758,8 @@ function paintRest() {
     announce('Rest done');
   }
   const key = [App.rest ? 'rest' : '', done ? 'done' : '', App.rest?.label || '',
-    act ? `${act.action}|${act.uid || ''}|${act.si ?? ''}|${act.label}` : ''].join('/');
+    act ? `${act.action}|${act.uid || ''}|${act.si ?? ''}|${act.label}` : '',
+    App.rest?.check ? `${App.rest.check.effort || ''}|${App.rest.check.fixed || ''}` : ''].join('/');
   if (key !== _dockKey) {
     const hadFocus = root.contains(document.activeElement) ? document.activeElement.dataset.action : null;
     root.innerHTML = `
@@ -1716,7 +1771,8 @@ function paintRest() {
         <span class="rest-label">${done ? 'Rest done' : 'Rest'}${App.rest.label ? ` · ${esc(App.rest.label)}` : ''}</span>
         <button class="btn small ghost" data-action="rest-add" aria-label="Add 30 seconds of rest">+30s</button>
         <button class="btn small ghost" data-action="rest-skip">${done ? 'Dismiss' : 'Skip rest'}</button>
-      </div>` : ''}
+      </div>
+      ${restCheckHtml()}` : ''}
       ${act ? `
       <button class="btn accent dock-main" data-action="${act.action}"${act.uid ? ` data-uid="${act.uid}"` : ''}${act.si != null ? ` data-si="${act.si}"` : ''}>
         ${act.action === 'complete-set' || act.action === 'review-finish' ? icon('check') : act.action === 'focus-ex' ? icon('chevron') : icon('plus')}
@@ -1736,6 +1792,49 @@ function paintRest() {
     if (t) t.textContent = done ? 'Go' : `${mm}:${String(ss).padStart(2, '0')}`;
     if (f) f.style.width = pct + '%';
   }
+}
+/* The set you just ticked, checked while you rest. Pre-filled rows make
+   logging one tap, which also made a missed rep one tap from being logged as
+   a hit — and a false hit is a false weight increase next session. So the
+   dock asks, right when you have time to answer, and it takes one tap either
+   way. Effort is optional and only ever sharpens progression (all-easy top
+   sets earn a bigger step); leaving it blank changes nothing. */
+function restCheckHtml() {
+  const c = App.rest?.check;
+  const st = c && sessionExercise(c.uid)?.sets[c.si];
+  if (!st || !st.done) return '';
+  const unit = isTimedLift(sessionExercise(c.uid).name) ? 's' : ' reps';
+  const q = c.fixed ? `Logged ${c.fixed}${unit}` : c.assumed ? `All ${c.reps}${unit}?` : 'How was it?';
+  return `
+      <div class="dock-check" role="group" aria-label="Check the set you just logged">
+        <span class="dc-q">${esc(q)}</span>
+        ${!c.fixed ? [1, 2].filter(n => c.reps - n > 0).map(n =>
+          `<button class="dc-btn" data-action="set-fix-reps" data-n="${n}" aria-label="Only ${c.reps - n}${unit}">${c.reps - n}</button>`).join('') : ''}
+        <button class="dc-btn ${st.effort === 'easy' ? 'on' : ''}" data-action="set-effort" data-v="easy" aria-pressed="${st.effort === 'easy'}">Easy</button>
+        <button class="dc-btn ${st.effort === 'hard' ? 'on' : ''}" data-action="set-effort" data-v="hard" aria-pressed="${st.effort === 'hard'}">Hard</button>
+      </div>`;
+}
+function setLastEffort(v) {
+  const c = App.rest?.check;
+  const st = c && sessionExercise(c.uid)?.sets[c.si];
+  if (!st || !['easy', 'hard'].includes(v)) return;
+  st.effort = st.effort === v ? undefined : v;
+  if (!st.effort) delete st.effort;
+  c.effort = st.effort || '';
+  persistSession();
+  paintRest();
+}
+function fixLastReps(n) {
+  const c = App.rest?.check;
+  const ex = c && sessionExercise(c.uid);
+  const st = ex?.sets[c.si];
+  if (!st || c.fixed) return;
+  st.reps = Math.max(1, c.reps - n);
+  st.touched = true;
+  c.fixed = st.reps;
+  persistSession();
+  App.render();
+  announce(`${ex.name}: logged ${st.reps} instead`);
 }
 function restBeep() {
   try {
@@ -2022,7 +2121,7 @@ function renderSetLine(ex, st, si, isNext) {
   const label = setLabel(ex, si);
   const val = setValueText(ex.name, st);
   const state = st.done ? 'Done' : isNext ? 'Next' : st.touched ? 'Edited' : 'Planned';
-  const typeWord = type !== 'normal' && type !== 'warmup' ? ` (${type === 'drop' ? 'drop set' : 'to failure'})` : '';
+  const typeWord = type !== 'normal' && type !== 'warmup' ? ` (${type === 'drop' ? 'drop set' : type === 'backoff' ? 'back-off' : 'to failure'})` : '';
   return `
   <div class="set-line ${st.done ? 'done' : ''} ${isNext ? 'next' : ''}">
     <button class="set-sum" data-action="select-set" data-uid="${ex.uid}" data-si="${si}"
@@ -2220,12 +2319,17 @@ function completeSet(uid, si) {
     return;
   }
   _lastCompleteAt = Date.now();
+  // ticked straight off the pre-filled plan: the rest dock asks whether the reps really happened
+  const assumed = !!st.planned && !st.touched;
   st.done = true;
   st.planned = false;
   if (navigator.vibrate) navigator.vibrate(30);
   const pr = checkSetPR(ex.name, st);
   if (pr) toast(pr);
-  if (!isWarmup(st)) startRest(suggestedRestSec(ex.name), ex.name);
+  if (!isWarmup(st)) {
+    startRest(suggestedRestSec(ex.name), ex.name);
+    App.rest.check = { uid, si, reps: st.reps, assumed };
+  }
   App.setSel = null;
   let msg = `${ex.name}: ${setLabel(ex, si).toLowerCase()} complete.`;
   if (!exPending(ex)) {
@@ -2384,7 +2488,8 @@ function openExerciseMenu(uid) {
 
 const SET_TYPE_LABEL = {
   normal: 'Working set', warmup: 'Warmup — not counted',
-  failure: 'Taken to failure', drop: 'Drop set'
+  failure: 'Taken to failure', drop: 'Drop set',
+  backoff: 'Back-off — lighter, after your top set'
 };
 /* Reordering used to be two one-step items inside a per-exercise menu that only
    existed on the OPEN exercise — so moving a lift three places meant opening
@@ -2525,7 +2630,7 @@ function finishWorkout() {
   // is left intact until the save succeeds — returning early used to strip it.
   const exercises = s.exercises
     .map(({ uid, ...ex }) => ({ ...ex, sets: ex.sets.filter(st => (st.done || st.touched) && st.reps > 0)
-      .map(st => ({ weight: st.weight || 0, reps: st.reps, type: st.type || 'normal' })) }))
+      .map(st => ({ weight: st.weight || 0, reps: st.reps, type: st.type || 'normal', ...(st.effort ? { effort: st.effort } : {}) })) }))
     .filter(ex => ex.sets.length > 0);
   if (!exercises.length) { toast('Complete or edit at least one set first'); return; }
   const { focusUid, ...saved } = s;

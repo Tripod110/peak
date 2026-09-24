@@ -187,7 +187,7 @@ const Store = {
 /* Prefixed because there are no modules here: nine scripts share one global
    scope, and a bare `const str` would be a SyntaxError the day anyone else
    wants that name — which would break the entire app, not just this file. */
-const SET_KINDS = ['normal', 'warmup', 'failure', 'drop'];
+const SET_KINDS = ['normal', 'warmup', 'failure', 'drop', 'backoff'];
 
 const szNum = (v, min, max, fallback = 0) => {
   const n = Number(v);
@@ -209,7 +209,8 @@ function cleanSets(sets) {
       type: SET_KINDS.includes(s.type) ? s.type : 'normal',
       ...(s.done ? { done: true } : {}),
       ...(s.touched ? { touched: true } : {}),
-      ...(s.planned ? { planned: true } : {})
+      ...(s.planned ? { planned: true } : {}),
+      ...(['easy', 'hard'].includes(s.effort) ? { effort: s.effort } : {})
     };
   });
 }

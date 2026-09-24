@@ -24,6 +24,34 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v44 — the engine listens
+2026-09-23 · **pending push**
+
+The rest of the lifter review's findings, the ones the v41 fixes left open.
+
+- **A second attempt after a deload.** Back at the old top weight after a rebuild, one miss no
+  longer triggers another deload straight away. The plan says "one more go", and only a second
+  miss at the top counts as a stall (`attemptsAtTopSinceDeload`).
+- **Back-off sets.** A new set type, next to warmup, drop and failure. They count as volume, but
+  progression judges only the top sets. A 405×5 top set plus two 365 back-offs now earns 415.
+  Before, it read as two missed sets and never went up.
+- **Reps check and effort in the rest dock.** Tick a pre-filled set and the dock asks "All 5 reps?"
+  with one-tap fixes (4, 3), so a missed rep can't silently be logged as a hit and earn a false
+  increase. Easy / Hard are optional. When every top set is marked easy, the next jump is a double
+  step. Hard or blank changes nothing.
+- **Too much volume is named.** When a stalled lift's muscle is programmed past its maximum
+  recoverable volume (MRV), the plateau note says it's probably fatigue, which agrees with the
+  deload, instead of suggesting more sets.
+- **Side delts are their own muscle.** Lateral raises, cable Y-raises and upright rows count there,
+  and presses count half. "Shoulders" becomes *Front & rear delts*. Before, a press-heavy routine
+  with no lateral work read as fully trained shoulders. Two new library lifts: Machine Lateral
+  Raise and Cable Y-Raise.
+
+Stored: `effort` on sets and the `backoff` set type, both sanitised on restore. Tests: 6 new;
+123 pass. The dock row was checked in the browser at 375×812.
+
+---
+
 ## v43 — log anything
 2026-09-22 · **pending push**
 

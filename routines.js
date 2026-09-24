@@ -55,19 +55,21 @@ const LIB = {
     { n: 'Farmer Carry', s: ['abs'], t: '3×40' }
   ],
   shoulders: [
-    { n: 'Overhead Press', s: ['triceps'], t: '4×5' },
-    { n: 'Seated Dumbbell Shoulder Press', s: ['triceps'], t: '3×10' },
-    { n: 'Arnold Press', s: ['triceps'], t: '3×10' },
+    { n: 'Overhead Press', s: ['triceps', 'sidedelts'], t: '4×5' },
+    { n: 'Seated Dumbbell Shoulder Press', s: ['triceps', 'sidedelts'], t: '3×10' },
+    { n: 'Arnold Press', s: ['triceps', 'sidedelts'], t: '3×10' },
     { n: 'Push Press', s: ['triceps', 'quads'], t: '3×5' },
-    { n: 'Machine Shoulder Press', s: ['triceps'], t: '3×12' },
+    { n: 'Machine Shoulder Press', s: ['triceps', 'sidedelts'], t: '3×12' },
     { n: 'Landmine Press', s: ['chest', 'triceps'], t: '3×10' },
-    { n: 'Lateral Raise', t: '4×15' },
-    { n: 'Cable Lateral Raise', t: '3×15' },
+    { n: 'Lateral Raise', p: ['sidedelts'], t: '4×15' },
+    { n: 'Cable Lateral Raise', p: ['sidedelts'], t: '3×15' },
+    { n: 'Machine Lateral Raise', p: ['sidedelts'], t: '3×15' },
+    { n: 'Cable Y-Raise', p: ['sidedelts'], s: ['shoulders'], t: '3×15' },
     { n: 'Front Raise', t: '3×15' },
     { n: 'Rear Delt Fly', s: ['back'], t: '3×15' },
     { n: 'Reverse Pec Deck', s: ['back'], t: '3×15' },
     { n: 'Face Pull', s: ['back'], t: '3×15' },
-    { n: 'Upright Row', t: '3×12' }
+    { n: 'Upright Row', p: ['sidedelts'], s: ['back'], t: '3×12' }
   ],
   biceps: [
     { n: 'Barbell Curl', t: '3×10' },
@@ -339,7 +341,7 @@ function renderRoutineEditor() {
    box. */
 function pickerCandidates() {
   const seen = new Map();
-  libAll().forEach(e => seen.set(e.n.toLowerCase(), { n: e.n, group: e.group, lib: true }));
+  libAll().forEach(e => seen.set(e.n.toLowerCase(), { n: e.n, group: (e.p && e.p[0]) || e.group, lib: true }));
   if (typeof customExerciseList === 'function') customExerciseList().forEach(c =>
     seen.set(c.n.toLowerCase(), { n: c.n, group: musclesFor(c.n).p[0] || 'other', mine: true }));
   // anything you've actually logged outranks the library — it is proof of use
@@ -539,7 +541,8 @@ function coachSuggestions() {
         if (score > bestScore) { bestScore = score; bestDay = i; }
       });
       if (bestDay < 0) return;   // nothing in the routine trains it — too big a call to make for someone
-      const pick = (LIB[m] || []).find(e => !inRoutine.has(e.n.toLowerCase()));
+      // by primary mover, not library group — side delts live in the shoulders group
+      const pick = libAll().filter(e => (e.p || [e.group]).includes(m)).find(e => !inRoutine.has(e.n.toLowerCase()));
       if (!pick) return;
       out.push({
         key: `vol:${m}:${pick.n}`, tone: 'warn', ico: '💪', rank: 4,
