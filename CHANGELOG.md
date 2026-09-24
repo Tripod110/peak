@@ -24,8 +24,37 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
-## v50 — the coach says less
+## v51 — one visual system
 2026-09-24 · **pending push**
+
+Stage 3 of the UI pass ([UI-PASS.md](UI-PASS.md)). No content moved; the five tabs now look
+like one app.
+
+- **Scales, not literals.** Spacing (`--sp-1`…`--sp-5`, 4–24px) and type (`--fs-hero` 36 ·
+  `value` 23 · `title` 16 · `body` 14 · `meta` 12 · `label` 11) live in `:root`. Everything
+  this pass touched uses them: cards, tiles, eyebrows, the check-in, the coach line and rows.
+  Older rules convert when they're next edited.
+- **One eyebrow.** The check-in and coach cards used their own 11px eyebrow; they take the
+  heroes' now. Section headings were already one style. Cards sit 16px apart, like the tiles.
+- **Icons, not emoji.** Quick log and all 22 Explore rows use Peak's own icon set, which
+  gained an apple and a bowl for Grocery. Emoji drew differently per platform and ignored
+  the theme.
+- **Tiles are 96px on every tab**, whatever they hold: four sub-lines were shortened to fit
+  one line at 320px, and a sub can no longer wrap.
+- **Digits that tick don't shuffle.** The workout's progress line, set label, set numbers,
+  plate maths and "Complete set N of M" use fixed-width digits, like the timers already did.
+- **Accessibility, measured.** An audit of every control on every tab and the live workout,
+  in all five themes, found 30 gaps — every one already present in v48. All closed: muted
+  text retuned in dark and light, a new red for danger text that reads ≥4.6:1 everywhere,
+  and 44px day chips, food rows, text fields and small buttons. Same audit after: 0.
+- **Fixed:** Sleep's "vs last week" read "−0h 05m"; small differences now read in minutes.
+
+142 tests pass; each change measured before and after in the browser at 390 and 320px.
+
+---
+
+## v50 — the coach says less
+2026-09-24 · `39d4f29` · **pending push**
 
 Stage 2 of the UI pass ([UI-PASS.md](UI-PASS.md)). Train's suggestions read as a list, and no
 screen says the same sentence twice.
