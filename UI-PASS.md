@@ -192,3 +192,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · (no code change) · stage 1: Today's card order already matched; focus line kept under tiles
 - 2026-09-24 · d8d4775 · stage 1: Food hero loses heroStats; tiles own protein/kcal/score
 - 2026-09-24 · d4e915b · stage 1: kcal-left lives in Food's hero; Calories tile says under/on/over target
+- 2026-09-24 · f57a671 · stage 1: Sleep hero loses heroStats (score on tile only); logged Sleep's other repeats
