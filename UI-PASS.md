@@ -181,3 +181,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 0ad9e1f · stage 1: sessions count on the Week tile only (check-in stat dropped, Explore row reworded)
 - 2026-09-24 · 5cd5dc8 · stage 1: check-in protein becomes a streak (≥2 days); logged Sleep 320px overflow
 - 2026-09-24 · d52ebc6 · stage 1: sleep labelled '7-day avg' vs 'last night'; Explore note loses sleep score
+- 2026-09-24 · 3b555ce · stage 1: check-in body capped at two sentences, focus sentence dropped, test added
