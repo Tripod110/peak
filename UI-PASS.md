@@ -197,8 +197,18 @@ The app has grown three generations of styling. This makes them agree. No conten
       "log a night", "0/14 nights", "log a meal") and `.tile-s` is one line with an ellipsis as
       a backstop; a two-line empty value still fits the 96px minimum. Now 96px everywhere, and
       no sub is cut in any measured state.*
-- [ ] Re-check the v46 gains: button text contrast ≥4.5:1 in all five themes, 44px targets,
+- [x] Re-check the v46 gains: button text contrast ≥4.5:1 in all five themes, 44px targets,
       landscape safe areas. Measure, don't assume.
+      *Measured every visible button/link/row on all five tabs in all five themes (text colour
+      against its real rendered background; bounding box for size), and ran the identical
+      audit against v48: **the same 30 findings on both — this pass regressed nothing.**
+      Landscape (844×390): no overflow on any tab; the left/right `env(safe-area-inset-*)` rules
+      and `viewport-fit=cover` are intact. But the audit shows v46 didn't fully land — next box.*
+- [ ] Fix the gaps the audit found (all pre-existing, present in v48):
+      contrast — light theme's inactive tab labels 3.91, Train's day chips 3.61 (light) / 4.33
+      (dark), Sleep's ghost-danger "Delete" 3.44–3.64 in four themes, Food's entry ✕ and
+      Grocery's aisle toggle 4.30 (light); targets — day chips 40px tall, Food entry rows 37px,
+      Grocery's add field 41px and add button 42px wide.
 
 Stage done when: switching tabs doesn't feel like switching apps.
 
@@ -254,3 +264,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 3dbb757 · stage 3: type tokens; 12 touched rules converted (1 size moved, 17→16px)
 - 2026-09-24 · 8e2650c · stage 3: icons not emoji in Quick log + 22 Explore rows (decision recorded)
 - 2026-09-24 · 88a14dd · stage 3: tile strips 96px on every tab (subs shortened, .tile-s one line)
+- 2026-09-24 · (docs) · stage 3: a11y re-check — 30 findings, identical on v48 (no regression); fixes split into a new box
