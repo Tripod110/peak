@@ -126,14 +126,21 @@ you to deal with them one at a time. The card that says don't do this twice is d
 - [x] `routines.js:renderCoachCard` — group suggestions that share a kind and a day into **one**
       card: a heading, then a row per lift with its own action. Two separate "Drop X?" cards
       become "Three lifts you never do on Upper A" with three rows.
+      *Amended by the no-repeat test: two days of skipped lifts made two cards ending in the
+      same sentence, so grouping is by kind across days; rows name their day when a card spans
+      more than one ("8 lifts you never do" → "Push A · Overhead Press").*
 - [x] With grouping in place, delete the "(2 other lifts are in the same position — deal with
       them one at a time.)" clause from `coachSuggestions` bodies.
 - [x] Every suggestion body gets a ceiling of ~140 characters: what was seen, then the
       consequence of acting. No restating the title.
 - [x] `coach.js:COACH_COPY` — same ceiling. Any string longer than two sentences gets cut, and
       no sentence may appear twice in one render.
-- [ ] Add a test: render Today's HTML for a seeded profile and assert no sentence (split on
+- [x] Add a test: render Today's HTML for a seeded profile and assert no sentence (split on
       `. `, trimmed, >20 chars) appears twice. That's the regression that keeps copy honest.
+      *`tests/copy.test.mjs`, via a new `makeAppContext()` in the harness that loads app.js
+      without boot(). Covers Today (check-in and coach line) and Train's coach card. Today at
+      v48 would have passed: its repeats were numbers, not identical sentences. The Train case
+      fails on v49's code with the "one at a time" clause, as it should.*
 
 Stage done when: no screen repeats a sentence, and the Train suggestions read as a list rather
 than a stack of paragraphs.

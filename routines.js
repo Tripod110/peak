@@ -477,8 +477,10 @@ function coachSuggestions() {
         title: `Add ${name} to ${day.name}?`,
         body: `You added it by hand in ${n} of your last ${recent.length} ${day.name} sessions. In the routine, it's pre-filled for you.`,
         label: 'Add it', action: 'coach-add-ex', data: { day: dayIdx, name },
-        group: { id: `add:${day.name}`, title: n2 => `${n2} lifts you keep adding to ${day.name}`,
-          body: `Each shows up in ${COACH_MIN_SESSIONS}+ of your last ${recent.length} ${day.name} sessions. In the routine, they're pre-filled.` },
+        group: { id: 'add', day: day.name, title: n2 => `${n2} lifts you keep adding to ${day.name}`,
+          body: `Each shows up in ${COACH_MIN_SESSIONS}+ of your last ${recent.length} ${day.name} sessions. In the routine, they're pre-filled.`,
+          multiTitle: n2 => `${n2} lifts you keep adding by hand`,
+          multiBody: `Each shows up in most of its day's recent sessions. In the routine, they're pre-filled.` },
         row: `${name} · ${n} of ${recent.length}`
       });
     });
@@ -496,8 +498,10 @@ function coachSuggestions() {
         title: `Drop ${name} from ${day.name}?`,
         body: `No sets logged in your last ${recent.length} ${day.name} sessions. Removing it shortens the session; your history stays.`,
         label: 'Remove it', action: 'coach-drop-ex', data: { day: dayIdx, ex: exIdx, name },
-        group: { id: `drop:${day.name}`, title: n2 => `${n2} lifts you never do on ${day.name}`,
-          body: `No sets logged in your last ${recent.length} ${day.name} sessions. Removing one shortens the session; your history stays.` },
+        group: { id: 'drop', day: day.name, title: n2 => `${n2} lifts you never do on ${day.name}`,
+          body: `No sets logged in your last ${recent.length} ${day.name} sessions. Removing one shortens the session; your history stays.`,
+          multiTitle: n2 => `${n2} lifts you never do`,
+          multiBody: `No sets logged in their day's recent sessions. Removing one shortens that session; your history stays.` },
         row: name
       }));
     }
@@ -518,8 +522,10 @@ function coachSuggestions() {
         body: `Your last ${counts.length} ${day.name} sessions all had ${counts[0]} working sets. Matching the plan fixes the pre-fill and "sets left".`,
         label: `Make it ${counts[0]}×${tgt.reps}`, action: 'coach-set-target',
         data: { day: dayIdx, ex: exIdx, target: `${counts[0]}×${tgt.reps}` },
-        group: { id: `sets:${day.name}`, title: n2 => `${n2} lifts on ${day.name} where the plan's set count is off`,
-          body: `Your last ${recent.length} ${day.name} sessions agree with each other, not the plan. Matching them fixes the pre-fill.` },
+        group: { id: 'sets', day: day.name, title: n2 => `${n2} lifts on ${day.name} where the plan's set count is off`,
+          body: `Your last ${recent.length} ${day.name} sessions agree with each other, not the plan. Matching them fixes the pre-fill.`,
+          multiTitle: n2 => `${n2} lifts where the plan's set count is off`,
+          multiBody: `Your recent sessions agree with each other, not the plan. Matching them fixes the pre-fill.` },
         row: `${name} · plan ${tgt.sets}, you do ${counts[0]}`
       });
     });
@@ -584,9 +590,11 @@ function routineWeeklyMuscleSets() {
   return sets;
 }
 
-/* Suggestions that share a kind and a day fold into one card: a heading, one
-   line on what was seen, then a row per lift with its own action. Singletons
-   keep the full title-and-body form. */
+/* Suggestions of the same kind fold into one card: a heading, one line on what
+   was seen, then a row per lift with its own action. Grouping by kind and day
+   left two days of skipped lifts as two cards ending in the same sentence, so
+   it's by kind; rows name their day when the card spans more than one.
+   Singletons keep the full title-and-body form. */
 function groupCoachSuggestions(list) {
   const groups = new Map();
   list.forEach(s => {
@@ -619,14 +627,16 @@ function renderCoachCard() {
           </div>
         </div>
       </div>`;
-  const many = g => `
+  const many = g => {
+    const multi = new Set(g.map(s => s.group.day)).size > 1;
+    return `
       <div class="coach ${g[0].tone}">
         <span class="a-ico">${g[0].ico}</span>
         <div class="a-body">
-          <b>${esc(g[0].group.title(g.length))}</b>
-          ${esc(g[0].group.body)}
+          <b>${esc(multi ? g[0].group.multiTitle(g.length) : g[0].group.title(g.length))}</b>
+          ${esc(multi ? g[0].group.multiBody : g[0].group.body)}
           <ul class="coach-rows">
-            ${g.map(s => `<li><span class="cr-n">${esc(s.row)}</span>
+            ${g.map(s => `<li><span class="cr-n">${esc(multi ? `${s.group.day} · ${s.row}` : s.row)}</span>
               <span class="cr-a">
                 <button class="btn small primary" data-action="${s.action}" data-key="${esc(s.key)}"
                   data-d='${esc(JSON.stringify(s.data))}' aria-label="${esc(`${s.label}: ${s.data.name || s.row}`)}">${esc(s.label)}</button>
@@ -636,6 +646,7 @@ function renderCoachCard() {
           </ul>
         </div>
       </div>`;
+  };
   return `
   <div class="card">
     <h2>Peak noticed <span class="h2-right">${hidden ? `${all.length} suggestions` : 'from your logged sessions'}</span></h2>
