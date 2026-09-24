@@ -198,10 +198,10 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 14px;
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
 }
-.card h2 { font-size: 14px; font-weight: 600; color: var(--ink-2); margin-bottom: 12px; letter-spacing: 0.02em; }
+.card h2 { font-size: 14px; font-weight: 600; color: var(--ink-2); margin-bottom: var(--sp-3); letter-spacing: 0.02em; }
 .card h2 .h2-right { float: right; font-weight: 400; color: var(--muted); font-size: 12px; }
 
 .row { display: flex; gap: 10px; align-items: center; }
@@ -1064,7 +1064,8 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .coach-card { border-left: 3px solid var(--blue); }
 .coach-card.good { border-left-color: var(--good); }
 .coach-card.warn { border-left-color: var(--warning); }
-.coach-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+/* the look comes from .eyebrow — one eyebrow style app-wide; this only spaces it */
+.coach-eyebrow { margin-bottom: var(--sp-1); }
 .coach-h { display: block; font-size: 16px; color: var(--ink); margin-bottom: 4px; }
 .coach-b { color: var(--ink-2); font-size: 14px; line-height: 1.45; margin: 0; }
 .coach-sub { color: var(--muted); font-size: 13px; margin-top: 8px; }

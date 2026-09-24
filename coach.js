@@ -487,7 +487,7 @@ function renderCoachLine() {
   if (!i) return deload ? `<section class="card coach-card" aria-label="Coach">${deload}</section>` : '';
   return `
   <section class="card coach-card ${i.tone}" aria-label="Coach">
-    <div class="coach-eyebrow">Coach</div>
+    <div class="eyebrow coach-eyebrow">Coach</div>
     <b class="coach-h">${esc(i.headline)}</b>
     <p class="coach-b">${esc(i.body)}</p>
     ${deload}
@@ -758,7 +758,7 @@ function renderWeeklyCheckin() {
   const stat = (v, label) => `<div class="ck-stat"><b>${esc(v)}</b><span>${esc(label)}</span></div>`;
   return `
   <section class="card coach-card checkin" aria-label="Weekly check-in">
-    <div class="coach-eyebrow">Your week · from ${esc(shortDate(c.week))}</div>
+    <div class="eyebrow coach-eyebrow">Your week · from ${esc(shortDate(c.week))}</div>
     <div class="ck-stats">
       ${stat(String(f.prs7), f.prs7 === 1 ? 'PR' : 'PRs')}
       ${f.sleepAvg ? stat(f.sleepAvg, 'sleep, 7-day avg') : ''}

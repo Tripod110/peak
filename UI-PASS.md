@@ -156,8 +156,14 @@ The app has grown three generations of styling. This makes them agree. No conten
       *Converted so far: `.stat-tiles`, `.tile`, `.tile-l`, `.ck-stats`/`.ck-stat`, `.coach-rows`.
       Off-scale values rounded to the nearest step (tile 12/11px → 12px, gap 5 → 4px); every
       measured size moved ≤6px.*
-- [ ] Card padding and heading treatment: one `h2` style for section cards, one eyebrow style
+- [x] Card padding and heading treatment: one `h2` style for section cards, one eyebrow style
       for heroes. List the exceptions here if any survive, with the reason.
+      *Measured on all five tabs: section `h2` was already one style everywhere. The check-in and
+      coach cards had their own 11px eyebrow; they now use `.eyebrow`. `.card` padding and
+      spacing are on the scale (16px, cards now 16px apart like the tile strip).
+      Exceptions kept: **hero padding** stays 20/18/18px, since the hero is the screen's
+      headline card; **Food and Sleep heroes** open with the day stepper, not an eyebrow,
+      because which day you're looking at and how to change it are one control.*
 - [ ] Type rhythm: hero / section / body / meta sizes come from a small set. Every number that
       can change while you watch it (`timers, weights, counts`) uses `font-variant-numeric:
       tabular-nums`.
