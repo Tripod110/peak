@@ -130,7 +130,7 @@ you to deal with them one at a time. The card that says don't do this twice is d
       them one at a time.)" clause from `coachSuggestions` bodies.
 - [x] Every suggestion body gets a ceiling of ~140 characters: what was seen, then the
       consequence of acting. No restating the title.
-- [ ] `coach.js:COACH_COPY` — same ceiling. Any string longer than two sentences gets cut, and
+- [x] `coach.js:COACH_COPY` — same ceiling. Any string longer than two sentences gets cut, and
       no sentence may appear twice in one render.
 - [ ] Add a test: render Today's HTML for a seeded profile and assert no sentence (split on
       `. `, trimmed, >20 chars) appears twice. That's the regression that keeps copy honest.

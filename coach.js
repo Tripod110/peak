@@ -214,13 +214,13 @@ const COACH_COPY = {
     drill:       [f => ({ h: `${plural(f.prs, 'PR')}. Good. Now do it again.`, b: `${f.names} ${f.progN === 1 ? 'is' : 'are'} moving. Nobody gets to coast — earn the next one.` })]
   },
   grinding: {
-    encouraging: [f => ({ h: `You've been putting in the work — let's make it pay`, b: `You've hit ${f.adherencePct}% of your sessions, but ${f.names} ${f.flatN === 1 ? "hasn't" : "haven't"} moved in a while — that's your body adapting, not a lack of effort. A change of stimulus usually wakes things up.` })],
-    straight:    [f => ({ h: `Flat for a while — switch it up`, b: `${f.flatN} of ${f.judgedN} lifts have gone quiet (${f.names}) while you've made ${f.adherencePct}% of sessions. You're showing up, so change the program, not the effort.` }),
+    encouraging: [f => ({ h: `You've been putting in the work — let's make it pay`, b: `${f.names} ${f.flatN === 1 ? "hasn't" : "haven't"} moved despite ${f.adherencePct}% attendance. That's adaptation, not effort — change the stimulus.` })],
+    straight:    [f => ({ h: `Flat for a while — switch it up`, b: `${f.flatN} of ${f.judgedN} lifts are flat (${f.names}) at ${f.adherencePct}% attendance. You're showing up — change the program.` }),
                   f => ({ h: `Same plan, same numbers`, b: `${f.names}: no real progress lately, and it isn't attendance. Time for a new block.` })],
     drill:       [f => ({ h: `Same weights, week after week. Enough.`, b: `${f.names} ${f.flatN === 1 ? 'is' : 'are'} stuck. You're turning up — now change the plan and make it hurt in a new way.` })]
   },
   holding: {
-    encouraging: [f => ({ h: `Strength holding on a cut — that's a win`, b: `Most people lose strength in a deficit, and you're keeping ${f.names} where ${f.judgedN === 1 ? 'it is' : 'they are'}. Protect it with protein and sleep — they're doing the heavy lifting now.` })],
+    encouraging: [f => ({ h: `Strength holding on a cut — that's a win`, b: `You're keeping ${f.names} where ${f.judgedN === 1 ? 'it is' : 'they are'} — most people can't in a deficit. Protein and sleep protect it.` })],
     straight:    [f => ({ h: `Holding strength in a deficit`, b: `Flat numbers on a cut are the goal, not a problem. Keep protein high and don't chase PRs until you're back at maintenance.` })],
     drill:       [f => ({ h: `You're cutting and you're not getting weaker. Good.`, b: `Hold the line and hit your protein. PRs come back when the food does.` })]
   },
