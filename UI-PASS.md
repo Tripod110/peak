@@ -164,9 +164,15 @@ The app has grown three generations of styling. This makes them agree. No conten
       Exceptions kept: **hero padding** stays 20/18/18px, since the hero is the screen's
       headline card; **Food and Sleep heroes** open with the day stepper, not an eyebrow,
       because which day you're looking at and how to change it are one control.*
-- [ ] Type rhythm: hero / section / body / meta sizes come from a small set. Every number that
-      can change while you watch it (`timers, weights, counts`) uses `font-variant-numeric:
-      tabular-nums`.
+- [x] Every number that can change while you watch it (`timers, weights, counts`) uses
+      `font-variant-numeric: tabular-nums`. *Split from the type-rhythm item. Found by scanning a
+      live workout for digit-bearing elements without it: the progress line, the exercise
+      eyebrow, the set label and numbers, the plate maths and the dock's "Complete set N of M"
+      now have it. Timers, tiles, hero stats and set rows already did. What's left is static
+      (prescriptions like 3×8, "+30s", rep-count buttons).*
+- [ ] Type rhythm: hero / section / body / meta sizes come from a small set. *185 `font-size`
+      declarations across 28 distinct sizes today: define the set as tokens, convert what this
+      pass touches, list the rest.*
 - [ ] Icons: `ICONS` in `ui.js` is the source. Replace the leftover emoji in Today's Quick log
       and the `navRow` calls across Today/Train/Food/Sleep/Grocery with `icon()` — or decide
       emoji stay and make their size and alignment consistent in one rule. Write the decision

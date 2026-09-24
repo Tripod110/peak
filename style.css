@@ -902,6 +902,10 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .wk-bar span { display: block; height: 100%; border-radius: 3px; background: var(--good); transition: width 0.3s ease; }
 .wk-meta { font-size: 13px; color: var(--muted); }
 .wk-meta b { color: var(--ink); font-size: 15px; }
+/* Numbers that change while you watch — set counts, the set label, the plate
+   maths, the dock's "Complete set N of M" — keep fixed-width digits so the line
+   doesn't shuffle each tap. Timers and tile values carry their own. */
+.wk-meta, .eyebrow, .se-label, .ss-no, .pl-base, .pl-plate, .pl-text, .pl-plates, .dock-main { font-variant-numeric: tabular-nums; }
 .wk-foot { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .empty-state h3 { font-size: 22px; margin-bottom: 6px; }
 
