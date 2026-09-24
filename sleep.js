@@ -308,7 +308,8 @@ function weekOverWeek(wk) {
   for (let i = 7; i < 14; i++) { const e = s[todayKey(-i)]; if (e) { n++; sum += e.durationMin; } }
   if (!n) return 'no nights last week';
   const d = wk.avgMin - Math.round(sum / n);
-  return Math.abs(d) < 5 ? 'same as last week' : `${d > 0 ? '+' : '−'}${fmtDur(Math.abs(d))} vs last week`;
+  const ad = Math.abs(d);
+  return ad < 5 ? 'same as last week' : `${d > 0 ? '+' : '−'}${ad < 60 ? `${ad} min` : fmtDur(ad)} vs last week`;
 }
 function usualWindowNavValue() {
   const u = usualNight();
