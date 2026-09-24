@@ -151,8 +151,11 @@ than a stack of paragraphs.
 
 The app has grown three generations of styling. This makes them agree. No content moves.
 
-- [ ] Spacing scale in `style.css` `:root` (`--sp-1: 4px` … `--sp-5: 24px`) and use it in the
+- [x] Spacing scale in `style.css` `:root` (`--sp-1: 4px` … `--sp-5: 24px`) and use it in the
       components this pass touches. Don't rewrite every old rule — convert what you edit.
+      *Converted so far: `.stat-tiles`, `.tile`, `.tile-l`, `.ck-stats`/`.ck-stat`, `.coach-rows`.
+      Off-scale values rounded to the nearest step (tile 12/11px → 12px, gap 5 → 4px); every
+      measured size moved ≤6px.*
 - [ ] Card padding and heading treatment: one `h2` style for section cards, one eyebrow style
       for heroes. List the exceptions here if any survive, with the reason.
 - [ ] Type rhythm: hero / section / body / meta sizes come from a small set. Every number that

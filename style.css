@@ -1,6 +1,13 @@
 /* Forge — dark-first mobile PWA */
 :root {
   color-scheme: dark;
+  /* spacing scale (UI-PASS stage 3) — themes never override these. New and
+     edited rules use it; older rules convert as they're touched. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
   /* surfaces & ink (reference dark palette) */
   --page: #0d0d0d;
   --surface: #1a1a19;
@@ -611,11 +618,11 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
 .coach.warn { border-left-color: var(--warning); }
 .coach .a-body { color: var(--ink-2); }
 .coach .a-body b { display: block; margin-bottom: 2px; color: var(--ink); }
-.coach-rows { list-style: none; margin: 8px 0 0; padding: 0; }
-.coach-rows li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; padding: 6px 0; border-top: 1px solid var(--border); }
+.coach-rows { list-style: none; margin: var(--sp-2) 0 0; padding: 0; }
+.coach-rows li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-1) var(--sp-2); padding: var(--sp-2) 0; border-top: 1px solid var(--border); }
 .coach-rows li:first-child { border-top: 0; }
 .coach-rows .cr-n { color: var(--ink); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.coach-rows .cr-a { display: flex; gap: 8px; margin-left: auto; }
+.coach-rows .cr-a { display: flex; gap: var(--sp-2); margin-left: auto; }
 
 /* muscle volume rows */
 .mv-row { margin-bottom: 11px; }
@@ -847,14 +854,14 @@ body.in-workout #fab-root { display: none; }
 .empty-inline { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; padding: 14px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
 
 /* ---------- Today: three glance tiles ---------- */
-.stat-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin-bottom: var(--sp-4); }
 .tile {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
-  min-height: 96px; padding: 12px 11px; min-width: 0; text-align: left;
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1);
+  min-height: 96px; padding: var(--sp-3); min-width: 0; text-align: left;
   background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
 }
 .tile:active { border-color: var(--blue); }
-.tile-l { display: flex; align-items: center; gap: 5px; max-width: 100%; overflow-wrap: anywhere; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.tile-l { display: flex; align-items: center; gap: var(--sp-1); max-width: 100%; overflow-wrap: anywhere; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .tile-l .ico { width: 14px; height: 14px; }
 .tile-v { font-size: 23px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tile-v small { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
@@ -1030,7 +1037,7 @@ details.why[open] summary::after { transform: rotate(90deg); }
   .hero-title, .card h2.hero-title { font-size: 30px; }
   .se-field { grid-template-columns: 48px 44px minmax(0, 1fr) 44px; gap: 5px; }
   .se-field input { font-size: 22px; }
-  .tile { padding: 10px 8px; }
+  .tile { padding: var(--sp-2); }
   .tile-v { font-size: 19px; }
   .ex-focus { padding: 12px 10px 14px; }
 }
@@ -1098,8 +1105,8 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .chart-table table { width: 100%; border-collapse: collapse; }
 .chart-table th, .chart-table td { text-align: left; padding: 5px 0; border-top: 1px solid var(--grid); color: var(--ink-2); font-weight: 400; }
 .chart-table th { color: var(--muted); }
-.ck-stats { display: flex; gap: 8px; margin: 6px 0 12px; flex-wrap: wrap; }
-.ck-stat { flex: 1 1 64px; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.ck-stats { display: flex; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-3); flex-wrap: wrap; }
+.ck-stat { flex: 1 1 64px; background: var(--surface-2); border-radius: 10px; padding: var(--sp-2); }
 .ck-stat b { display: block; font-size: 17px; color: var(--ink); }
 .ck-stat span { font-size: 12px; color: var(--muted); }
 .coach-line.warn { border-left: 3px solid var(--warning); }
