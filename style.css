@@ -8,6 +8,14 @@
   --sp-3: 12px;
   --sp-4: 16px;
   --sp-5: 24px;
+  /* type scale — hero / value / title / body / meta / label. Converted rules use
+     these; the rest of the sheet still has literals (listed in UI-PASS.md). */
+  --fs-hero: 36px;
+  --fs-value: 23px;
+  --fs-title: 16px;
+  --fs-body: 14px;
+  --fs-meta: 12px;
+  --fs-label: 11px;
   /* surfaces & ink (reference dark palette) */
   --page: #0d0d0d;
   --surface: #1a1a19;
@@ -201,8 +209,8 @@ label { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 5px
   padding: var(--sp-4);
   margin-bottom: var(--sp-4);
 }
-.card h2 { font-size: 14px; font-weight: 600; color: var(--ink-2); margin-bottom: var(--sp-3); letter-spacing: 0.02em; }
-.card h2 .h2-right { float: right; font-weight: 400; color: var(--muted); font-size: 12px; }
+.card h2 { font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); margin-bottom: var(--sp-3); letter-spacing: 0.02em; }
+.card h2 .h2-right { float: right; font-weight: 400; color: var(--muted); font-size: var(--fs-meta); }
 
 .row { display: flex; gap: 10px; align-items: center; }
 .row > .grow { flex: 1; }
@@ -822,7 +830,7 @@ body.in-workout #fab-root { display: none; }
 
 .eyebrow {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  font-size: var(--fs-meta); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
 }
 .eyebrow .ico { width: 15px; height: 15px; }
 .eyebrow.good { color: var(--good); }
@@ -832,7 +840,7 @@ body.in-workout #fab-root { display: none; }
 /* ---------- hero card (Today + Train) ---------- */
 .hero-card { padding: 20px 18px 18px; }
 .hero-title, .card h2.hero-title {
-  font-size: 36px; font-weight: 800; line-height: 1.02; letter-spacing: -0.025em;
+  font-size: var(--fs-hero); font-weight: 800; line-height: 1.02; letter-spacing: -0.025em;
   margin: 8px 0 6px; overflow-wrap: anywhere; color: var(--ink);
 }
 .hero-meta { font-size: 14px; color: var(--ink-2); }
@@ -861,12 +869,12 @@ body.in-workout #fab-root { display: none; }
   background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
 }
 .tile:active { border-color: var(--blue); }
-.tile-l { display: flex; align-items: center; gap: var(--sp-1); max-width: 100%; overflow-wrap: anywhere; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.tile-l { display: flex; align-items: center; gap: var(--sp-1); max-width: 100%; overflow-wrap: anywhere; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .tile-l .ico { width: 14px; height: 14px; }
-.tile-v { font-size: 23px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile-v { font-size: var(--fs-value); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tile-v small { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
-.tile-v.tile-empty { font-size: 16px; color: var(--ink-2); white-space: normal; }
-.tile-s { font-size: 11px; color: var(--muted); }
+.tile-v.tile-empty { font-size: var(--fs-title); color: var(--ink-2); white-space: normal; }
+.tile-s { font-size: var(--fs-label); color: var(--muted); }
 .tile-bar { align-self: stretch; height: 5px; margin-top: auto; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .tile-bar span { display: block; height: 100%; background: var(--blue); border-radius: 3px; }
 .focus-line { display: flex; align-items: center; gap: 10px; margin: 0 2px 14px; }
@@ -1070,8 +1078,8 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .coach-card.warn { border-left-color: var(--warning); }
 /* the look comes from .eyebrow — one eyebrow style app-wide; this only spaces it */
 .coach-eyebrow { margin-bottom: var(--sp-1); }
-.coach-h { display: block; font-size: 16px; color: var(--ink); margin-bottom: 4px; }
-.coach-b { color: var(--ink-2); font-size: 14px; line-height: 1.45; margin: 0; }
+.coach-h { display: block; font-size: var(--fs-title); color: var(--ink); margin-bottom: 4px; }
+.coach-b { color: var(--ink-2); font-size: var(--fs-body); line-height: 1.45; margin: 0; }
 .coach-sub { color: var(--muted); font-size: 13px; margin-top: 8px; }
 .coach-actions { gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .coach-actions .btn { min-height: 44px; }
@@ -1112,8 +1120,8 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .chart-table th { color: var(--muted); }
 .ck-stats { display: flex; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-3); flex-wrap: wrap; }
 .ck-stat { flex: 1 1 64px; background: var(--surface-2); border-radius: 10px; padding: var(--sp-2); }
-.ck-stat b { display: block; font-size: 17px; color: var(--ink); }
-.ck-stat span { font-size: 12px; color: var(--muted); }
+.ck-stat b { display: block; font-size: var(--fs-title); color: var(--ink); }
+.ck-stat span { font-size: var(--fs-meta); color: var(--muted); }
 .coach-line.warn { border-left: 3px solid var(--warning); }
 .coach-line.good { border-left: 3px solid var(--good); }
 

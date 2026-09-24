@@ -170,9 +170,15 @@ The app has grown three generations of styling. This makes them agree. No conten
       eyebrow, the set label and numbers, the plate maths and the dock's "Complete set N of M"
       now have it. Timers, tiles, hero stats and set rows already did. What's left is static
       (prescriptions like 3×8, "+30s", rep-count buttons).*
-- [ ] Type rhythm: hero / section / body / meta sizes come from a small set. *185 `font-size`
+- [x] Type rhythm: hero / section / body / meta sizes come from a small set. *185 `font-size`
       declarations across 28 distinct sizes today: define the set as tokens, convert what this
       pass touches, list the rest.*
+      *Tokens: `--fs-hero` 36 · `--fs-value` 23 · `--fs-title` 16 · `--fs-body` 14 · `--fs-meta`
+      12 · `--fs-label` 11. Converted: card `h2` and its right-hand note, `.eyebrow`, the hero
+      title, tile label/value/sub, the check-in stats, the coach headline and body. Measured
+      before/after on all five tabs at 390 and 320px: the one change is the check-in stat,
+      17 → 16px. Still literal: 173 declarations (9px 9.5px 10px 10.5px 11px 11.5px 12px 13px 14px 15px 16px 17px 18px 19px 20px 21px 22px 24px 25px 26px 28px 30px 34px 42px), including the 320px overrides
+      (hero 30px, tile value 19px) — they convert when a later edit touches them.*
 - [ ] Icons: `ICONS` in `ui.js` is the source. Replace the leftover emoji in Today's Quick log
       and the `navRow` calls across Today/Train/Food/Sleep/Grocery with `icon()` — or decide
       emoji stay and make their size and alignment consistent in one rule. Write the decision
