@@ -263,8 +263,15 @@ ate.
       something else" card is gone; a "Quick add" card after the day's list holds the chips and
       renders only when there are some. Clicked through: both secondary buttons open their
       sheets, a chip logs its food, Repeat is disabled with no history.*
-- [ ] Everything that worked still works: scan → review → log, manual entry, edit an entry's
+- [x] Everything that worked still works: scan → review → log, manual entry, edit an entry's
       amounts and time, delete with undo, repeat a day, past days, macro drill-in, trends.
+      *Walked in the browser, each checked against stored data, not the screen: scan (Gemini
+      stubbed) → review 2 items → edit one estimate → log both, edited kcal kept; manual entry
+      from the hero row; edit kcal and time (270 @ 07:15 stored); delete → Undo restores it;
+      Quick add chip logs; step back a day, log there, Back to today; Repeat a day copies into
+      the viewed day; Protein tile → Macros; Explore → Nutrition trends (charts render); Score
+      tile → breakdown sheet. 11/11 pass, no page errors. Not covered: the real Gemini call
+      (no network to it here) and the camera picker.*
 
 Stage done when: the Food tab answers "what have I eaten, and what's left?" above the fold, and
 nothing was lost.
@@ -309,3 +316,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · d171e6b · stage 4: day nav + headline — past days get past-tense headlines
 - 2026-09-24 · 991eeff · fix: tile labels broke mid-word under 378px (Stage 1 regression); icon drops instead
 - 2026-09-24 · c238b76 · stage 4: logging affordances — scan primary, manual/repeat secondary, Quick add only with chips
+- 2026-09-24 · (docs) · stage 4: every Food flow walked in the browser, 11/11 pass
