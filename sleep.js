@@ -269,14 +269,14 @@ function renderSleepHome() {
         ? { valueHtml: `${Math.floor(wk.avgMin / 60)}<small>h </small>${String(wk.avgMin % 60).padStart(2, '0')}<small>m</small>`,
             sub: `${wk.nights} of 7 nights`,
             ariaLabel: `Seven-day average ${fmtDur(wk.avgMin)} across ${wk.nights} nights. Open the trend` }
-        : { empty: true, value: 'No nights', sub: 'log one to start', ariaLabel: 'No nights logged this week. Open the trend' })
+        : { empty: true, value: 'No nights', sub: 'log a night', ariaLabel: 'No nights logged this week. Open the trend' })
     }),
     tile({
       action: 'sleep-nav', data: { view: 'nights' }, ico: 'moon', label: 'Score',
       ...(score != null
         ? { value: score, unit: '/ 100', sub: key === todayKey() ? 'last night' : 'this night',
             ariaLabel: `Sleep score ${score} out of 100. Open the last 14 nights` }
-        : { empty: true, value: 'Not logged', sub: `${logged14} of 14 nights`, ariaLabel: 'This night is not logged. Open the last 14 nights' })
+        : { empty: true, value: 'Not logged', sub: `${logged14}/14 nights`, ariaLabel: 'This night is not logged. Open the last 14 nights' })
     }),
     tile({
       action: 'sleep-nav', data: { view: 'consistency' }, ico: 'clock', label: 'Timing',

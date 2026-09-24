@@ -190,8 +190,13 @@ The app has grown three generations of styling. This makes them agree. No conten
       the muted ink colour. `navRow`'s `ico` argument is renamed `icoHtml` (D-17: caller-built
       markup). Emoji left elsewhere (alerts, the focus line, toasts, check-in goals) are not
       in this item's scope.*
-- [ ] Tile strips are the same height across tabs whatever they contain (Today's "Not logged"
+- [x] Tile strips are the same height across tabs whatever they contain (Today's "Not logged"
       vs Food's "1,860 / 2,450").
+      *Measured every tile on Today, Food and Sleep, with history and as a new user, at 390 and
+      320px: 96–101px, always from a sub-line wrapping. Four subs shortened ("last 7 days",
+      "log a night", "0/14 nights", "log a meal") and `.tile-s` is one line with an ellipsis as
+      a backstop; a two-line empty value still fits the 96px minimum. Now 96px everywhere, and
+      no sub is cut in any measured state.*
 - [ ] Re-check the v46 gains: button text contrast ≥4.5:1 in all five themes, 44px targets,
       landscape safe areas. Measure, don't assume.
 

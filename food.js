@@ -52,7 +52,7 @@ function renderFoodHome() {
     tile({
       action: 'food-score', ico: 'chart', label: 'Score',
       ...(score == null
-        ? { empty: true, value: 'No food', sub: 'nothing logged', ariaLabel: 'No score yet: nothing logged this day' }
+        ? { empty: true, value: 'No food', sub: 'log a meal', ariaLabel: 'No score yet: nothing logged this day' }
         : { value: score, unit: '/ 100', sub: score >= 70 ? 'solid day' : score >= 45 ? 'room to improve' : 'off target',
             ariaLabel: `Nutrition score ${score} out of 100. What goes into this?` })
     })

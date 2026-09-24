@@ -877,7 +877,9 @@ body.in-workout #fab-root { display: none; }
 .tile-v { font-size: var(--fs-value); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tile-v small { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
 .tile-v.tile-empty { font-size: var(--fs-title); color: var(--ink-2); white-space: normal; }
-.tile-s { font-size: var(--fs-label); color: var(--muted); }
+/* one line, always: a wrapping sub made Today's strip taller than Food's. The tile's
+   aria-label carries the full meaning, so the rare ellipsis loses nothing. */
+.tile-s { max-width: 100%; font-size: var(--fs-label); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile-bar { align-self: stretch; height: 5px; margin-top: auto; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .tile-bar span { display: block; height: 100%; background: var(--blue); border-radius: 3px; }
 .focus-line { display: flex; align-items: center; gap: 10px; margin: 0 2px 14px; }

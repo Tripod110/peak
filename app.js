@@ -433,7 +433,7 @@ function renderTodayHome() {
             sub: 'last night', ariaLabel: `Sleep last night: ${fmtDur(night.durationMin)}. Edit sleep log` }
         : { empty: true, value: 'Not logged', sub: 'tap to log', ariaLabel: 'Sleep not logged. Log last night' }) }),
     tile({ action: 'today-nav', data: { view: 'streaks' }, ico: 'calendar', label: 'Week',
-      value: wk, unit: `/ ${p.gymDays}`, sub: 'sessions, 7 days',
+      value: wk, unit: `/ ${p.gymDays}`, sub: 'last 7 days',
       ariaLabel: `${wk} of ${p.gymDays} lifting sessions in the last 7 days. Open consistency` })
   ])}
 
