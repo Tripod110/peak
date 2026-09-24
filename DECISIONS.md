@@ -31,6 +31,7 @@ enables. Open decisions sit at the top — those are the ones waiting on you.
 | [D-22](#d-22) | The coach: rules decide, voice words it, you can always say no | 🟢 Decided · v42 |
 | [D-23](#d-23) | Your definition of an exercise beats the name-based guess | 🟢 Decided · v43 |
 | [D-24](#d-24) | Several routines: the active one keeps its key, the rest wait in a library | 🟢 Decided · v43 |
+| [D-25](#d-25) | Develop Peak as a product; park the launch plan | 🟢 Decided · 2026-09-22 |
 
 ---
 
@@ -552,3 +553,23 @@ nothing to migrate: an existing routine simply becomes the active one of a libra
 
 **Nothing is ever discarded by a switch or a new routine,** and every such change registers an undo
 (D-20).
+
+## <a name="d-25"></a>D-25 · Develop Peak as a product; park the launch plan
+**🟢 Decided.** 2026-09-22 · `ROADMAP.md`, `PAYMENTS.md`
+
+The July roadmap was a launch plan: instrumentation, 10–20 users, distribution, a Pro tier by the end
+of September, and install and retention gates at months 1, 2 and 6. After weeks spent getting Peak
+launch-ready, none of the gate work had started, and the owner concluded they'd rather build the app
+than sell it.
+
+**Decided:** Peak is developed as an all-in-one fitness app that feels like a coach tailored to one
+person. Food, sleep and grocery are core, not supporting features. The launch material is
+**parked, not deleted**: PAYMENTS.md carries a header saying so, and ROADMAP.md keeps a *Parked*
+section so the thinking isn't lost.
+
+**Rejected:** the product review's advice to hide or freeze the non-training tabs. That advice was
+right for a plateau-only product, which Peak isn't trying to be.
+
+**Consequence:** "done" now means *right and pleasant to use*, measured by tests, browser checks
+and the real-device pass, rather than installs and conversion. The one launch-plan item that still
+matters for its own sake is the device pass, and it stays in SHIPPING.md.

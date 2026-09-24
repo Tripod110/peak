@@ -1,5 +1,10 @@
 # Payments — getting Peak Pro sellable
 
+> **⏸ Parked — 2026-09-24.** Peak is being developed as a product rather than launched as a
+> business ([D-25](DECISIONS.md#d-25), [ROADMAP.md](ROADMAP.md)). Nothing below is in progress. It's
+> kept as the plan to pick up if that changes. Read the product review's notes in ROADMAP → *Parked*
+> before reusing the Pro bundle: cloud sync and the program builder make weak paid features.
+
 Target from `ROADMAP.md`: **Peak Pro, $29/year** — unlimited scans, cloud sync + backup,
 unlimited history, program builder, CSV export. Month 2 (through Sep 30).
 
