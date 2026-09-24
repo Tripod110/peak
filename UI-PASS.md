@@ -321,3 +321,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 991eeff · fix: tile labels broke mid-word under 378px (Stage 1 regression); icon drops instead
 - 2026-09-24 · c238b76 · stage 4: logging affordances — scan primary, manual/repeat secondary, Quick add only with chips
 - 2026-09-24 · (docs) · stage 4: every Food flow walked in the browser, 11/11 pass
+- 2026-09-24 · 5ad9b9c · v52: stage 4 released — UI pass complete (one known gap: 320×568 fold)
