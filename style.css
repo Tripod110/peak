@@ -1111,3 +1111,14 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .dc-q { font-size: 13px; color: var(--ink-2); margin-right: auto; }
 .dc-btn { min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-2); font-size: 14px; font-weight: 600; }
 .dc-btn.on { border-color: var(--blue); color: var(--ink); }
+
+/* ---------- gym floor (v45) ---------- */
+/* keyboard open: the tab bar goes, the dock rides on top of the keyboard */
+body.kbd-open .tabbar { display: none; }
+body.kbd-open #rest-root { bottom: var(--kbd-h, 0px); }
+body.kbd-open #fab-root { display: none; }
+/* the + button and toasts stop sitting on content: reserve its height, and
+   float toasts above it when it's showing */
+body:not(.in-workout) .view { padding-bottom: calc(96px + var(--dock-h, 0px)); }
+body:not(.in-workout) #toast-root { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 84px); }
+.ss-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--border); vertical-align: 1px; }

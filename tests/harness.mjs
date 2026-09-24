@@ -80,7 +80,8 @@ export function makeContext() {
       weekKeyOf, checkinDue, weeklyCheckin, dismissCheckin, coachAiGuard,
       customExercise, saveCustomExercise, renameExerciseEverywhere, perHandLift, isTimedLift, defaultTargetFor, pickerCandidates, musclesFor,
       getRoutineLibrary, createRoutine, switchRoutine, deleteLibraryRoutine, sessionAsDay, saveSessionAsDay, getActivities, rememberActivity,
-      fixLastReps, setLastEffort, routineWeeklyMuscleSets, MUSCLES, setSetType };
+      fixLastReps, setLastEffort, routineWeeklyMuscleSets, MUSCLES, setSetType,
+      addWarmup, toggleSuperset, suggestedRestSec, stepSetWeight };
   `, ctx);
   // wipeAll uses Object.keys(localStorage); give it the real key list
   vm.runInContext(`Store.wipeAll = function () { localStorage.keys().filter(k => k.startsWith('forge:')).forEach(k => localStorage.removeItem(k)); _cache.clear(); };`, ctx);

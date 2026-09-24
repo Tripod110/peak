@@ -308,3 +308,54 @@ test('ticking a pre-filled set asks whether the reps happened, and one tap fixes
   P.setLastEffort('hard');
   assert.equal(ex.sets[0].effort, undefined, 'tapping again clears it');
 });
+
+/* ---- gym floor (v45) ---- */
+
+test('warm-ups ramp 40/60/80/90% in order, before the first working set', () => {
+  benchSession(7, [200, 200, 200, 200], [5, 5, 5, 5]);
+  P.startWorkout(0);
+  const ex = P.App.activeSession.exercises.find(e => e.name === 'Bench Press');
+  for (let i = 0; i < 4; i++) P.addWarmup(ex.uid);
+  const warm = ex.sets.filter(s => s.type === 'warmup');
+  assert.equal(warm.length, 4);
+  assert.deepEqual([...warm.map(s => s.reps)], [8, 5, 3, 1]);
+  const lbs = warm.map(s => Math.round(s.weight * 2.20462));
+  assert.ok(lbs[0] < lbs[1] && lbs[1] < lbs[2] && lbs[2] < lbs[3], `ascending: ${lbs}`);
+  assert.equal(ex.sets[4].type, 'normal', 'working sets come after the ramp');
+  P.addWarmup(ex.uid);
+  assert.equal(ex.sets.filter(s => s.type === 'warmup').length, 4, 'a full ramp stops there');
+});
+
+test('a superset goes straight to the partner, and rest comes after the round', () => {
+  P.startWorkout(0);
+  const [a, b] = P.App.activeSession.exercises;
+  P.toggleSuperset(a.uid);
+  assert.equal(a.superset, 'A'); assert.equal(b.superset, 'A');
+  a.sets[0].reps = a.sets[0].reps || 5; b.sets[0].reps = b.sets[0].reps || 5;
+  P.completeSet(a.uid, 0);
+  assert.equal(P.App.rest, null, 'no rest between partners');
+  assert.equal(P.App.activeSession.focusUid, b.uid);
+  // the double-tap guard is 450ms; step past it
+  const realNow = Date.now; ctx.Date = Date; Date.now = () => realNow() + 1000;
+  try { P.completeSet(b.uid, 0); } finally { Date.now = realNow; }
+  assert.ok(P.App.rest, 'rest after the round');
+  assert.equal(P.App.activeSession.focusUid, a.uid, 'next round starts back at the first lift');
+  P.toggleSuperset(a.uid);
+  assert.equal(a.superset, undefined); assert.equal(b.superset, undefined);
+});
+
+test('rest time: barbell rows get the long rest, cable rows do not', () => {
+  const base = P.getSettings().restSec;
+  assert.equal(P.suggestedRestSec('Barbell Row'), Math.round(base * 1.5));
+  assert.equal(P.suggestedRestSec('Seated Cable Row'), base);
+  assert.equal(P.suggestedRestSec('Leg Press'), base);
+});
+
+test('the metric stepper moves in 1.25 kg', () => {
+  P.setSettings({ units: 'metric', restSec: 90 });
+  P.startWorkout(0);
+  const ex = P.App.activeSession.exercises[0];
+  ex.sets[0].weight = 100;
+  P.stepSetWeight(ex.uid, 0, 1);
+  assert.ok(Math.abs(ex.sets[0].weight - 101.25) < 1e-9);
+});

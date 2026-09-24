@@ -1,6 +1,6 @@
 /* Peak — app shell, dashboard, onboarding, settings */
 
-const APP_VERSION = 'v44';
+const APP_VERSION = 'v45';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -1602,6 +1602,7 @@ document.addEventListener('click', e => {
     case 'step-reps': stepSetReps(uid, si, Number(el.dataset.dir)); break;
     case 'set-type': closeModal(); setSetType(uid, si, el.dataset.type); break;
     case 'set-effort': setLastEffort(el.dataset.v); break;
+    case 'superset-toggle': toggleSuperset(uid); break;
     case 'set-fix-reps': fixLastReps(Number(el.dataset.n)); break;
     case 'rest-add': if (App.rest) { App.rest.endsAt += 30000; App.rest.total += 30; App.rest.beeped = false; persistSession(); paintRest(); } break;
     case 'rest-skip': App.rest = null; persistSession(); paintRest(); break;
@@ -1961,10 +1962,30 @@ function registerServiceWorker() {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
+/* The on-screen keyboard. Fixed elements anchor to the layout viewport, which
+   the keyboard does not shrink, so the Complete-set dock and the tab bar sat
+   behind it while you typed a rep count. visualViewport is what the keyboard
+   does shrink: when it's open, hide the tab bar and lift the dock by exactly
+   the keyboard's height. */
+function watchKeyboard() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const update = () => {
+    const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const open = covered > 120;   // a keyboard, not a URL bar collapsing
+    document.body.classList.toggle('kbd-open', open);
+    document.documentElement.style.setProperty('--kbd-h', open ? `${Math.round(covered)}px` : '0px');
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  update();
+}
+
 (function boot() {
   applyTheme(getSettings().theme);
   registerServiceWorker();
   requestPersistentStorage();
+  watchKeyboard();
   if (getProfile()) {
     const s = restoreSession();
     if (s) App.tab = 'train';

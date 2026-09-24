@@ -1700,7 +1700,10 @@ function openLoadModal(name) {
 /* rest timer — driven off a timestamp so throttled/background tabs stay accurate */
 function suggestedRestSec(name) {
   const base = getSettings().restSec || 120;
-  if (/squat|deadlift|bench|overhead press|row|hip thrust/i.test(name)) return Math.round(base * 1.5);
+  /* Long rest for heavy free-weight compounds only. "row" alone gave a seated
+     cable row the squat's rest; only barbell-style rows earn it now. */
+  if (/squat|deadlift|bench press|overhead press|hip thrust/i.test(name) && !/goblet|leg press|machine|smith/i.test(name)) return Math.round(base * 1.5);
+  if (/\b(barbell|pendlay|t.?bar|yates) row/i.test(name)) return Math.round(base * 1.5);
   if (/curl|raise|fly|pushdown|extension|calf|crunch|plank/i.test(name)) return Math.round(base * 0.6);
   return base;
 }
@@ -2073,7 +2076,7 @@ function renderExerciseRow(ex) {
   <button class="ex-row ${complete ? 'complete' : ''}" data-action="focus-ex" data-uid="${ex.uid}"
     aria-label="${esc(ex.name)}, ${status}. Open exercise">
     <span class="exr-badge" aria-hidden="true">${complete ? icon('check') : `${done}/${total}`}</span>
-    <span class="exr-name">${esc(ex.name)}</span>
+    <span class="exr-name">${esc(ex.name)}${ex.superset ? ` <span class="ss-tag">SS ${esc(ex.superset)}</span>` : ''}</span>
     <span class="exr-meta" aria-hidden="true">${esc(ex.target || '')}</span>
     <span class="exr-chev" aria-hidden="true">${icon('chevron')}</span>
   </button>`;
@@ -2096,7 +2099,7 @@ function renderFocusedExercise(ex, xi, count) {
   <section class="card ex-focus" id="ex-focus" aria-labelledby="exf-title">
     <div class="exf-head">
       <div class="grow">
-        <div class="eyebrow">Exercise ${xi + 1} of ${count} · ${done}/${ex.sets.length} sets</div>
+        <div class="eyebrow">Exercise ${xi + 1} of ${count} · ${done}/${ex.sets.length} sets${ex.superset ? ` · superset ${esc(ex.superset)}` : ''}</div>
         <h3 class="exf-title" id="exf-title" tabindex="-1">${esc(ex.name)}${perHandLift(ex.name) ? ' <span class="exf-tag">per hand</span>' : ''}</h3>
       </div>
       <button class="icon-btn2" data-action="ex-menu" data-uid="${ex.uid}" aria-label="Options for ${esc(ex.name)}">${icon('more')}</button>
@@ -2229,10 +2232,19 @@ function addWarmup(uid) {
   if (!ex) return;
   const pr = nextTarget(ex.name, ex.target || findTargetFor(ex.name));
   const workDisp = pr.w || Math.round(toW(Math.max(0, ...workingSets(ex.sets).map(s => s.weight || 0))));
-  const warmDisp = workDisp > 0 ? roundW(workDisp * 0.55, ex.name) : 0;
-  ex.sets.unshift({ weight: warmDisp ? fromW(warmDisp) : null, reps: Math.max(5, (pr.reps || 8) + 2), type: 'warmup', done: false });
-  // the set being edited moved down one; keep pointing at the same set
-  if (App.setSel && App.setSel.uid === uid) App.setSel = { uid, si: App.setSel.si + 1 };
+  /* A ramp, not a pile of identical sets: each tap adds the next step up —
+     40% × 8, 60% × 5, 80% × 3, then 90% × 1 — in order, before the first
+     working set. Three taps used to give three sets at 55%. */
+  const RAMP = [[0.4, 8], [0.6, 5], [0.8, 3], [0.9, 1]];
+  const lead = ex.sets.findIndex(s => !isWarmup(s));
+  const at = lead < 0 ? ex.sets.length : lead;
+  const have = ex.sets.slice(0, at).filter(isWarmup).length;
+  if (have >= RAMP.length) { toast('That’s a full warm-up ramp already'); return; }
+  const [pct, reps] = RAMP[have];
+  const warmDisp = workDisp > 0 ? roundW(workDisp * pct, ex.name) : 0;
+  ex.sets.splice(at, 0, { weight: warmDisp ? fromW(warmDisp) : null, reps, type: 'warmup', done: false });
+  // sets from the insertion point down moved one; keep pointing at the same set
+  if (App.setSel && App.setSel.uid === uid && App.setSel.si >= at) App.setSel = { uid, si: App.setSel.si + 1 };
   persistSession();
   App.render();
 }
@@ -2242,9 +2254,10 @@ function addWarmup(uid) {
 function stepSetWeight(uid, si, dir) {
   const st = sessionExercise(uid)?.sets[si];
   if (!st) return;
-  const step = isMetric() ? 1 : 2.5;
+  // 1.25 kg is the smallest plate most gyms have; a 1 kg step walked you off the plate grid
+  const step = isMetric() ? 1.25 : 2.5;
   const cur = st.weight != null ? toW(st.weight) : 0;
-  st.weight = fromW(Math.max(0, Math.round((cur + dir * step) * 10) / 10));
+  st.weight = fromW(Math.max(0, Math.round((cur + dir * step) * 100) / 100));
   st.touched = true;
   st.planned = false;
   App.setSel = { uid, si };
@@ -2326,13 +2339,25 @@ function completeSet(uid, si) {
   if (navigator.vibrate) navigator.vibrate(30);
   const pr = checkSetPR(ex.name, st);
   if (pr) toast(pr);
-  if (!isWarmup(st)) {
+  /* A superset goes straight to its partner — resting between the two halves is
+     the thing a superset exists to skip. Rest comes after the round. */
+  const partner = isWarmup(st) ? null : supersetNext(s, ex);
+  if (!isWarmup(st) && !partner) {
     startRest(suggestedRestSec(ex.name), ex.name);
     App.rest.check = { uid, si, reps: st.reps, assumed };
   }
   App.setSel = null;
   let msg = `${ex.name}: ${setLabel(ex, si).toLowerCase()} complete.`;
-  if (!exPending(ex)) {
+  const roundStart = !partner && ex.superset ? supersetFirst(s, ex) : null;
+  if (partner) {
+    s.focusUid = partner;
+    App._scrollFocus = 'scroll';
+    msg += ` Superset — straight to ${sessionExercise(partner).name}.`;
+  } else if (roundStart) {
+    s.focusUid = roundStart;
+    App._scrollFocus = 'scroll';
+    msg += ` Round done — rest, then ${sessionExercise(roundStart).name}.`;
+  } else if (!exPending(ex)) {
     const next = firstPendingFrom(s, xi + 1);
     if (next) {
       s.focusUid = next;
@@ -2345,6 +2370,45 @@ function completeSet(uid, si) {
   persistSession();
   App.render();
   announce(msg);
+}
+
+/* ---------- supersets ----------
+   A group letter on each exercise in the live session. Order within a group is
+   routine order; a round is one set of each, then rest. */
+function supersetGroup(s, ex) { return ex.superset ? s.exercises.filter(e => e.superset === ex.superset) : [ex]; }
+/* the next partner after `ex` in this round that still has sets to do */
+function supersetNext(s, ex) {
+  if (!ex.superset) return null;
+  const g = supersetGroup(s, ex);
+  for (let k = g.indexOf(ex) + 1; k < g.length; k++) if (exPending(g[k])) return g[k].uid;
+  return null;
+}
+/* where the next round starts: the first member with sets left */
+function supersetFirst(s, ex) {
+  const g = supersetGroup(s, ex);
+  return g.length > 1 ? g.find(exPending)?.uid || null : null;
+}
+function toggleSuperset(uid) {
+  const s = App.activeSession;
+  const xi = exerciseIndex(uid);
+  const ex = s?.exercises[xi], next = s?.exercises[xi + 1];
+  if (!ex || !next) return;
+  if (ex.superset && ex.superset === next.superset) {
+    delete ex.superset;
+    // a group of one isn't a superset
+    const size = {};
+    s.exercises.forEach(e => { if (e.superset) size[e.superset] = (size[e.superset] || 0) + 1; });
+    s.exercises.forEach(e => { if (e.superset && size[e.superset] < 2) delete e.superset; });
+    announce(`${ex.name} and ${next.name} unlinked`);
+  } else {
+    const used = new Set(s.exercises.map(e => e.superset).filter(Boolean));
+    const id = ex.superset || next.superset || 'ABCDEFGH'.split('').find(c => !used.has(c)) || 'Z';
+    ex.superset = id; next.superset = id;
+    announce(`${ex.name} and ${next.name} are now superset ${id}`);
+  }
+  persistSession();
+  closeModal();
+  App.render();
 }
 
 function uncompleteSet(uid, si) {
@@ -2480,6 +2544,8 @@ function openExerciseMenu(uid) {
       <button class="sheet-item" data-action="ce-edit" data-name="${esc(ex.name)}">${icon('sliders')} Edit exercise — name, type, muscles</button>
       <button class="sheet-item" data-action="edit-load" data-name="${esc(ex.name)}">${icon('dumbbell')} How this lift is loaded</button>
       ${s.exercises.length > 1 ? `<button class="sheet-item" data-action="open-reorder">${icon('reorder')} Reorder exercises</button>` : ''}
+      ${s.exercises[xi + 1] ? `<button class="sheet-item" data-action="superset-toggle" data-uid="${uid}">${icon('reorder')} ${
+        ex.superset && ex.superset === s.exercises[xi + 1].superset ? `Unlink superset with ${esc(s.exercises[xi + 1].name)}` : `Superset with ${esc(s.exercises[xi + 1].name)}`}</button>` : ''}
       <button class="sheet-item danger" data-action="del-exercise" data-uid="${uid}">${icon('trash')} Remove ${esc(ex.name)} from this workout</button>
     </div>
     <button class="btn mt" data-action="close-modal">Cancel</button>

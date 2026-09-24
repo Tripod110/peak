@@ -24,8 +24,32 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v45 — the gym floor
+2026-09-24 · **pending push**
+
+The in-gym friction the lifter and mobile reviews found.
+
+- **Warm-up ramp.** Each tap on *Warmup* adds the next step, in order, before the first working
+  set: 40% × 8, 60% × 5, 80% × 3, 90% × 1. Three taps used to give three identical sets at 55%.
+- **Supersets.** In a live workout, open a lift's ⋯ menu and choose *Superset with (next lift)*.
+  Completing a set jumps straight to the partner with no rest, and rest starts after the round.
+  Both lifts show an *SS A* tag. It's per session for now; routines don't store supersets.
+- **The metric stepper moves in 1.25 kg,** the smallest plate most gyms have (it used to move 1 kg).
+- **Rest times:** only barbell, Pendlay, T-bar and Yates rows get the heavy-compound rest. A seated
+  cable row no longer gets the squat's 1.5×, and machine and goblet variants of the big lifts don't
+  either.
+- **Keyboard.** When the on-screen keyboard opens, the tab bar and + button hide and the
+  Complete-set dock rides on top of the keyboard (`visualViewport`). *Needs the real-device
+  check in SHIPPING.md: emulators don't show a real keyboard.*
+- **The + button and toasts stop covering content.** The page reserves the button's height, and
+  toasts float above it.
+
+Tests: 4 new; 127 pass. Checked in the browser at 375×812.
+
+---
+
 ## v44 — the engine listens
-2026-09-23 · **pending push**
+`1fb59de` · 2026-09-23 · **live**
 
 The rest of the lifter review's findings, the ones the v41 fixes left open.
 
@@ -53,7 +77,7 @@ Stored: `effort` on sets and the `backoff` set type, both sanitised on restore. 
 ---
 
 ## v43 — log anything
-2026-09-22 · **pending push**
+2026-09-22 · **live** (pushed with v44)
 
 Anything you train, defined the way you train it ([D-23](DECISIONS.md#d-23), [D-24](DECISIONS.md#d-24)).
 
@@ -87,7 +111,7 @@ activity (it's remembered), and a blank routine.
 ---
 
 ## v42 — Peak starts coaching
-2026-09-22 · **pending push**
+2026-09-22 · **live** (pushed with v44)
 
 Peak used to tell you what a number was. Now it tells you how you're doing and what to do about
 it, from your own last month rather than one lift on one day ([D-22](DECISIONS.md#d-22)).
@@ -150,7 +174,7 @@ are discarded too, and the rule-written version stays whenever the request fails
 ---
 
 ## v41 — the plateau engine reads reps, and the device id stays home
-2026-09-22 · **pending push**
+2026-09-22 · **live** (pushed with v44)
 
 `forge:deviceId` is the only thing the Worker checks on `/subscribe` and `/unsubscribe`, so
 whoever holds it can delete a device's reminders or repoint its push subscription. Backups are

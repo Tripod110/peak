@@ -225,6 +225,7 @@ function cleanExercises(list) {
     .map(ex => ({
       name: szStr(szObj(ex).name, 80), target: szStr(szObj(ex).target, 12),
       ...(szUid(szObj(ex).uid) ? { uid: szObj(ex).uid } : {}),
+      ...(/^[A-Z]$/.test(szObj(ex).superset || '') ? { superset: szObj(ex).superset } : {}),
       sets: cleanSets(szObj(ex).sets)
     }))
     .filter(ex => ex.name);
