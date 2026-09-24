@@ -194,3 +194,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · d4e915b · stage 1: kcal-left lives in Food's hero; Calories tile says under/on/over target
 - 2026-09-24 · f57a671 · stage 1: Sleep hero loses heroStats (score on tile only); logged Sleep's other repeats
 - 2026-09-24 · 0d609a8 · stage 1: Sleep 320px overflow fixed (label 'Timing', .tile-l wraps)
+- 2026-09-24 · c6d80c5 · stage 1: Sleep's 7-day avg and ± spread printed once; Explore rows show week-on-week and usual window
