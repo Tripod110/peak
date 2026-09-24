@@ -99,10 +99,14 @@ decide which copy matters.
 
 **Sleep** — `sleep.js:renderSleepHome`, `renderSleepHero`
 
-- [ ] The score is in the hero and in the Score tile. Hero keeps duration, times and how rested;
+- [x] The score is in the hero and in the Score tile. Hero keeps duration, times and how rested;
       the tile keeps the score.
 - [ ] Sleep overflows at 320px: a tile label (`span.tile-l`) ends at 325px. Found while
       verifying stage 1 item 2; pre-existing on v48.
+- [ ] Sleep still repeats itself: the 7-day average is in the 7-day tile, the insight line
+      ("averaging 7h 06m over 6 nights") and Explore → Hours slept; regularity (±N min) is in
+      the tile and Explore → Bed & wake times. Explore rows should say something the tiles
+      don't. Found while verifying the score item.
 
 Stage done when: Today, Food and Sleep each print any given number once, and the three screens
 still answer their question in the first viewport.

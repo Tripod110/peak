@@ -260,7 +260,7 @@ function renderSleepHome() {
   const logged14 = Object.keys(getSleep()).filter(k => k <= todayKey() && daysBetween(k, todayKey()) < 14).length;
 
   return `
-  ${renderSleepHero(key, score)}
+  ${renderSleepHero(key)}
 
   ${tileStrip([
     tile({
@@ -306,7 +306,7 @@ function sleepLinkNavValue() {
 }
 
 /* The night in front of you: what it was, or the cheapest way to log it. */
-function renderSleepHero(key, score) {
+function renderSleepHero(key) {
   const entry = getSleep()[key];
   const isToday = key === todayKey();
   const atFloor = key <= earliestNightKey();
@@ -326,10 +326,6 @@ function renderSleepHero(key, score) {
       eyebrowHtml: nav,
       title: fmtDur(entry.durationMin),
       meta: `${fmtTime(entry.bed)} → ${fmtTime(entry.wake)} · ${SLEEP_QUALITY[entry.quality] || 'OK'}`,
-      bodyHtml: heroStats([
-        { v: score ?? '—', l: 'score' },
-        { v: `${entry.quality}/5`, l: 'how rested' }
-      ]),
       actions: [
         { label: 'Edit this night', icon: 'sliders', action: 'open-sleep-log' },
         { label: 'Delete', icon: 'trash', action: 'del-sleep', data: { key }, cls: 'ghost danger' }
