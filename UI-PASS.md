@@ -225,8 +225,31 @@ Only once stages 1–3 are ticked. Food is the tab with the most competing block
 "Log something else", the day's entries, Explore — five places to look before you know what you
 ate.
 
-- [ ] Sketch the target layout in this file first (a list of blocks in order, with what each
+- [x] Sketch the target layout in this file first (a list of blocks in order, with what each
       answers). Get it written before writing code.
+
+      **Target layout, top to bottom** (390×844; blocks 1–3 must start above the fold):
+
+      1. **Day hero** — *which day, and what's left?* `‹ Today ›` stepper as its top line (as
+         now), headline "2,320 kcal left", the protein sentence, **Scan a meal** as the one big
+         button, then two small secondary buttons in one row: *Enter manually* · *Repeat a day*.
+         This absorbs the "Log something else" card's two buttons; past days stay on the stepper.
+      2. **Tile strip** — *how do the numbers stack up?* Protein / Calories / Score, unchanged
+         (they're the drill-ins to Macros and the score breakdown).
+      3. **The day's food, by part of day** — *what have I eaten?* One card. Groups: Morning
+         (before 12:00), Afternoon (12:00–16:59), Evening (17:00 on), from each entry's `time`.
+         Each group's header: its name, the group's kcal, and the running total so far
+         ("Afternoon · 640 kcal · 1,060 so far"). Empty groups don't render. Rows as now: tap to
+         edit amounts/time, ✕ to delete with undo. Nothing logged → one line pointing at Scan.
+      4. **Quick add** — *can I log a usual in one tap?* Frequent-food chips, then grocery chips.
+         Each row renders only if it has chips; the whole card only if either does.
+      5. **Explore** — Macros, Frequent foods, Past days, Nutrition trends; unchanged.
+
+      What moves: the "Log something else" card is gone — manual and repeat join the hero,
+      chips become block 4 and sit *under* the list. Nothing is removed; no data shape changes
+      (part of day is derived from `time`). **Waiting on the human** before code: the part-of-day
+      boundaries (12:00 / 17:00), whether the running total belongs in the group headers, and
+      quick-add below the list rather than above it.
 - [ ] Day navigation and the day's headline in one place.
 - [ ] Entries grouped by part of day (morning / afternoon / evening) with a running total, rather
       than one flat list.
@@ -273,3 +296,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 7f92e25 · stage 3: a11y gaps closed (30 → 0 findings across five themes)
 - 2026-09-24 · f101583 · stage 3: Sleep week-over-week in minutes (found in tab screenshots)
 - 2026-09-24 · 35e82be · v51: stage 3 released; stage 4 (rebuild Food) next
+- 2026-09-24 · (docs) · stage 4: Food target layout sketched; paused for sign-off before code
