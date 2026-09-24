@@ -82,8 +82,11 @@ decide which copy matters.
       job right now… Consistency outranks intensity"). Cap it at two sentences: one thing
       observed, one thing to do. The "This week's focus:" sentence repeats `weeklyWeakLink`,
       which Explore already shows — keep one.
-- [ ] Card order on Today: hero → coach line → tiles → quick log → explore → notices. Fix
-      whatever doesn't match.
+- [x] Card order on Today: hero → coach line → tiles → quick log → explore → notices. Fix
+      whatever doesn't match. *Already matched (checked in the browser, with the check-in and
+      with the coach line in its slot). The one unlisted block, the focus line ("114g protein
+      to go · Log food"), stays directly under the tiles: it's the action for whichever tile is
+      behind, so it belongs next to them.*
 
 **Food** — `food.js:renderFoodHome`, `renderFoodHero`
 
@@ -182,3 +185,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 5cd5dc8 · stage 1: check-in protein becomes a streak (≥2 days); logged Sleep 320px overflow
 - 2026-09-24 · d52ebc6 · stage 1: sleep labelled '7-day avg' vs 'last night'; Explore note loses sleep score
 - 2026-09-24 · 3b555ce · stage 1: check-in body capped at two sentences, focus sentence dropped, test added
+- 2026-09-24 · (no code change) · stage 1: Today's card order already matched; focus line kept under tiles
