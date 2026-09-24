@@ -218,3 +218,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 965b7e5 · stage 2: COACH_COPY bodies ≤140 chars (3 rewritten); test extended
 - 2026-09-24 · 3fb5fd0 · stage 2: no-repeat test (Today + Train coach card); coach grouping moved to kind-across-days
 - 2026-09-24 · 39d4f29 · v50: stage 2 released (all five tabs swept, no repeated sentences); stage 3 next
+- 2026-09-24 · 02bd9a1 · stage 3: spacing scale in :root; tiles, check-in stats, coach rows converted
