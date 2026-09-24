@@ -232,3 +232,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 39d4f29 · v50: stage 2 released (all five tabs swept, no repeated sentences); stage 3 next
 - 2026-09-24 · 02bd9a1 · stage 3: spacing scale in :root; tiles, check-in stats, coach rows converted
 - 2026-09-24 · a9e5b44 · stage 3: one eyebrow style; card spacing on scale; 2 exceptions recorded
+- 2026-09-24 · 92ba401 · stage 3: tabular-nums on live workout counters; type rhythm split into its own box
