@@ -205,3 +205,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · c218cee · stage 2: coach suggestions grouped by kind + day, row per lift; test added
 - 2026-09-24 · ab39cda · stage 2: 'one at a time' clause deleted from drop suggestions
 - 2026-09-24 · 8046e1c · stage 2: suggestion bodies ≤140 chars (longest 116); test added
+- 2026-09-24 · 965b7e5 · stage 2: COACH_COPY bodies ≤140 chars (3 rewritten); test extended
