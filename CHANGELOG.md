@@ -25,7 +25,7 @@ See [SHIPPING.md](SHIPPING.md).
 ---
 
 ## v47 — onboarding leads with training
-2026-09-24 · **pending push**
+`8712379` · 2026-09-24 · **live**
 
 The new-user review's findings, adapted for an all-in-one app: nutrition is still set up in
 onboarding, it just stops coming first and stops choosing for you.
