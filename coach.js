@@ -751,7 +751,6 @@ function renderWeeklyCheckin() {
   <section class="card coach-card checkin" aria-label="Weekly check-in">
     <div class="coach-eyebrow">Your week · from ${esc(shortDate(c.week))}</div>
     <div class="ck-stats">
-      ${stat(`${f.sessions7}/${f.planned}`, 'sessions')}
       ${stat(String(f.prs7), f.prs7 === 1 ? 'PR' : 'PRs')}
       ${f.sleepAvg ? stat(f.sleepAvg, 'avg sleep') : ''}
       ${f.proteinHitDays ? stat(f.proteinHitDays, 'protein days') : ''}

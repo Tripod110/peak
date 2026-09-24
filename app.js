@@ -523,7 +523,7 @@ function weeklyWeakLink(p, t) {
   }
   {
     const sev = (p.gymDays - lifts.length) / p.gymDays;
-    if (sev > 0.20) cands.push({ key: 'sessions', sev, ico: '🏋', short: `${lifts.length} of ${p.gymDays} sessions`,
+    if (sev > 0.20) cands.push({ key: 'sessions', sev, ico: '🏋', short: 'sessions are behind',
       full: `${lifts.length} of ${p.gymDays} planned lifting sessions${stats.cardio ? ` (cardio doesn't count toward these)` : ''}. Consistency outranks intensity — just get in the gym.` });
   }
   if (avgScore != null) {
