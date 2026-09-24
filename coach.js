@@ -763,7 +763,7 @@ function renderWeeklyCheckin() {
     <div class="coach-eyebrow">Your week · from ${esc(shortDate(c.week))}</div>
     <div class="ck-stats">
       ${stat(String(f.prs7), f.prs7 === 1 ? 'PR' : 'PRs')}
-      ${f.sleepAvg ? stat(f.sleepAvg, 'avg sleep') : ''}
+      ${f.sleepAvg ? stat(f.sleepAvg, 'sleep, 7-day avg') : ''}
       ${f.proteinStreak >= 2 ? stat(`${f.proteinStreak} days`, 'protein streak') : ''}
     </div>
     <b class="coach-h">${esc(c.headline)}</b>

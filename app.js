@@ -461,7 +461,7 @@ function renderTodayHome() {
     ${navRow('today-nav', 'nutrition', '🍽', 'Nutrition trends', `${Math.round(totals.kcal).toLocaleString()} / ${kcalTarget.toLocaleString()} kcal today`)}
     ${navRow('today-nav', 'weight', '⚖', 'Body weight', weightNavValue(p, latestDisp, wChange))}
     ${navRow('today-nav', 'streaks', '🔥', 'Consistency', streakSummary())}
-    <div class="chart-note">Target ${kcalTarget.toLocaleString()} kcal${trainKcalToday ? ` (+${trainKcalToday} from today's training)` : ''} · ${GOAL_LABEL[p.goal]}${slScore != null ? ` · sleep score ${slScore}` : ''}</div>
+    <div class="chart-note">Target ${kcalTarget.toLocaleString()} kcal${trainKcalToday ? ` (+${trainKcalToday} from today's training)` : ''} · ${GOAL_LABEL[p.goal]}</div>
   </div>`;
 }
 const FOCUS_LABEL = { 'quick-scan': 'Scan', 'quick-food': 'Log food', 'quick-sleep': 'Log sleep', 'quick-train': 'Train' };

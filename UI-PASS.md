@@ -75,7 +75,7 @@ decide which copy matters.
       and give the Explore row a value that isn't the same number.
 - [x] Protein appears in the check-in ("7 of 7 protein days") and the Protein tile. Keep the
       tile. The check-in may keep protein only as a *streak* framing the tile can't show.
-- [ ] Sleep appears as the check-in's 7-day average and the tile's last night. Both are useful
+- [x] Sleep appears as the check-in's 7-day average and the tile's last night. Both are useful
       and neither says which it is — label them ("7-day avg" / "last night"), and delete
       `sleep score NN` from the Explore card's `chart-note`.
 - [ ] The check-in body is a paragraph that says consistency twice ("Consistency is the whole
