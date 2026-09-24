@@ -25,7 +25,7 @@ See [SHIPPING.md](SHIPPING.md).
 ---
 
 ## v52 — Food, rebuilt
-2026-09-24 · **pending push**
+`5ad9b9c` · 2026-09-24 · **live** (merged to `main` as `8c36207`)
 
 Stage 4 of the UI pass ([UI-PASS.md](UI-PASS.md)), the last. The Food tab answers "what have I
 eaten, and what's left?" before you scroll, and everything it did before still works.
@@ -51,7 +51,7 @@ below the fold.
 ---
 
 ## v51 — one visual system
-2026-09-24 · `35e82be` · **pending push**
+`35e82be` · 2026-09-24 · **live** (merged to `main` as `8c36207`)
 
 Stage 3 of the UI pass ([UI-PASS.md](UI-PASS.md)). No content moved; the five tabs now look
 like one app.
@@ -80,7 +80,7 @@ like one app.
 ---
 
 ## v50 — the coach says less
-2026-09-24 · `39d4f29` · **pending push**
+`39d4f29` · 2026-09-24 · **live** (merged to `main` as `8c36207`)
 
 Stage 2 of the UI pass ([UI-PASS.md](UI-PASS.md)). Train's suggestions read as a list, and no
 screen says the same sentence twice.
@@ -105,7 +105,7 @@ at 390 and 320px with its actions clicked through.
 ---
 
 ## v49 — one number, one place
-2026-09-24 · `4f4115d` · **pending push**
+`4f4115d` · 2026-09-24 · **live** (merged to `main` as `8c36207`)
 
 Stage 1 of the UI pass ([UI-PASS.md](UI-PASS.md)). Nothing new: Today, Food and Sleep each
 print any given number once, so the eye never has to decide which copy matters.
@@ -135,7 +135,7 @@ print any given number once, so the eye never has to decide which copy matters.
 ---
 
 ## v48 — bring your history
-2026-09-24 · **pending push**
+`cd4e4e3` · 2026-09-24 · **live**
 
 **Import from Strong or Hevy** (Settings → *Import workouts from Strong or Hevy*). Years of history
 elsewhere is exactly what plateau watch, progression, the coach and goal projections need, so they
