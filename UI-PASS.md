@@ -301,3 +301,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 35e82be · v51: stage 3 released; stage 4 (rebuild Food) next
 - 2026-09-24 · (docs) · stage 4: Food target layout sketched; paused for sign-off before code
 - 2026-09-24 · (docs) · stage 4: sketch signed off — flat list kept (grouping box struck), quick-add below the list
+- 2026-09-24 · d171e6b · stage 4: day nav + headline — past days get past-tense headlines
