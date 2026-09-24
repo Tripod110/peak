@@ -1056,6 +1056,12 @@ details.why[open] summary::after { transform: rotate(90deg); }
 .rv-note { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .rv-left { font-size: 12px; color: var(--warning); margin-top: 2px; }
 
+/* 'CALORIES' + its icon needs 84px; a tile only has that from a 378px viewport. Below
+   it, overflow-wrap broke labels mid-word (PROTEI/N). The icon is decorative
+   (aria-hidden), so narrow phones drop it rather than the word. */
+@media (max-width: 379px) {
+  .tile-l .ico { display: none; }
+}
 @media (max-width: 359px) {
   .hero-title, .card h2.hero-title { font-size: 30px; }
   .se-field { grid-template-columns: 48px 44px minmax(0, 1fr) 44px; gap: 5px; }
