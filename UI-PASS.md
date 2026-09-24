@@ -253,3 +253,4 @@ One line per iteration: date, hash, what landed.
 - 2026-09-24 · 92ba401 · stage 3: tabular-nums on live workout counters; type rhythm split into its own box
 - 2026-09-24 · 3dbb757 · stage 3: type tokens; 12 touched rules converted (1 size moved, 17→16px)
 - 2026-09-24 · 8e2650c · stage 3: icons not emoji in Quick log + 22 Explore rows (decision recorded)
+- 2026-09-24 · 88a14dd · stage 3: tile strips 96px on every tab (subs shortened, .tile-s one line)
