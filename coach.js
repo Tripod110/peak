@@ -733,12 +733,23 @@ function weeklyCheckin() {
     progressing: sig.progressing.map(l => l.name), flat: sig.flatOrStalled.map(l => l.name),
     sleepAvg: sig.sleep7.avgMin ? `${Math.floor(sig.sleep7.avgMin / 60)}h${String(sig.sleep7.avgMin % 60).padStart(2, '0')}` : null,
     proteinHitDays: sig.proteinLogged ? `${sig.proteinHit} of ${sig.proteinLogged}` : null,
+    proteinStreak: proteinStreak(sig.proteinTarget),
     focus: weak && !['ok', 'none'].includes(weak.key) ? weak.full : null,
     goals
   };
   const rule = { headline: words.h, body: words.b + (facts.focus ? ` This week's focus: ${facts.focus}` : '') };
   const ai = coachAiCached(facts);
   return { week: weekKeyOf(), facts, ...(ai || rule), aiWorded: !!ai, rule, action: COACH_ACTIONS[state] ? COACH_ACTIONS[state]() : null };
+}
+
+/* Consecutive days at ≥90% of the protein target, ending today if today already
+   counts, else yesterday. The Protein tile shows today; this is the part it can't. */
+function proteinStreak(target) {
+  if (!target) return 0;
+  const hit = i => dayTotals(todayKey(-i)).protein >= target * 0.9;
+  let n = 0;
+  for (let i = hit(0) ? 0 : 1; i < 90 && hit(i); i++) n++;
+  return n;
 }
 
 function renderWeeklyCheckin() {
@@ -753,7 +764,7 @@ function renderWeeklyCheckin() {
     <div class="ck-stats">
       ${stat(String(f.prs7), f.prs7 === 1 ? 'PR' : 'PRs')}
       ${f.sleepAvg ? stat(f.sleepAvg, 'avg sleep') : ''}
-      ${f.proteinHitDays ? stat(f.proteinHitDays, 'protein days') : ''}
+      ${f.proteinStreak >= 2 ? stat(`${f.proteinStreak} days`, 'protein streak') : ''}
     </div>
     <b class="coach-h">${esc(c.headline)}</b>
     <p class="coach-b">${esc(c.body)}</p>

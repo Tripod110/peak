@@ -73,7 +73,7 @@ decide which copy matters.
 - [x] Sessions this week appears in the weekly check-in, the Week tile, and Explore → This week.
       The tile is the one people look at: keep it, drop the count from the check-in's stat row,
       and give the Explore row a value that isn't the same number.
-- [ ] Protein appears in the check-in ("7 of 7 protein days") and the Protein tile. Keep the
+- [x] Protein appears in the check-in ("7 of 7 protein days") and the Protein tile. Keep the
       tile. The check-in may keep protein only as a *streak* framing the tile can't show.
 - [ ] Sleep appears as the check-in's 7-day average and the tile's last night. Both are useful
       and neither says which it is — label them ("7-day avg" / "last night"), and delete
@@ -98,6 +98,8 @@ decide which copy matters.
 
 - [ ] The score is in the hero and in the Score tile. Hero keeps duration, times and how rested;
       the tile keeps the score.
+- [ ] Sleep overflows at 320px: a tile label (`span.tile-l`) ends at 325px. Found while
+      verifying stage 1 item 2; pre-existing on v48.
 
 Stage done when: Today, Food and Sleep each print any given number once, and the three screens
 still answer their question in the first viewport.
