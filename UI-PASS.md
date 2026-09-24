@@ -107,6 +107,11 @@ decide which copy matters.
       ("averaging 7h 06m over 6 nights") and Explore → Hours slept; regularity (±N min) is in
       the tile and Explore → Bed & wake times. Explore rows should say something the tiles
       don't. Found while verifying the score item.
+- [x] Stage-done sweep (every repeated number on Today/Food/Sleep, seeded, listed by script):
+      Today's Explore note repeated the kcal target from the Nutrition row; Food's "Today's
+      food" header repeated the tiles' kcal and protein (now shows the item count the hero
+      dropped); Food → Macros repeated protein (now carbs · fat). Remaining matches are
+      coincidences (a single entry equals the day total; "7" in "7-day" and "7h 45m").
 
 Stage done when: Today, Food and Sleep each print any given number once, and the three screens
 still answer their question in the first viewport.

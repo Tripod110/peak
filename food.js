@@ -70,7 +70,7 @@ function renderFoodHome() {
 
   <div class="card">
     <h2>${isToday ? "Today's food" : 'Logged'}
-      <span class="h2-right">${Math.round(totals.kcal)} kcal · ${Math.round(totals.protein)}g protein</span></h2>
+      <span class="h2-right">${items.length ? `${items.length} item${items.length === 1 ? '' : 's'}` : ''}</span></h2>
     ${items.length === 0
       ? `<div class="muted center" style="padding:14px 0">Nothing logged ${isToday ? 'yet today' : 'this day'}. Scan a meal above.</div>`
       : items.map(e => `
@@ -87,7 +87,7 @@ function renderFoodHome() {
 
   <div class="card">
     <h2>Explore</h2>
-    ${navRow('food-nav', 'macros', '🥗', 'Macros', `${Math.round(totals.protein)}g protein · ${Math.round(totals.carbs)}g carbs · ${Math.round(totals.fat)}g fat`)}
+    ${navRow('food-nav', 'macros', '🥗', 'Macros', `${Math.round(totals.carbs)}g carbs · ${Math.round(totals.fat)}g fat`)}
     ${navRow('food-nav', 'frequents', '🔁', 'Frequent foods', freqCount() ? `${freqCount()} saved` : 'none yet')}
     ${navRow('food-nav', 'days', '📅', 'Past days', `${daySummary().loggedCount} of last 14 logged`)}
     ${navRow('goto-nutrition', null, '📈', 'Nutrition trends', '14-day charts')}
