@@ -46,7 +46,7 @@ function renderFoodHome() {
     tile({
       action: 'food-nav', data: { view: 'macros' }, ico: 'flame', label: 'Calories',
       value: Math.round(totals.kcal).toLocaleString(), unit: `/ ${t.kcal.toLocaleString()}`,
-      sub: kcalLeftLabel(totals.kcal, t.kcal),
+      sub: kcalStatusLabel(totals.kcal, t.kcal),
       ariaLabel: `${Math.round(totals.kcal)} of ${t.kcal} calories. Open macros`
     }),
     tile({
@@ -94,18 +94,23 @@ function renderFoodHome() {
   </div>`;
 }
 
+/* The hero says how many kcal are left; the Calories tile under it says only
+   which side of the target you're on, so the number is printed once. */
 function kcalLeftLabel(eaten, target) {
   const left = Math.round(target - eaten);
-  if (left > 0) return `${left.toLocaleString()} left`;
-  if (left === 0) return 'exactly on target';
-  return `${Math.abs(left).toLocaleString()} over`;
+  if (left > 0) return `${left.toLocaleString()} kcal left`;
+  if (left === 0) return 'Exactly on target';
+  return `${Math.abs(left).toLocaleString()} kcal over`;
+}
+function kcalStatusLabel(eaten, target) {
+  const left = Math.round(target - eaten);
+  return left > 0 ? 'under target' : left === 0 ? 'on target' : 'over target';
 }
 
 /* The day you are looking at, what is left in it, and the fastest way to add
    to it. The ring and the four macro bars moved to the Macros drill-in: on the
    screen you open five times a day, one number matters and it is protein. */
 function renderFoodHero(key, t, totals, items, isToday) {
-  const left = Math.round(t.kcal - totals.kcal);
   const proteinLeft = Math.round(Math.max(0, t.protein - totals.protein));
   const nav = `
     <div class="day-nav">
@@ -130,7 +135,7 @@ function renderFoodHero(key, t, totals, items, isToday) {
   return heroCard({
     id: 'food-hero', eyebrowHtml: nav,
     state: proteinLeft === 0 ? 'done' : '',
-    title: left >= 0 ? `${left.toLocaleString()} kcal left` : `${Math.abs(left).toLocaleString()} kcal over`,
+    title: kcalLeftLabel(totals.kcal, t.kcal),
     meta: proteinLeft > 0
       ? `${proteinLeft}g protein still to go — the number that decides whether the training sticks.`
       : 'Protein target hit. That is the one that matters.',

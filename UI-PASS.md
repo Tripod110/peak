@@ -94,7 +94,7 @@ decide which copy matters.
       score) are the same three numbers twice, 40px apart. Keep the tile strip; the hero keeps
       its headline ("590 kcal left") and its protein sentence, and loses the stat row — or keeps
       only `items`, which the tiles don't carry.
-- [ ] "590 kcal left" is the hero title *and* the Calories tile's sub. Pick one phrasing per
+- [x] "590 kcal left" is the hero title *and* the Calories tile's sub. Pick one phrasing per
       place (`kcalLeftLabel`).
 
 **Sleep** — `sleep.js:renderSleepHome`, `renderSleepHero`
