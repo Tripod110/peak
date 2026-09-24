@@ -293,10 +293,26 @@ function renderSleepHome() {
   <div class="card">
     <h2>Explore</h2>
     ${navRow('sleep-nav', 'nights', '🌙', 'Last 14 nights', `${logged14} logged`)}
-    ${navRow('sleep-nav', 'trend', '📈', 'Hours slept', wk.avgMin ? `7-day avg ${fmtDur(wk.avgMin)}` : 'needs a night or two')}
+    ${navRow('sleep-nav', 'trend', '📈', 'Hours slept', weekOverWeek(wk))}
     ${navRow('sleep-nav', 'training', '🏋', 'Sleep vs training', sleepLinkNavValue())}
-    ${navRow('sleep-nav', 'consistency', '⏰', 'Bed & wake times', c.bedSd == null ? `${c.nights} of 3 nights` : `±${Math.max(c.bedSd, c.wakeSd)} min`)}
+    ${navRow('sleep-nav', 'consistency', '⏰', 'Bed & wake times', usualWindowNavValue())}
   </div>`;
+}
+
+/* The tiles carry this week's average and the ± spread; Explore rows say what
+   they can't — the change on last week, and the window you usually keep. */
+function weekOverWeek(wk) {
+  if (wk.avgMin == null) return 'needs a night or two';
+  const s = getSleep();
+  let sum = 0, n = 0;
+  for (let i = 7; i < 14; i++) { const e = s[todayKey(-i)]; if (e) { n++; sum += e.durationMin; } }
+  if (!n) return 'no nights last week';
+  const d = wk.avgMin - Math.round(sum / n);
+  return Math.abs(d) < 5 ? 'same as last week' : `${d > 0 ? '+' : '−'}${fmtDur(Math.abs(d))} vs last week`;
+}
+function usualWindowNavValue() {
+  const u = usualNight();
+  return u.learned ? `~${fmtTime(u.bed)}–${fmtTime(u.wake)}` : 'learning your times';
 }
 
 function sleepLinkNavValue() {
@@ -425,22 +441,22 @@ function renderSleepInsight(wk) {
   }
   if (wk.nights < 4) {
     return `<div class="alert"><span class="a-ico">☾</span><div class="a-body">
-      <b>Only ${wk.nights} of the last 7 nights logged (averaging ${fmtDur(wk.avgMin)}).</b>
+      <b>Only ${wk.nights} of the last 7 nights logged.</b>
       That's too thin to read a trend from — log a few more and this turns into real feedback. You can backfill missed nights with the ‹ arrow above.</div></div>`;
   }
   const deficit = SLEEP_BANDS.target - wk.avgMin;
   if (deficit >= 60) {
     return `<div class="alert crit"><span class="a-ico">☾</span><div class="a-body">
-      <b>You're averaging ${fmtDur(wk.avgMin)} across ${wk.nights} nights — about ${Math.round(deficit / 60 * 10) / 10}h short.</b>
+      <b>About ${Math.round(deficit / 60 * 10) / 10}h a night short of 8h across ${wk.nights} nights.</b>
       Sleep is where muscle is actually built. Under 7h, strength progress and recovery measurably drop —
       this is the most likely thing feeding your plateau. Try pulling bedtime 30 min earlier this week.</div></div>`;
   }
   if (deficit >= 20) {
     return `<div class="alert"><span class="a-ico">☾</span><div class="a-body">
-      <b>Close: averaging ${fmtDur(wk.avgMin)} over ${wk.nights} nights.</b> Another ~${Math.round(deficit)} min a night gets you to 8h. Consistent bedtime is the easiest lever.</div></div>`;
+      <b>Close: ~${Math.round(deficit)} min a night short of 8h over ${wk.nights} nights.</b> Consistent bedtime is the easiest lever.</div></div>`;
   }
   return `<div class="alert good"><span class="a-ico">✓</span><div class="a-body">
-    <b>Averaging ${fmtDur(wk.avgMin)} over ${wk.nights} nights — recovery is on point.</b> Keep the same bed/wake window.</div></div>`
+    <b>Recovery is on point across ${wk.nights} nights.</b> Keep the same bed/wake window.</div></div>`
     + renderConsistencyNote();
 }
 
@@ -453,11 +469,11 @@ function renderConsistencyNote() {
   const worst = c.wakeSd > c.bedSd ? 'wake' : 'bed';
   const sd = worst === 'wake' ? c.wakeSd : c.bedSd;
   if (sd <= 30) {
-    return `<div class="chart-note center">Your ${worst} times land within ±${sd} min across ${c.nights} nights — that's the consistent end, and it's worth protecting.</div>`;
+    return `<div class="chart-note center">Your ${worst} times are the steady end across ${c.nights} nights — worth protecting.</div>`;
   }
   const label = worst === 'wake' ? 'wake-up time' : 'bedtime';
   return `<div class="alert" style="border-left-color:var(--blue)"><span class="a-ico">⏰</span><div class="a-body">
-    <b>Your ${label} swings about ±${sd} minutes.</b>
+    <b>Your ${label} is the one that swings.</b>
     Duration is only part of it — an irregular ${label} shifts your body clock and costs you
     ${sd > 90 ? 'all' : 'part'} of the consistency portion of your score.
     ${worst === 'wake'

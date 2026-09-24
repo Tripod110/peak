@@ -103,7 +103,7 @@ decide which copy matters.
       the tile keeps the score.
 - [x] Sleep overflows at 320px: a tile label (`span.tile-l`) ends at 325px. Found while
       verifying stage 1 item 2; pre-existing on v48.
-- [ ] Sleep still repeats itself: the 7-day average is in the 7-day tile, the insight line
+- [x] Sleep still repeats itself: the 7-day average is in the 7-day tile, the insight line
       ("averaging 7h 06m over 6 nights") and Explore → Hours slept; regularity (±N min) is in
       the tile and Explore → Bed & wake times. Explore rows should say something the tiles
       don't. Found while verifying the score item.
