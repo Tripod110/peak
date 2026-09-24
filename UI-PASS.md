@@ -70,7 +70,7 @@ decide which copy matters.
 
 **Today** — `app.js:renderTodayHome`, `coach.js:renderWeeklyCheckin` / `renderCoachLine`
 
-- [ ] Sessions this week appears in the weekly check-in, the Week tile, and Explore → This week.
+- [x] Sessions this week appears in the weekly check-in, the Week tile, and Explore → This week.
       The tile is the one people look at: keep it, drop the count from the check-in's stat row,
       and give the Explore row a value that isn't the same number.
 - [ ] Protein appears in the check-in ("7 of 7 protein days") and the Protein tile. Keep the
@@ -176,3 +176,4 @@ nothing was lost.
 One line per iteration: date, hash, what landed.
 
 - 2026-09-24 · (pending) · plan written
+- 2026-09-24 · 0ad9e1f · stage 1: sessions count on the Week tile only (check-in stat dropped, Explore row reworded)
