@@ -24,6 +24,36 @@ See [SHIPPING.md](SHIPPING.md).
 
 ---
 
+## v49 — one number, one place
+2026-09-24 · **pending push**
+
+Stage 1 of the UI pass ([UI-PASS.md](UI-PASS.md)). Nothing new: Today, Food and Sleep each
+print any given number once, so the eye never has to decide which copy matters.
+
+- **Today.** The weekly check-in stops repeating the Week tile's session count and the Protein
+  tile's grams; protein stays only as a streak ("5 days · protein streak", from 2 days up).
+  Sleep is labelled "7-day avg" in the check-in against the tile's "last night". Explore →
+  This week says "sessions are behind" instead of the tile's number, and the note under
+  Explore drops the sleep score and the kcal target the Nutrition row already shows.
+- **The check-in says less.** Its body is two sentences: what happened, what to do. The
+  appended "This week's focus:" sentence is gone (Explore owns the weak link), eight coach
+  variants that ran to three or four sentences were cut to two, and the Gemini rewording is
+  asked for exactly two. A test pins every coach variant at two sentences or fewer.
+- **Food.** The hero keeps its "N kcal left" headline and protein sentence and loses its stat
+  row. The Calories tile says under / on / over target instead of repeating the headline.
+  The day's list header shows the item count, not the tiles' totals; Explore → Macros shows
+  carbs and fat.
+- **Sleep.** The hero keeps duration, bed → wake and how rested; the score lives on the Score
+  tile. The 7-day average and the bed/wake spread print once, on their tiles; the insight
+  leads with the gap to 8h; Explore → Hours slept shows the change on last week and Bed & wake
+  times shows your usual window.
+- **Fixed:** Sleep scrolled sideways on 320px screens — "REGULARITY" didn't fit its tile. The
+  tile is now "Timing", and tile labels wrap rather than widen the page.
+
+136 tests pass; each change checked in the browser at 390 and 320px across themes.
+
+---
+
 ## v48 — bring your history
 2026-09-24 · **pending push**
 
